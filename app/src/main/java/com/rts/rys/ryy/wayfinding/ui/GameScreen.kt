@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,18 +21,23 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -63,6 +69,7 @@ fun GameScreen(
     onExit: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val physics = remember(stage.id) { BallPhysics(stage.maze) }
     val tilt = remember { TiltSensor(context) }
 
@@ -81,14 +88,20 @@ fun GameScreen(
     var elapsedMs by remember(stage.id) { mutableLongStateOf(0L) }
     var finished by remember(stage.id) { mutableStateOf(false) }
     var paused by remember(stage.id) { mutableStateOf(false) }
+    var attemptId by remember(stage.id) { mutableIntStateOf(0) }
+
+    BackHandler(enabled = !paused) { paused = true }
 
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(stage.id) {
+    LaunchedEffect(stage.id, attemptId) {
         physics.reset()
         ballX = physics.x
         ballY = physics.y
+        ballRotation = 0f
+        ballSquash = 0f
+        ballSquashIsX = false
         elapsedMs = 0L
         finished = false
         var last = 0L
@@ -117,6 +130,9 @@ fun GameScreen(
             }
 
             val reached = physics.step(dt, ax, ay)
+            if (physics.justImpacted) {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
             ballX = physics.x
             ballY = physics.y
             ballRotation = physics.rotation
@@ -151,7 +167,11 @@ fun GameScreen(
                     color = InkDark,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.align(Alignment.Center)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 96.dp)
                 )
                 Box(
                     modifier = Modifier
@@ -173,7 +193,8 @@ fun GameScreen(
 
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .weight(1f)
                     .shadow(6.dp, RoundedCornerShape(24.dp))
                     .clip(RoundedCornerShape(24.dp))
                     .background(CreamBg)
@@ -187,22 +208,25 @@ fun GameScreen(
                     squashAxisIsX = ballSquashIsX,
                     modifier = Modifier.fillMaxSize()
                 )
-
-                DPad(
-                    onInput = { dx, dy ->
-                        val len = sqrt(dx * dx + dy * dy)
-                        if (len > 0f) {
-                            kx = dx / len
-                            ky = dy / len
-                        } else {
-                            kx = 0f; ky = 0f
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 10.dp, bottom = 10.dp)
-                )
             }
+
+            Spacer(Modifier.height(12.dp))
+
+            DPad(
+                onInput = { dx, dy ->
+                    val len = sqrt(dx * dx + dy * dy)
+                    if (len > 0f) {
+                        kx = dx / len
+                        ky = dy / len
+                    } else {
+                        kx = 0f; ky = 0f
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(end = 6.dp)
+                    .alpha(if (sensorEnabled) 0.45f else 1f)
+            )
         }
 
         if (paused) {
@@ -210,6 +234,10 @@ fun GameScreen(
                 sensorEnabled = sensorEnabled,
                 onToggleSensor = { AppSettings.setSensorEnabled(!sensorEnabled) },
                 onResume = { paused = false },
+                onRestart = {
+                    paused = false
+                    attemptId++
+                },
                 onExit = onExit
             )
         }
@@ -241,12 +269,13 @@ private fun PauseDialog(
     sensorEnabled: Boolean,
     onToggleSensor: () -> Unit,
     onResume: () -> Unit,
+    onRestart: () -> Unit,
     onExit: () -> Unit
 ) {
     Dialog(onDismissRequest = onResume) {
         Box(
             modifier = Modifier
-                .size(width = 320.dp, height = 280.dp)
+                .size(width = 320.dp, height = 340.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(Color.White)
                 .padding(24.dp)
@@ -258,6 +287,12 @@ private fun PauseDialog(
             ) {
                 Text("잠깐 멈췄어요", color = InkDark, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
                 SensorToggleChip(enabled = sensorEnabled, onClick = onToggleSensor)
+                DialogButton(
+                    label = "다시 시작",
+                    bg = SunYellow,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onRestart
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     DialogButton("그만할래요", CoralPink, modifier = Modifier.weight(1f), onClick = onExit)
                     DialogButton("계속해요", SkyBlue, modifier = Modifier.weight(1f), onClick = onResume)

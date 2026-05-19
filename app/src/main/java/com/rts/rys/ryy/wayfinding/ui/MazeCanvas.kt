@@ -1,7 +1,14 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -36,9 +43,19 @@ fun MazeCanvas(
     squashAxisIsX: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val infinite = rememberInfiniteTransition(label = "maze")
+    val goalPulse by infinite.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.10f,
+        animationSpec = infiniteRepeatable(
+            tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "goalPulse"
+    )
     Canvas(modifier = modifier) {
         drawMaze(maze)
-        drawGoal(maze)
+        drawGoal(maze, goalPulse)
         drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX)
     }
 }
@@ -120,27 +137,27 @@ private fun DrawScope.drawWallTile(tl: Offset, cs: Float) {
     )
 }
 
-private fun DrawScope.drawGoal(maze: Maze) {
+private fun DrawScope.drawGoal(maze: Maze, pulse: Float) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
     val cx = origin.x + (maze.goalCol + 0.5f) * cs
     val cy = origin.y + (maze.goalRow + 0.5f) * cs
 
-    // 후광
+    // 후광 — 펄스에 따라 크기/투명도 변화
     drawCircle(
         brush = Brush.radialGradient(
-            colors = listOf(GoalGold.copy(alpha = 0.55f), GoalGold.copy(alpha = 0f)),
+            colors = listOf(GoalGold.copy(alpha = 0.55f * pulse), GoalGold.copy(alpha = 0f)),
             center = Offset(cx, cy),
-            radius = cs * 0.95f
+            radius = cs * 0.95f * pulse
         ),
         center = Offset(cx, cy),
-        radius = cs * 0.95f
+        radius = cs * 0.95f * pulse
     )
-    // 별
+    // 별 — 펄스로 크기 변화
     drawStar(
         center = Offset(cx, cy),
-        outerR = cs * 0.42f,
-        innerR = cs * 0.18f,
+        outerR = cs * 0.42f * pulse,
+        innerR = cs * 0.18f * pulse,
         fill = GoalGold,
         stroke = GoalGoldDeep
     )

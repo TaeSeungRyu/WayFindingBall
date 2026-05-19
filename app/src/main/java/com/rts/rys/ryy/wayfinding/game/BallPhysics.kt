@@ -42,6 +42,9 @@ class BallPhysics(
     /** Which axis the last impactful collision was on. */
     var squashAxis: SquashAxis = SquashAxis.NONE
         private set
+    /** True for one [step] tick when an impactful collision occurred. Consumer reads then resets next step. */
+    var justImpacted: Boolean = false
+        private set
 
     fun reset() {
         x = maze.startCol + 0.5f
@@ -52,6 +55,7 @@ class BallPhysics(
         headingRad = 0f
         squashAmount = 0f
         squashAxis = SquashAxis.NONE
+        justImpacted = false
     }
 
     /**
@@ -113,12 +117,15 @@ class BallPhysics(
 
         // squash on impactful collisions
         val impactThreshold = 3f
+        justImpacted = false
         if (collidedX && abs(vxPre) > impactThreshold) {
             squashAxis = SquashAxis.X
             squashAmount = 1f
+            justImpacted = true
         } else if (collidedY && abs(vyPre) > impactThreshold) {
             squashAxis = SquashAxis.Y
             squashAmount = 1f
+            justImpacted = true
         }
         squashAmount = (squashAmount - dt / SQUASH_DURATION_S).coerceAtLeast(0f)
         if (squashAmount <= 0f) squashAxis = SquashAxis.NONE

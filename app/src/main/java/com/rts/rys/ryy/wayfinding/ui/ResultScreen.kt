@@ -146,7 +146,7 @@ fun ResultScreen(
             Spacer(Modifier.height(36.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                BigPillButton("홈으로", SkyBlue, onHome)
+                BigPillButton("단계 고르기", SkyBlue, onHome)
                 BigPillButton("다시 해요", CoralPink, onRetry)
             }
         }

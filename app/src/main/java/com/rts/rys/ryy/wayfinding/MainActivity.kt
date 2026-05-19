@@ -88,7 +88,7 @@ fun MazeApp() {
                     }
                 },
                 onExit = {
-                    navController.popBackStack(Routes.HOME, inclusive = false)
+                    navController.popBackStack(Routes.STAGE_SELECT, inclusive = false)
                 }
             )
         }
@@ -106,11 +106,11 @@ fun MazeApp() {
                 elapsedMs = elapsed,
                 onRetry = {
                     navController.navigate(Routes.game(stageId)) {
-                        popUpTo(Routes.HOME) { inclusive = false }
+                        popUpTo(Routes.STAGE_SELECT) { inclusive = false }
                     }
                 },
                 onHome = {
-                    navController.popBackStack(Routes.HOME, inclusive = false)
+                    navController.popBackStack(Routes.STAGE_SELECT, inclusive = false)
                 }
             )
         }
