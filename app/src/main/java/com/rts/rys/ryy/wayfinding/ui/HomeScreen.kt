@@ -116,22 +116,31 @@ fun HomeScreen(
                 onClick = onCreate
             )
 
-            Spacer(Modifier.height(32.dp))
-            SensorSettingRow()
+            Spacer(Modifier.height(28.dp))
+            SettingRow(
+                label = "기울기 센서",
+                enabled = AppSettings.sensorEnabled.value,
+                onSet = { AppSettings.setSensorEnabled(it) }
+            )
+            Spacer(Modifier.height(10.dp))
+            SettingRow(
+                label = "소리",
+                enabled = AppSettings.soundEnabled.value,
+                onSet = { AppSettings.setSoundEnabled(it) }
+            )
         }
     }
 }
 
 @Composable
-private fun SensorSettingRow() {
-    val enabled by AppSettings.sensorEnabled
+private fun SettingRow(label: String, enabled: Boolean, onSet: (Boolean) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "기울기 센서",
+            text = label,
             color = InkDark,
             fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold
@@ -141,14 +150,14 @@ private fun SensorSettingRow() {
             label = "사용",
             selected = enabled,
             selectedColor = SkyBlue,
-            onClick = { AppSettings.setSensorEnabled(true) }
+            onClick = { onSet(true) }
         )
         Spacer(Modifier.size(8.dp))
         SensorSegment(
             label = "사용 안 함",
             selected = !enabled,
             selectedColor = CoralPink,
-            onClick = { AppSettings.setSensorEnabled(false) }
+            onClick = { onSet(false) }
         )
     }
 }

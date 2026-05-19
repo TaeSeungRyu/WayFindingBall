@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
+import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
@@ -63,6 +64,14 @@ fun ResultScreen(
 ) {
     val context = LocalContext.current
     val stage = remember(stageId) { Stages.byId(stageId) }
+    val earnedStars = remember(stageId, elapsedMs) { MazePar.starsFor(stage, elapsedMs) }
+    val previousBest = remember(stageId) {
+        RecordsRepository(context).load()
+            .filter { it.stageId == stageId }
+            .minByOrNull { it.elapsedMs }
+            ?.elapsedMs
+    }
+    val isNewBest = previousBest == null || elapsedMs < previousBest
 
     LaunchedEffect(stageId, elapsedMs) {
         val repo = RecordsRepository(context)
@@ -121,7 +130,18 @@ fun ResultScreen(
                 color = InkSoft,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(18.dp))
+            BigStarsRow(stars = earnedStars)
+            if (isNewBest) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "★ 최고 기록! ★",
+                    fontSize = 14.sp,
+                    color = CoralPink,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            Spacer(Modifier.height(18.dp))
 
             Box(
                 modifier = Modifier
@@ -149,6 +169,20 @@ fun ResultScreen(
                 BigPillButton("단계 고르기", SkyBlue, onHome)
                 BigPillButton("다시 해요", CoralPink, onRetry)
             }
+        }
+    }
+}
+
+@Composable
+private fun BigStarsRow(stars: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        for (i in 1..3) {
+            Text(
+                text = "★",
+                fontSize = 42.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = if (i <= stars) GoalGold else InkSoft.copy(alpha = 0.3f)
+            )
         }
     }
 }

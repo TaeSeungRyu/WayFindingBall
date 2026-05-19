@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -30,10 +31,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.data.RecordsRepository
+import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.game.difficultyLabel
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
+import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
@@ -46,9 +50,19 @@ fun StageSelectScreen(
     onBack: () -> Unit,
     onSelect: (Int) -> Unit
 ) {
+    val context = LocalContext.current
     val customs by Stages.customStages
     val stagesByLevel = remember(customs) {
         (1..4).associateWith { Stages.byLevel(it) }
+    }
+    val starsByStage = remember(customs) {
+        val records = RecordsRepository(context).load()
+        val bestByStage = records.groupBy { it.stageId }
+            .mapValues { (_, rs) -> rs.minOf { it.elapsedMs } }
+        stagesByLevel.values.flatten().associate { stage ->
+            val best = bestByStage[stage.id]
+            stage.id to if (best != null) MazePar.starsFor(stage, best) else 0
+        }
     }
     Box(
         modifier = Modifier
@@ -90,6 +104,7 @@ fun StageSelectScreen(
                             row.forEach { stage ->
                                 StageCard(
                                     stage = stage,
+                                    stars = starsByStage[stage.id] ?: 0,
                                     onClick = { onSelect(stage.id) },
                                     modifier = Modifier.weight(1f)
                                 )
@@ -161,39 +176,60 @@ private fun SectionHeader(level: Int, difficulty: String) {
 }
 
 @Composable
-private fun StageCard(stage: Stage, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun StageCard(
+    stage: Stage,
+    stars: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val color = levelColor(stage.level)
     Box(
         modifier = modifier
-            .height(120.dp)
+            .height(132.dp)
             .shadow(6.dp, RoundedCornerShape(20.dp))
             .clip(RoundedCornerShape(20.dp))
             .background(color)
             .clickable(onClick = onClick)
-            .padding(12.dp),
+            .padding(10.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (stage.isCustom) "내" else "${stage.indexInLevel}",
-                    fontSize = if (stage.isCustom) 20.sp else 26.sp,
+                    fontSize = if (stage.isCustom) 18.sp else 24.sp,
                     fontWeight = FontWeight.Black,
                     color = Color.White
                 )
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = stage.name,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White
+            )
+            Spacer(Modifier.height(4.dp))
+            StarsRow(stars = stars, size = 14)
+        }
+    }
+}
+
+@Composable
+private fun StarsRow(stars: Int, size: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        for (i in 1..3) {
+            Text(
+                text = "★",
+                fontSize = size.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = if (i <= stars) GoalGold else Color.White.copy(alpha = 0.3f)
             )
         }
     }

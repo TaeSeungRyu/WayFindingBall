@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.rts.rys.ryy.wayfinding.data.AppSettings
+import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.Stage
@@ -132,6 +133,7 @@ fun GameScreen(
             val reached = physics.step(dt, ax, ay)
             if (physics.justImpacted) {
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                SoundManager.playBonk()
             }
             ballX = physics.x
             ballY = physics.y
@@ -141,6 +143,7 @@ fun GameScreen(
             elapsedMs = accumulatedMs
             if (reached) {
                 finished = true
+                SoundManager.playGoal()
                 onFinished(elapsedMs)
             }
         }
@@ -230,9 +233,12 @@ fun GameScreen(
         }
 
         if (paused) {
+            val soundEnabled by AppSettings.soundEnabled
             PauseDialog(
                 sensorEnabled = sensorEnabled,
+                soundEnabled = soundEnabled,
                 onToggleSensor = { AppSettings.setSensorEnabled(!sensorEnabled) },
+                onToggleSound = { AppSettings.setSoundEnabled(!soundEnabled) },
                 onResume = { paused = false },
                 onRestart = {
                     paused = false
@@ -245,9 +251,8 @@ fun GameScreen(
 }
 
 @Composable
-private fun SensorToggleChip(enabled: Boolean, onClick: () -> Unit) {
+private fun PillToggleChip(label: String, enabled: Boolean, onClick: () -> Unit) {
     val bg = if (enabled) SkyBlue else InkSoft
-    val label = if (enabled) "센서 ON" else "센서 OFF"
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(18.dp))
@@ -267,7 +272,9 @@ private fun SensorToggleChip(enabled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun PauseDialog(
     sensorEnabled: Boolean,
+    soundEnabled: Boolean,
     onToggleSensor: () -> Unit,
+    onToggleSound: () -> Unit,
     onResume: () -> Unit,
     onRestart: () -> Unit,
     onExit: () -> Unit
@@ -275,7 +282,7 @@ private fun PauseDialog(
     Dialog(onDismissRequest = onResume) {
         Box(
             modifier = Modifier
-                .size(width = 320.dp, height = 340.dp)
+                .size(width = 320.dp, height = 360.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(Color.White)
                 .padding(24.dp)
@@ -286,7 +293,18 @@ private fun PauseDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("잠깐 멈췄어요", color = InkDark, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                SensorToggleChip(enabled = sensorEnabled, onClick = onToggleSensor)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PillToggleChip(
+                        label = if (sensorEnabled) "센서 ON" else "센서 OFF",
+                        enabled = sensorEnabled,
+                        onClick = onToggleSensor
+                    )
+                    PillToggleChip(
+                        label = if (soundEnabled) "소리 ON" else "소리 OFF",
+                        enabled = soundEnabled,
+                        onClick = onToggleSound
+                    )
+                }
                 DialogButton(
                     label = "다시 시작",
                     bg = SunYellow,
