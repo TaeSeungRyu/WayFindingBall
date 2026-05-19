@@ -1,6 +1,7 @@
 package com.rts.rys.ryy.wayfinding.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -347,6 +348,24 @@ fun GameScreen(
 
             Spacer(Modifier.height(4.dp))
 
+            // 20초 주기 스포트라이트: 10s 일반 → 5s 카운트 → 5s 어두움
+            val phaseMs = elapsedMs % 20000L
+            val countdownNum: Int = when (phaseMs) {
+                in 10000L..14999L -> (5 - ((phaseMs - 10000L) / 1000L).toInt()).coerceIn(1, 5)
+                else -> 0
+            }
+            val spotlightAlpha: Float = when (phaseMs) {
+                in 15000L..19999L -> {
+                    val t = (phaseMs - 15000L) / 5000f
+                    when {
+                        t < 0.10f -> (t / 0.10f).coerceIn(0f, 1f)
+                        t > 0.90f -> ((1f - t) / 0.10f).coerceIn(0f, 1f)
+                        else -> 1f
+                    }
+                }
+                else -> 0f
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -385,25 +404,80 @@ fun GameScreen(
                             .background(SunYellow.copy(alpha = flashAlpha * 0.55f))
                     )
                 }
+                if (spotlightAlpha > 0f) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cs = minOf(size.width / stage.maze.cols, size.height / stage.maze.rows)
+                        val ox = (size.width - cs * stage.maze.cols) / 2f
+                        val oy = (size.height - cs * stage.maze.rows) / 2f
+                        val ballPx = Offset(ox + ballX * cs, oy + ballY * cs)
+                        val holeR = cs * 2.0f
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colorStops = arrayOf(
+                                    0f to Color.Black.copy(alpha = 0f),
+                                    0.20f to Color.Black.copy(alpha = 0f),
+                                    1f to Color.Black.copy(alpha = 0.88f * spotlightAlpha)
+                                ),
+                                center = ballPx,
+                                radius = holeR
+                            ),
+                            size = size
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(4.dp))
 
-            DPad(
-                onInput = { dx, dy ->
-                    val len = sqrt(dx * dx + dy * dy)
-                    if (len > 0f) {
-                        kx = dx / len
-                        ky = dy / len
-                    } else {
-                        kx = 0f; ky = 0f
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (countdownNum > 0) {
+                        val secFrac = ((phaseMs - 10000L) % 1000L) / 1000f
+                        val pulse = 1f + 0.30f * (1f - secFrac)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "🌑 곧 깜깜!",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = CoralPink
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = countdownNum.toString(),
+                                fontSize = 72.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = CoralPink,
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = pulse
+                                    scaleY = pulse
+                                }
+                            )
+                        }
                     }
-                },
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .padding(end = 6.dp)
-                    .alpha(if (sensorEnabled) 0.45f else 1f)
-            )
+                }
+                DPad(
+                    onInput = { dx, dy ->
+                        val len = sqrt(dx * dx + dy * dy)
+                        if (len > 0f) {
+                            kx = dx / len
+                            ky = dy / len
+                        } else {
+                            kx = 0f; ky = 0f
+                        }
+                    },
+                    modifier = Modifier
+                        .padding(end = 6.dp)
+                        .alpha(if (sensorEnabled) 0.45f else 1f)
+                )
+            }
         }
 
         if (paused) {
