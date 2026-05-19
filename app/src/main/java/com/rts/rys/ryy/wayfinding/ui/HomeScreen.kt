@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
@@ -105,7 +107,67 @@ fun HomeScreen(
                 bg = SunYellow,
                 onClick = onRecords
             )
+
+            Spacer(Modifier.height(32.dp))
+            SensorSettingRow()
         }
+    }
+}
+
+@Composable
+private fun SensorSettingRow() {
+    val enabled by AppSettings.sensorEnabled
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "센서",
+            color = InkDark,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(Modifier.size(12.dp))
+        SensorSegment(
+            label = "사용",
+            selected = enabled,
+            selectedColor = SkyBlue,
+            onClick = { AppSettings.setSensorEnabled(true) }
+        )
+        Spacer(Modifier.size(8.dp))
+        SensorSegment(
+            label = "사용 안 함",
+            selected = !enabled,
+            selectedColor = CoralPink,
+            onClick = { AppSettings.setSensorEnabled(false) }
+        )
+    }
+}
+
+@Composable
+private fun SensorSegment(
+    label: String,
+    selected: Boolean,
+    selectedColor: Color,
+    onClick: () -> Unit
+) {
+    val bg = if (selected) selectedColor else Color.White
+    val textColor = if (selected) Color.White else InkSoft
+    Box(
+        modifier = Modifier
+            .shadow(if (selected) 4.dp else 2.dp, RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
     }
 }
 

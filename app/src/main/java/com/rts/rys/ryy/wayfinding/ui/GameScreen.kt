@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
@@ -62,8 +63,10 @@ fun GameScreen(
     val physics = remember(stage.id) { BallPhysics(stage.maze) }
     val tilt = remember { TiltSensor(context) }
 
-    DisposableEffect(Unit) {
-        tilt.start()
+    val sensorEnabled by AppSettings.sensorEnabled
+
+    DisposableEffect(sensorEnabled) {
+        if (sensorEnabled) tilt.start() else tilt.stop()
         onDispose { tilt.stop() }
     }
 
@@ -92,8 +95,8 @@ fun GameScreen(
             accumulatedMs += ((now - last) / 1_000_000L)
             last = now
 
-            val sx = tilt.tiltX
-            val sy = tilt.tiltY
+            val sx = if (sensorEnabled) tilt.tiltX else 0f
+            val sy = if (sensorEnabled) tilt.tiltY else 0f
             val useKeypad = kx != 0f || ky != 0f
             val ax: Float
             val ay: Float
@@ -135,7 +138,12 @@ fun GameScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.weight(1f))
+                SensorToggleChip(
+                    enabled = sensorEnabled,
+                    onClick = { AppSettings.setSensorEnabled(!sensorEnabled) }
+                )
+                Spacer(Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(18.dp))
@@ -190,6 +198,26 @@ fun GameScreen(
                 onExit = onExit
             )
         }
+    }
+}
+
+@Composable
+private fun SensorToggleChip(enabled: Boolean, onClick: () -> Unit) {
+    val bg = if (enabled) SkyBlue else InkSoft
+    val label = if (enabled) "센서 ON" else "센서 OFF"
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
     }
 }
 
