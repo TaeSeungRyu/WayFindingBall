@@ -247,6 +247,7 @@ fun MazeEditorScreen(
         previewMaze?.let { maze ->
             EditorPreview(
                 maze = maze,
+                level = level,
                 onExit = { previewMaze = null }
             )
         }
@@ -437,11 +438,12 @@ private fun ActionButton(
 }
 
 @Composable
-private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
+private fun EditorPreview(maze: Maze, level: Int, onExit: () -> Unit) {
     BackHandler { onExit() }
 
     val context = LocalContext.current
     val physics = remember(maze) { BallPhysics(maze) }
+    val theme = remember(level) { com.rts.rys.ryy.wayfinding.game.themeForLevel(level) }
     val tilt = remember { TiltSensor(context) }
     val sensorEnabled by AppSettings.sensorEnabled
 
@@ -522,9 +524,13 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
+            .background(Brush.verticalGradient(listOf(theme.skyTop, theme.skyBottom)))
             .windowInsetsPadding(WindowInsets.systemBars)
     ) {
+        SkyAmbience(
+            modifier = Modifier.fillMaxSize(),
+            cloudOpacity = theme.cloudOpacity
+        )
         Column(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
@@ -560,6 +566,7 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
                     ballScale = breath,
                     headingRad = ballHeading,
                     isHappy = reached,
+                    theme = theme,
                     modifier = Modifier.fillMaxSize()
                 )
                 if (reached) {

@@ -54,6 +54,7 @@ import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
+import com.rts.rys.ryy.wayfinding.game.themeForLevel
 import com.rts.rys.ryy.wayfinding.ui.theme.BallRed
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.CreamBg
@@ -86,6 +87,7 @@ fun GameScreen(
     val view = LocalView.current
     val physics = remember(stage.id) { BallPhysics(stage.maze) }
     val tilt = remember { TiltSensor(context) }
+    val theme = remember(stage.level) { themeForLevel(stage.level) }
 
     val sensorEnabled by AppSettings.sensorEnabled
 
@@ -291,9 +293,13 @@ fun GameScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
+            .background(Brush.verticalGradient(listOf(theme.skyTop, theme.skyBottom)))
     ) {
-        SkyAmbience(modifier = Modifier.fillMaxSize())
+        SkyAmbience(
+            modifier = Modifier.fillMaxSize(),
+            cloudOpacity = theme.cloudOpacity,
+            sparkleColor = if (theme.isDark) Color.White else Color.White
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -358,6 +364,7 @@ fun GameScreen(
                     ballScale = ballScale * breath,
                     headingRad = ballHeading,
                     isHappy = celebrating,
+                    theme = theme,
                     modifier = Modifier.fillMaxSize()
                 )
                 EffectsOverlay(

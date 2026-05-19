@@ -33,7 +33,11 @@ private data class SparkleData(
 )
 
 @Composable
-fun SkyAmbience(modifier: Modifier = Modifier) {
+fun SkyAmbience(
+    modifier: Modifier = Modifier,
+    cloudOpacity: Float = 1f,
+    sparkleColor: Color = Color.White
+) {
     val infinite = rememberInfiniteTransition(label = "sky")
     val t by infinite.animateFloat(
         initialValue = 0f,
@@ -73,12 +77,14 @@ fun SkyAmbience(modifier: Modifier = Modifier) {
     }
 
     Canvas(modifier = modifier) {
-        for (c in clouds) {
-            val cycle = (t * c.speed + c.phase) % 1f
-            val x = cycle * (size.width + 220f) - 110f
-            val y = c.yFrac * size.height
-            val s = c.sizeFrac * size.minDimension
-            drawCloud(Offset(x, y), s, c.alpha)
+        if (cloudOpacity > 0f) {
+            for (c in clouds) {
+                val cycle = (t * c.speed + c.phase) % 1f
+                val x = cycle * (size.width + 220f) - 110f
+                val y = c.yFrac * size.height
+                val s = c.sizeFrac * size.minDimension
+                drawCloud(Offset(x, y), s, c.alpha * cloudOpacity)
+            }
         }
         for (sp in sparkles) {
             val cx = sp.xFrac * size.width
@@ -86,7 +92,7 @@ fun SkyAmbience(modifier: Modifier = Modifier) {
             val ph = (twinkle + sp.phase) % 1f
             val alpha = (0.5f + 0.5f * sin(ph * 2f * PI.toFloat())) * 0.55f
             drawCircle(
-                color = Color.White.copy(alpha = alpha),
+                color = sparkleColor.copy(alpha = alpha),
                 radius = sp.sizePx,
                 center = Offset(cx, cy)
             )

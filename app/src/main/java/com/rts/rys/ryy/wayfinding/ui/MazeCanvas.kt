@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import com.rts.rys.ryy.wayfinding.game.Cell
 import com.rts.rys.ryy.wayfinding.game.Maze
+import com.rts.rys.ryy.wayfinding.game.MazeTheme
+import com.rts.rys.ryy.wayfinding.game.themeForLevel
 import com.rts.rys.ryy.wayfinding.ui.theme.BallRed
 import com.rts.rys.ryy.wayfinding.ui.theme.BallRedDeep
 import com.rts.rys.ryy.wayfinding.ui.theme.FloorTile
@@ -48,6 +50,7 @@ fun MazeCanvas(
     ballScale: Float = 1f,
     headingRad: Float = 0f,
     isHappy: Boolean = false,
+    theme: MazeTheme = themeForLevel(1),
     modifier: Modifier = Modifier
 ) {
     val infinite = rememberInfiniteTransition(label = "maze")
@@ -79,7 +82,7 @@ fun MazeCanvas(
         label = "sparkleT"
     )
     Canvas(modifier = modifier) {
-        drawMaze(maze)
+        drawMaze(maze, theme)
         drawGoal(maze, goalPulse, rayRotation, sparkleTime)
         if (trail.isNotEmpty() && ballScale > 0f) drawTrail(maze, trail)
         if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale, headingRad, isHappy)
@@ -113,76 +116,72 @@ private fun DrawScope.originOffset(maze: Maze, cs: Float): Offset {
     return Offset((size.width - totalW) / 2f, (size.height - totalH) / 2f)
 }
 
-private fun DrawScope.drawMaze(maze: Maze) {
+private fun DrawScope.drawMaze(maze: Maze, theme: MazeTheme) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
 
-    // 바닥 (체크무늬 크림)
+    // 바닥 (체크무늬) — 테마 색
     for (r in 0 until maze.rows) for (c in 0 until maze.cols) {
         if (maze.grid[r][c] == Cell.WALL) continue
         val tl = Offset(origin.x + c * cs, origin.y + r * cs)
-        val tile = if ((r + c) % 2 == 0) FloorTile else FloorTileAlt
+        val tile = if ((r + c) % 2 == 0) theme.floorTile else theme.floorTileAlt
         drawRect(color = tile, topLeft = tl, size = Size(cs, cs))
     }
 
-    // 바닥 위 작은 디테일 (셀 ~15%에 잎/꽃잎/조약돌)
+    // 바닥 위 작은 디테일
     for (r in 0 until maze.rows) for (c in 0 until maze.cols) {
         if (maze.grid[r][c] == Cell.WALL) continue
         val tl = Offset(origin.x + c * cs, origin.y + r * cs)
-        drawFloorDetail(c, r, tl, cs)
+        drawFloorDetail(c, r, tl, cs, theme)
     }
 
-    // 벽 그림자 — 우하단 방향으로 인접 바닥에 드리워짐
+    // 벽 그림자 — 어두운 테마면 약하게
     val shadowOffset = cs * 0.15f
+    val shadowAlpha = if (theme.isDark) 0.30f else 0.14f
     for (r in 0 until maze.rows) for (c in 0 until maze.cols) {
         if (maze.grid[r][c] != Cell.WALL) continue
         val tl = Offset(origin.x + c * cs + shadowOffset, origin.y + r * cs + shadowOffset)
         drawRect(
-            color = Color.Black.copy(alpha = 0.14f),
+            color = Color.Black.copy(alpha = shadowAlpha),
             topLeft = tl,
             size = Size(cs, cs)
         )
     }
 
-    // 벽 (잔디 블록) — 셀별로 변주
+    // 벽 — 셀별로 변주
     for (r in 0 until maze.rows) for (c in 0 until maze.cols) {
         if (maze.grid[r][c] != Cell.WALL) continue
         val tl = Offset(origin.x + c * cs, origin.y + r * cs)
-        drawWallTile(c, r, tl, cs)
+        drawWallTile(c, r, tl, cs, theme)
     }
-
 }
 
-private fun DrawScope.drawFloorDetail(c: Int, r: Int, tl: Offset, cs: Float) {
-    // 시드와 별도 솔트(99)로 벽 변주와 겹치지 않게
+private fun DrawScope.drawFloorDetail(c: Int, r: Int, tl: Offset, cs: Float, theme: MazeTheme) {
     val seed = tileSeed(c, r) xor 0x6f7c
     val roll = seedFloat(seed, 99)
-    if (roll > 0.18f) return // ~18%만 디테일
+    if (roll > 0.18f) return
     val variant = (seedFloat(seed, 98) * 100f).toInt()
     when {
         variant < 45 -> {
-            // 작은 잎 2개
             val cx = tl.x + cs * (0.30f + seedFloat(seed, 80) * 0.40f)
             val cy = tl.y + cs * (0.30f + seedFloat(seed, 81) * 0.40f)
-            val leafColor = Color(0xFFA8C49B).copy(alpha = 0.85f)
-            drawCircle(leafColor, cs * 0.05f, Offset(cx, cy))
-            drawCircle(leafColor, cs * 0.04f, Offset(cx + cs * 0.10f, cy + cs * 0.06f))
+            val dotColor = theme.floorDetailDot.copy(alpha = 0.85f)
+            drawCircle(dotColor, cs * 0.05f, Offset(cx, cy))
+            drawCircle(dotColor, cs * 0.04f, Offset(cx + cs * 0.10f, cy + cs * 0.06f))
         }
         variant < 75 -> {
-            // 작은 조약돌
             val cx = tl.x + cs * (0.30f + seedFloat(seed, 82) * 0.40f)
             val cy = tl.y + cs * (0.30f + seedFloat(seed, 83) * 0.40f)
             val rr = cs * 0.055f
             drawCircle(Color.Black.copy(alpha = 0.10f), rr, Offset(cx + 1f, cy + 1.5f))
-            drawCircle(Color(0xFFCBB995), rr, Offset(cx, cy))
+            drawCircle(theme.rockTop, rr, Offset(cx, cy))
             drawCircle(Color.White.copy(alpha = 0.5f), rr * 0.35f, Offset(cx - rr * 0.3f, cy - rr * 0.3f))
         }
         else -> {
-            // 살짝 진한 바닥 얼룩 (paint splash)
             val cx = tl.x + cs * (0.25f + seedFloat(seed, 84) * 0.50f)
             val cy = tl.y + cs * (0.25f + seedFloat(seed, 85) * 0.50f)
             drawCircle(
-                color = Color(0xFFE8D9B5).copy(alpha = 0.65f),
+                color = theme.floorDetailSplotch.copy(alpha = 0.65f),
                 radius = cs * 0.13f,
                 center = Offset(cx, cy)
             )
@@ -190,17 +189,16 @@ private fun DrawScope.drawFloorDetail(c: Int, r: Int, tl: Offset, cs: Float) {
     }
 }
 
-private fun DrawScope.drawWallTile(c: Int, r: Int, tl: Offset, cs: Float) {
+private fun DrawScope.drawWallTile(c: Int, r: Int, tl: Offset, cs: Float, theme: MazeTheme) {
     val sz = Size(cs, cs)
     val seed = tileSeed(c, r)
-    // 본체 그라데이션 — 셀별 미세한 밝기 변동
     val tintShift = (seedFloat(seed, 7) - 0.5f) * 0.06f
     drawRect(
         brush = Brush.verticalGradient(
             colors = listOf(
-                shiftBrightness(WallTopLight, tintShift),
-                shiftBrightness(WallGreen, tintShift),
-                shiftBrightness(WallGreenDeep, tintShift)
+                shiftBrightness(theme.wallTop, tintShift),
+                shiftBrightness(theme.wallMid, tintShift),
+                shiftBrightness(theme.wallDeep, tintShift)
             ),
             startY = tl.y,
             endY = tl.y + cs
@@ -208,65 +206,59 @@ private fun DrawScope.drawWallTile(c: Int, r: Int, tl: Offset, cs: Float) {
         topLeft = tl,
         size = sz
     )
-    // 외곽
     drawRect(
-        color = WallGreenDeep,
+        color = theme.wallDeep,
         topLeft = tl,
         size = sz,
         style = Stroke(width = 1.5f)
     )
-    // 상단 하이라이트
     drawLine(
-        color = Color.White.copy(alpha = 0.55f),
+        color = Color.White.copy(alpha = if (theme.isDark) 0.20f else 0.55f),
         start = Offset(tl.x + cs * 0.12f, tl.y + cs * 0.18f),
         end = Offset(tl.x + cs * 0.88f, tl.y + cs * 0.18f),
         strokeWidth = cs * 0.06f
     )
 
-    // 변주: 100분위 분포 → 꽃 / 돌 / 잎사귀 점들
     val variant = (seedFloat(seed, 1) * 100f).toInt()
     when {
-        variant < 10 -> drawTileRock(seed, tl, cs)
-        variant < 24 -> drawTileFlower(seed, tl, cs)
-        else -> drawTileLeaves(seed, tl, cs)
+        variant < 10 -> drawTileRock(seed, tl, cs, theme)
+        variant < 24 -> drawTileFlower(seed, tl, cs, theme)
+        else -> drawTileLeaves(seed, tl, cs, theme)
     }
 }
 
-private fun DrawScope.drawTileLeaves(seed: Int, tl: Offset, cs: Float) {
+private fun DrawScope.drawTileLeaves(seed: Int, tl: Offset, cs: Float, theme: MazeTheme) {
     val count = 1 + (seedFloat(seed, 11) * 3f).toInt().coerceIn(1, 3)
     for (i in 0 until count) {
         val fx = 0.18f + seedFloat(seed, 20 + i) * 0.65f
         val fy = 0.42f + seedFloat(seed, 30 + i) * 0.45f
         val rr = cs * (0.045f + seedFloat(seed, 40 + i) * 0.030f)
         drawCircle(
-            color = WallTopLight.copy(alpha = 0.88f),
+            color = theme.wallAccent.copy(alpha = 0.88f),
             radius = rr,
             center = Offset(tl.x + cs * fx, tl.y + cs * fy)
         )
     }
 }
 
-private fun DrawScope.drawTileRock(seed: Int, tl: Offset, cs: Float) {
+private fun DrawScope.drawTileRock(seed: Int, tl: Offset, cs: Float, theme: MazeTheme) {
     val cx = tl.x + cs * (0.32f + seedFloat(seed, 50) * 0.36f)
     val cy = tl.y + cs * (0.55f + seedFloat(seed, 51) * 0.28f)
     val rr = cs * (0.10f + seedFloat(seed, 52) * 0.04f)
-    // 그림자
     drawCircle(
         color = Color.Black.copy(alpha = 0.18f),
         radius = rr,
         center = Offset(cx + 1.2f, cy + 2.0f)
     )
-    // 본체
     drawCircle(
         brush = Brush.verticalGradient(
-            colors = listOf(Color(0xFFC4CED4), Color(0xFF8A98A2)),
+            colors = listOf(theme.rockTop, theme.rockBottom),
             startY = cy - rr,
             endY = cy + rr
         ),
         radius = rr,
         center = Offset(cx, cy)
     )
-    // 하이라이트
     drawCircle(
         color = Color.White.copy(alpha = 0.5f),
         radius = rr * 0.28f,
@@ -274,16 +266,13 @@ private fun DrawScope.drawTileRock(seed: Int, tl: Offset, cs: Float) {
     )
 }
 
-private fun DrawScope.drawTileFlower(seed: Int, tl: Offset, cs: Float) {
+private fun DrawScope.drawTileFlower(seed: Int, tl: Offset, cs: Float, theme: MazeTheme) {
     val cx = tl.x + cs * (0.30f + seedFloat(seed, 60) * 0.42f)
     val cy = tl.y + cs * (0.40f + seedFloat(seed, 61) * 0.40f)
     val petalR = cs * (0.065f + seedFloat(seed, 62) * 0.020f)
     val petalDist = cs * 0.07f
-    val petalColor = when ((seedFloat(seed, 63) * 3f).toInt().coerceIn(0, 2)) {
-        0 -> Color(0xFFFFC1CC) // 분홍
-        1 -> Color(0xFFFFD89C) // 살구
-        else -> Color(0xFFCDB6F5) // 라벤더
-    }
+    val palette = theme.flowerColors
+    val petalColor = palette[(seedFloat(seed, 63) * palette.size).toInt().coerceIn(0, palette.size - 1)]
     for (i in 0 until 5) {
         val a = (i * (2.0 * PI / 5.0) - PI / 2.0).toFloat()
         val px = cx + cos(a) * petalDist
@@ -291,7 +280,7 @@ private fun DrawScope.drawTileFlower(seed: Int, tl: Offset, cs: Float) {
         drawCircle(color = petalColor, radius = petalR, center = Offset(px, py))
     }
     drawCircle(
-        color = Color(0xFFFFE066),
+        color = theme.flowerCenter,
         radius = cs * 0.048f,
         center = Offset(cx, cy)
     )
