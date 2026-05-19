@@ -79,7 +79,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "통통 미로",
+                text = "또르르 미로",
                 fontSize = 56.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = InkDark,

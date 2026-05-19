@@ -130,7 +130,7 @@ fun SplashScreen(onFinished: () -> Unit) {
             }
 
             Text(
-                text = "통통 미로",
+                text = "또르르 미로",
                 color = InkDark,
                 fontSize = 42.sp,
                 fontWeight = FontWeight.ExtraBold,
