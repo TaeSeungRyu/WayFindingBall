@@ -172,7 +172,7 @@ fun GameScreen(
                 }
 
                 val reached = physics.step(dt, ax, ay)
-                if (physics.justImpacted) {
+                if (physics.justImpacted && !reached) {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     SoundManager.playBonk()
                     repeat(5) {

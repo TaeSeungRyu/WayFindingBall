@@ -493,7 +493,7 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
             }
 
             val didReach = physics.step(dt, ax, ay)
-            if (physics.justImpacted) SoundManager.playBonk()
+            if (physics.justImpacted && !didReach) SoundManager.playBonk()
             ballX = physics.x
             ballY = physics.y
             ballRotation = physics.rotation
