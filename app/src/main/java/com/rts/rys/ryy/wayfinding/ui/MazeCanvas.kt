@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -30,6 +31,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.GoalGoldDeep
 import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 import com.rts.rys.ryy.wayfinding.ui.theme.WallGreenDeep
 import com.rts.rys.ryy.wayfinding.ui.theme.WallTopLight
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -55,9 +57,27 @@ fun MazeCanvas(
         ),
         label = "goalPulse"
     )
+    val rayRotation by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            tween(durationMillis = 9000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rayRot"
+    )
+    val sparkleTime by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            tween(durationMillis = 3200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "sparkleT"
+    )
     Canvas(modifier = modifier) {
         drawMaze(maze)
-        drawGoal(maze, goalPulse)
+        drawGoal(maze, goalPulse, rayRotation, sparkleTime)
         if (trail.isNotEmpty() && ballScale > 0f) drawTrail(maze, trail)
         if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale)
     }
@@ -102,11 +122,11 @@ private fun DrawScope.drawMaze(maze: Maze) {
         drawRect(color = tile, topLeft = tl, size = Size(cs, cs))
     }
 
-    // 벽 (잔디 블록)
+    // 벽 (잔디 블록) — 셀별로 변주
     for (r in 0 until maze.rows) for (c in 0 until maze.cols) {
         if (maze.grid[r][c] != Cell.WALL) continue
         val tl = Offset(origin.x + c * cs, origin.y + r * cs)
-        drawWallTile(tl, cs)
+        drawWallTile(c, r, tl, cs)
     }
 
     // 외곽 라운드 보더
@@ -118,12 +138,18 @@ private fun DrawScope.drawMaze(maze: Maze) {
     )
 }
 
-private fun DrawScope.drawWallTile(tl: Offset, cs: Float) {
+private fun DrawScope.drawWallTile(c: Int, r: Int, tl: Offset, cs: Float) {
     val sz = Size(cs, cs)
-    // 본체 그라데이션
+    val seed = tileSeed(c, r)
+    // 본체 그라데이션 — 셀별 미세한 밝기 변동
+    val tintShift = (seedFloat(seed, 7) - 0.5f) * 0.06f
     drawRect(
         brush = Brush.verticalGradient(
-            colors = listOf(WallTopLight, WallGreen, WallGreenDeep),
+            colors = listOf(
+                shiftBrightness(WallTopLight, tintShift),
+                shiftBrightness(WallGreen, tintShift),
+                shiftBrightness(WallGreenDeep, tintShift)
+            ),
             startY = tl.y,
             endY = tl.y + cs
         ),
@@ -144,43 +170,186 @@ private fun DrawScope.drawWallTile(tl: Offset, cs: Float) {
         end = Offset(tl.x + cs * 0.88f, tl.y + cs * 0.18f),
         strokeWidth = cs * 0.06f
     )
-    // 작은 잎사귀 점 두 개
+
+    // 변주: 100분위 분포 → 꽃 / 돌 / 잎사귀 점들
+    val variant = (seedFloat(seed, 1) * 100f).toInt()
+    when {
+        variant < 10 -> drawTileRock(seed, tl, cs)
+        variant < 24 -> drawTileFlower(seed, tl, cs)
+        else -> drawTileLeaves(seed, tl, cs)
+    }
+}
+
+private fun DrawScope.drawTileLeaves(seed: Int, tl: Offset, cs: Float) {
+    val count = 1 + (seedFloat(seed, 11) * 3f).toInt().coerceIn(1, 3)
+    for (i in 0 until count) {
+        val fx = 0.18f + seedFloat(seed, 20 + i) * 0.65f
+        val fy = 0.42f + seedFloat(seed, 30 + i) * 0.45f
+        val rr = cs * (0.045f + seedFloat(seed, 40 + i) * 0.030f)
+        drawCircle(
+            color = WallTopLight.copy(alpha = 0.88f),
+            radius = rr,
+            center = Offset(tl.x + cs * fx, tl.y + cs * fy)
+        )
+    }
+}
+
+private fun DrawScope.drawTileRock(seed: Int, tl: Offset, cs: Float) {
+    val cx = tl.x + cs * (0.32f + seedFloat(seed, 50) * 0.36f)
+    val cy = tl.y + cs * (0.55f + seedFloat(seed, 51) * 0.28f)
+    val rr = cs * (0.10f + seedFloat(seed, 52) * 0.04f)
+    // 그림자
     drawCircle(
-        color = WallTopLight.copy(alpha = 0.9f),
-        radius = cs * 0.06f,
-        center = Offset(tl.x + cs * 0.3f, tl.y + cs * 0.55f)
+        color = Color.Black.copy(alpha = 0.18f),
+        radius = rr,
+        center = Offset(cx + 1.2f, cy + 2.0f)
     )
+    // 본체
     drawCircle(
-        color = WallTopLight.copy(alpha = 0.9f),
-        radius = cs * 0.05f,
-        center = Offset(tl.x + cs * 0.65f, tl.y + cs * 0.72f)
+        brush = Brush.verticalGradient(
+            colors = listOf(Color(0xFFC4CED4), Color(0xFF8A98A2)),
+            startY = cy - rr,
+            endY = cy + rr
+        ),
+        radius = rr,
+        center = Offset(cx, cy)
+    )
+    // 하이라이트
+    drawCircle(
+        color = Color.White.copy(alpha = 0.5f),
+        radius = rr * 0.28f,
+        center = Offset(cx - rr * 0.35f, cy - rr * 0.35f)
     )
 }
 
-private fun DrawScope.drawGoal(maze: Maze, pulse: Float) {
+private fun DrawScope.drawTileFlower(seed: Int, tl: Offset, cs: Float) {
+    val cx = tl.x + cs * (0.30f + seedFloat(seed, 60) * 0.42f)
+    val cy = tl.y + cs * (0.40f + seedFloat(seed, 61) * 0.40f)
+    val petalR = cs * (0.065f + seedFloat(seed, 62) * 0.020f)
+    val petalDist = cs * 0.07f
+    val petalColor = when ((seedFloat(seed, 63) * 3f).toInt().coerceIn(0, 2)) {
+        0 -> Color(0xFFFFC1CC) // 분홍
+        1 -> Color(0xFFFFD89C) // 살구
+        else -> Color(0xFFCDB6F5) // 라벤더
+    }
+    for (i in 0 until 5) {
+        val a = (i * (2.0 * PI / 5.0) - PI / 2.0).toFloat()
+        val px = cx + cos(a) * petalDist
+        val py = cy + sin(a) * petalDist
+        drawCircle(color = petalColor, radius = petalR, center = Offset(px, py))
+    }
+    drawCircle(
+        color = Color(0xFFFFE066),
+        radius = cs * 0.048f,
+        center = Offset(cx, cy)
+    )
+}
+
+private fun tileSeed(c: Int, r: Int): Int = (c * 73856093) xor (r * 19349663)
+
+private fun seedFloat(seed: Int, salt: Int): Float {
+    var v = (seed xor (salt * 0x27d4eb2d.toInt())).toLong() and 0xFFFFFFFFL
+    v = (v xor (v shr 16)) and 0xFFFFFFFFL
+    v = (v * 0x85ebca6bL) and 0xFFFFFFFFL
+    v = (v xor (v shr 13)) and 0xFFFFFFFFL
+    return v.toFloat() / 0xFFFFFFFFL.toFloat()
+}
+
+private fun shiftBrightness(color: Color, shift: Float): Color {
+    val s = 1f + shift
+    return Color(
+        red = (color.red * s).coerceIn(0f, 1f),
+        green = (color.green * s).coerceIn(0f, 1f),
+        blue = (color.blue * s).coerceIn(0f, 1f),
+        alpha = color.alpha
+    )
+}
+
+private fun DrawScope.drawGoal(maze: Maze, pulse: Float, rayRotation: Float, sparkleTime: Float) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
     val cx = origin.x + (maze.goalCol + 0.5f) * cs
     val cy = origin.y + (maze.goalRow + 0.5f) * cs
+    val center = Offset(cx, cy)
 
-    // 후광 — 펄스에 따라 크기/투명도 변화
+    // 회전 광선
+    drawGoalRays(center, cs, rayRotation)
+
+    // 후광
     drawCircle(
         brush = Brush.radialGradient(
             colors = listOf(GoalGold.copy(alpha = 0.55f * pulse), GoalGold.copy(alpha = 0f)),
-            center = Offset(cx, cy),
+            center = center,
             radius = cs * 0.95f * pulse
         ),
-        center = Offset(cx, cy),
+        center = center,
         radius = cs * 0.95f * pulse
     )
-    // 별 — 펄스로 크기 변화
-    drawStar(
-        center = Offset(cx, cy),
-        outerR = cs * 0.42f * pulse,
-        innerR = cs * 0.18f * pulse,
-        fill = GoalGold,
-        stroke = GoalGoldDeep
-    )
+
+    // 별 — 펄스에 따라 크기 + ±5° wobble
+    val wobble = (pulse - 1.0f) * 60f
+    rotate(degrees = wobble, pivot = center) {
+        drawStar(
+            center = center,
+            outerR = cs * 0.42f * pulse,
+            innerR = cs * 0.18f * pulse,
+            fill = GoalGold,
+            stroke = GoalGoldDeep
+        )
+    }
+
+    // 궤도 위 반짝임
+    drawGoalSparkles(center, cs, sparkleTime)
+}
+
+private fun DrawScope.drawGoalRays(center: Offset, cs: Float, rotationDeg: Float) {
+    val rayCount = 8
+    val innerR = cs * 0.55f
+    rotate(degrees = rotationDeg, pivot = center) {
+        for (i in 0 until rayCount) {
+            val isLong = i % 2 == 0
+            val outerR = if (isLong) cs * 1.45f else cs * 1.05f
+            val aDeg = i * (360f / rayCount) - 90f
+            val a = aDeg * (PI.toFloat() / 180f)
+            val sx = center.x + cos(a) * innerR
+            val sy = center.y + sin(a) * innerR
+            val ex = center.x + cos(a) * outerR
+            val ey = center.y + sin(a) * outerR
+            drawLine(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        GoalGold.copy(alpha = if (isLong) 0.42f else 0.24f),
+                        GoalGold.copy(alpha = 0f)
+                    ),
+                    start = Offset(sx, sy),
+                    end = Offset(ex, ey)
+                ),
+                start = Offset(sx, sy),
+                end = Offset(ex, ey),
+                strokeWidth = cs * if (isLong) 0.11f else 0.08f,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawGoalSparkles(center: Offset, cs: Float, time: Float) {
+    val count = 4
+    for (i in 0 until count) {
+        val baseAngle = i * (360f / count)
+        val breathePhase = (time * 2f + i * 0.3f) * 2f * PI.toFloat()
+        val orbitRadius = cs * (0.82f + 0.10f * sin(breathePhase))
+        val orbitAngle = (baseAngle + time * 90f) * (PI.toFloat() / 180f)
+        val px = center.x + cos(orbitAngle) * orbitRadius
+        val py = center.y + sin(orbitAngle) * orbitRadius
+        val twinklePhase = (time * 1.5f + i * 0.25f) % 1f
+        val twinkle = (0.5f + 0.5f * sin(twinklePhase * 2f * PI.toFloat())).coerceIn(0f, 1f)
+        drawCircle(
+            color = GoalGold.copy(alpha = twinkle * 0.85f),
+            radius = cs * 0.055f * (0.7f + 0.3f * twinkle),
+            center = Offset(px, py)
+        )
+    }
 }
 
 private fun DrawScope.drawStar(

@@ -111,9 +111,11 @@ fun GameScreen(
     var celebrationTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var ballScale by remember(stage.id, attemptId) { mutableFloatStateOf(1f) }
     var flashAlpha by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
+    var idleStrength by remember(stage.id, attemptId) { mutableFloatStateOf(1f) }
+    var idleTime by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
 
     val density = LocalDensity.current
-    val shakeAmplitudePx = with(density) { 7.dp.toPx() }
+    val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
     BackHandler(enabled = !paused) { paused = true }
@@ -186,7 +188,7 @@ fun GameScreen(
                             )
                         )
                     }
-                    shakeMs = 0.13f
+                    shakeMs = 0.09f
                 }
                 ballX = physics.x
                 ballY = physics.y
@@ -254,7 +256,7 @@ fun GameScreen(
             // shake decay
             shakeMs = (shakeMs - dt).coerceAtLeast(0f)
             shakeOffset = if (shakeMs > 0f) {
-                val k = (shakeMs / 0.13f) * shakeAmplitudePx
+                val k = (shakeMs / 0.09f) * shakeAmplitudePx
                 Offset(
                     ((Math.random() - 0.5) * 2 * k).toFloat(),
                     ((Math.random() - 0.5) * 2 * k).toFloat()
@@ -262,6 +264,13 @@ fun GameScreen(
             } else Offset.Zero
             // flash decay
             flashAlpha = (flashAlpha - dt * 2.4f).coerceAtLeast(0f)
+
+            // idle breathing tracking
+            val speed = sqrt(physics.vx * physics.vx + physics.vy * physics.vy)
+            val targetIdle = if (!celebrating && speed < 0.5f) 1f else 0f
+            val approach = (dt * 2.5f).coerceIn(0f, 1f)
+            idleStrength += (targetIdle - idleStrength) * approach
+            idleTime += dt
 
             if (celebrating) {
                 celebrationTimer += dt
@@ -278,9 +287,13 @@ fun GameScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
-            .padding(top = 28.dp, bottom = 20.dp, start = 14.dp, end = 14.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        SkyAmbience(modifier = Modifier.fillMaxSize())
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 28.dp, bottom = 20.dp, start = 14.dp, end = 14.dp)
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -331,6 +344,7 @@ fun GameScreen(
                     .clip(RoundedCornerShape(24.dp))
                     .background(CreamBg)
             ) {
+                val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
                 MazeCanvas(
                     maze = stage.maze,
                     ballX = ballX,
@@ -339,8 +353,21 @@ fun GameScreen(
                     squashAmount = ballSquash,
                     squashAxisIsX = ballSquashIsX,
                     trail = trailPositions,
-                    ballScale = ballScale,
+                    ballScale = ballScale * breath,
                     modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colorStops = arrayOf(
+                                    0f to Color.Transparent,
+                                    0.6f to Color.Transparent,
+                                    1f to Color.Black.copy(alpha = 0.22f)
+                                )
+                            )
+                        )
                 )
                 EffectsOverlay(
                     maze = stage.maze,

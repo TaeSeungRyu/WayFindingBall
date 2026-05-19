@@ -453,6 +453,8 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
     var ballSquashIsX by remember(maze) { mutableStateOf(false) }
     var reached by remember(maze) { mutableStateOf(false) }
     var resetTrigger by remember { mutableIntStateOf(0) }
+    var idleStrength by remember(maze, resetTrigger) { mutableFloatStateOf(1f) }
+    var idleTime by remember(maze, resetTrigger) { mutableFloatStateOf(0f) }
 
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
@@ -497,6 +499,10 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
             ballRotation = physics.rotation
             ballSquash = physics.squashAmount
             ballSquashIsX = physics.squashAxis == SquashAxis.X
+            val speed = sqrt(physics.vx * physics.vx + physics.vy * physics.vy)
+            val targetIdle = if (!reached && speed < 0.5f) 1f else 0f
+            idleStrength += (targetIdle - idleStrength) * (dt * 2.5f).coerceIn(0f, 1f)
+            idleTime += dt
             if (didReach && !reached) {
                 reached = true
                 SoundManager.playGoal()
@@ -540,6 +546,7 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
                     .clip(RoundedCornerShape(24.dp))
                     .background(CreamBg)
             ) {
+                val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
                 MazeCanvas(
                     maze = maze,
                     ballX = ballX,
@@ -547,6 +554,7 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
                     rotation = ballRotation,
                     squashAmount = ballSquash,
                     squashAxisIsX = ballSquashIsX,
+                    ballScale = breath,
                     modifier = Modifier.fillMaxSize()
                 )
                 if (reached) {
