@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
+import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
@@ -74,6 +75,9 @@ fun GameScreen(
 
     var ballX by remember(stage.id) { mutableFloatStateOf(physics.x) }
     var ballY by remember(stage.id) { mutableFloatStateOf(physics.y) }
+    var ballRotation by remember(stage.id) { mutableFloatStateOf(0f) }
+    var ballSquash by remember(stage.id) { mutableFloatStateOf(0f) }
+    var ballSquashIsX by remember(stage.id) { mutableStateOf(false) }
     var elapsedMs by remember(stage.id) { mutableLongStateOf(0L) }
     var finished by remember(stage.id) { mutableStateOf(false) }
     var paused by remember(stage.id) { mutableStateOf(false) }
@@ -115,6 +119,9 @@ fun GameScreen(
             val reached = physics.step(dt, ax, ay)
             ballX = physics.x
             ballY = physics.y
+            ballRotation = physics.rotation
+            ballSquash = physics.squashAmount
+            ballSquashIsX = physics.squashAxis == SquashAxis.X
             elapsedMs = accumulatedMs
             if (reached) {
                 finished = true
@@ -175,6 +182,9 @@ fun GameScreen(
                     maze = stage.maze,
                     ballX = ballX,
                     ballY = ballY,
+                    rotation = ballRotation,
+                    squashAmount = ballSquash,
+                    squashAxisIsX = ballSquashIsX,
                     modifier = Modifier.fillMaxSize()
                 )
 

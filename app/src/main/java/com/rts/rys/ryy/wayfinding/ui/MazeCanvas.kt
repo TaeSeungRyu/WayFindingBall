@@ -10,6 +10,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import com.rts.rys.ryy.wayfinding.game.Cell
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.ui.theme.BallRed
@@ -29,12 +31,15 @@ fun MazeCanvas(
     maze: Maze,
     ballX: Float,
     ballY: Float,
+    rotation: Float = 0f,
+    squashAmount: Float = 0f,
+    squashAxisIsX: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier) {
         drawMaze(maze)
         drawGoal(maze)
-        drawBall(maze, ballX, ballY)
+        drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX)
     }
 }
 
@@ -169,40 +174,78 @@ private fun DrawScope.drawStar(
     drawPath(path = path, color = stroke, style = Stroke(width = 2.5f))
 }
 
-private fun DrawScope.drawBall(maze: Maze, bx: Float, by: Float) {
+private fun DrawScope.drawBall(
+    maze: Maze,
+    bx: Float,
+    by: Float,
+    rotation: Float,
+    squashAmount: Float,
+    squashAxisIsX: Boolean
+) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
     val cx = origin.x + bx * cs
     val cy = origin.y + by * cs
     val r = cs * 0.36f
 
-    // 그림자
+    // squash: compress along impact axis, slightly bulge perpendicular
+    val maxCompress = 0.22f
+    val scaleAlong = 1f - squashAmount * maxCompress
+    val scalePerp = 1f + squashAmount * maxCompress * 0.7f
+    val scaleX = if (squashAxisIsX) scaleAlong else scalePerp
+    val scaleY = if (squashAxisIsX) scalePerp else scaleAlong
+
+    // 그림자 — 임팩트 시 살짝 퍼짐
     drawCircle(
-        color = Color.Black.copy(alpha = 0.18f),
+        color = Color.Black.copy(alpha = 0.18f + squashAmount * 0.06f),
         center = Offset(cx + 2f, cy + 5f),
-        radius = r * 1.02f
+        radius = r * (1.02f + squashAmount * 0.12f)
     )
-    // 본체 (위쪽 밝은 빨강 → 아래쪽 진한 빨강)
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(Color.White, BallRed, BallRedDeep),
-            center = Offset(cx - r * 0.35f, cy - r * 0.4f),
-            radius = r * 1.5f
-        ),
-        center = Offset(cx, cy),
-        radius = r
-    )
-    // 하이라이트
-    drawCircle(
-        color = Color.White.copy(alpha = 0.95f),
-        center = Offset(cx - r * 0.38f, cy - r * 0.38f),
-        radius = r * 0.22f
-    )
-    // 외곽선
-    drawCircle(
-        color = BallRedDeep,
-        center = Offset(cx, cy),
-        radius = r,
-        style = Stroke(width = 2f)
-    )
+
+    scale(scaleX, scaleY, pivot = Offset(cx, cy)) {
+        // 본체 — 고정 광원(라디얼 그라데이션)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color.White, BallRed, BallRedDeep),
+                center = Offset(cx - r * 0.35f, cy - r * 0.4f),
+                radius = r * 1.5f
+            ),
+            center = Offset(cx, cy),
+            radius = r
+        )
+
+        // 회전 표면 마커 — 굴러가는 느낌
+        val rotDeg = rotation * 180f / Math.PI.toFloat()
+        rotate(degrees = rotDeg, pivot = Offset(cx, cy)) {
+            val markerColor = BallRedDeep.copy(alpha = 0.55f)
+            val markerR = r * 0.16f
+            val orbit = r * 0.55f
+            // 4개의 점을 십자로 배치 → 회전이 한눈에 보임
+            drawCircle(markerColor, markerR, Offset(cx + orbit, cy))
+            drawCircle(markerColor, markerR, Offset(cx - orbit, cy))
+            drawCircle(markerColor, markerR, Offset(cx, cy + orbit))
+            drawCircle(markerColor, markerR, Offset(cx, cy - orbit))
+            // 한 점만 더 진하게 → 회전 추적을 더 쉽게
+            drawCircle(
+                color = BallRedDeep.copy(alpha = 0.85f),
+                radius = markerR * 1.1f,
+                center = Offset(cx + orbit, cy)
+            )
+        }
+
+        // 광원 하이라이트 — 회전과 무관하게 고정
+        drawCircle(
+            color = Color.White.copy(alpha = 0.95f),
+            center = Offset(cx - r * 0.38f, cy - r * 0.38f),
+            radius = r * 0.22f
+        )
+
+        // 외곽선
+        drawCircle(
+            color = BallRedDeep,
+            center = Offset(cx, cy),
+            radius = r,
+            style = Stroke(width = 2f)
+        )
+    }
 }

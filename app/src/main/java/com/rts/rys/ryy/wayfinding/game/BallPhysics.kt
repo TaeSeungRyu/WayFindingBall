@@ -1,9 +1,13 @@
 package com.rts.rys.ryy.wayfinding.game
 
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
+
+enum class SquashAxis { NONE, X, Y }
 
 /**
  * Ball position and velocity are expressed in maze-cell units.
@@ -26,11 +30,28 @@ class BallPhysics(
     var vy: Float = 0f
         private set
 
+    /** Accumulated rolling angle in radians. Used by the renderer for surface pattern rotation. */
+    var rotation: Float = 0f
+        private set
+    /** Direction of travel in radians; the rolling pattern rotates around this axis (perpendicular to motion). */
+    var headingRad: Float = 0f
+        private set
+    /** 0..1, how compressed the ball is from the most recent wall hit; decays over [SQUASH_DURATION_S]. */
+    var squashAmount: Float = 0f
+        private set
+    /** Which axis the last impactful collision was on. */
+    var squashAxis: SquashAxis = SquashAxis.NONE
+        private set
+
     fun reset() {
         x = maze.startCol + 0.5f
         y = maze.startRow + 0.5f
         vx = 0f
         vy = 0f
+        rotation = 0f
+        headingRad = 0f
+        squashAmount = 0f
+        squashAxis = SquashAxis.NONE
     }
 
     /**
@@ -52,16 +73,23 @@ class BallPhysics(
         vx = vx.coerceIn(-maxSpeed, maxSpeed)
         vy = vy.coerceIn(-maxSpeed, maxSpeed)
 
+        // remember pre-collision velocity for squash strength
+        val vxPre = vx
+        val vyPre = vy
+
         // sub-step to avoid tunneling at high speeds
         val moveX = vx * dt
         val moveY = vy * dt
         val steps = max(1, ((max(abs(moveX), abs(moveY)) / 0.1f) + 1).toInt())
         val sx = moveX / steps
         val sy = moveY / steps
+        var collidedX = false
+        var collidedY = false
         for (i in 0 until steps) {
             // X axis
             val newX = x + sx
             if (collides(newX, y)) {
+                collidedX = true
                 vx = 0f
             } else {
                 x = newX
@@ -69,11 +97,31 @@ class BallPhysics(
             // Y axis
             val newY = y + sy
             if (collides(x, newY)) {
+                collidedY = true
                 vy = 0f
             } else {
                 y = newY
             }
         }
+
+        // rolling rotation: accumulate based on actual distance traveled
+        val speed = sqrt(vx * vx + vy * vy)
+        if (speed > 0.001f) {
+            rotation += speed * dt / radius
+            headingRad = atan2(vy, vx)
+        }
+
+        // squash on impactful collisions
+        val impactThreshold = 3f
+        if (collidedX && abs(vxPre) > impactThreshold) {
+            squashAxis = SquashAxis.X
+            squashAmount = 1f
+        } else if (collidedY && abs(vyPre) > impactThreshold) {
+            squashAxis = SquashAxis.Y
+            squashAmount = 1f
+        }
+        squashAmount = (squashAmount - dt / SQUASH_DURATION_S).coerceAtLeast(0f)
+        if (squashAmount <= 0f) squashAxis = SquashAxis.NONE
 
         // goal check (center inside goal cell)
         val cc = floor(x).toInt()
@@ -102,4 +150,8 @@ class BallPhysics(
     }
 
     private fun sign(v: Float): Float = if (v >= 0f) 1f else -1f
+
+    companion object {
+        const val SQUASH_DURATION_S = 0.18f
+    }
 }
