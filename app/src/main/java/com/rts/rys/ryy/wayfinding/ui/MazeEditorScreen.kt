@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -168,7 +171,8 @@ fun MazeEditorScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
-            .padding(20.dp)
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(
@@ -449,6 +453,7 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
     var ballX by remember(maze) { mutableFloatStateOf(physics.x) }
     var ballY by remember(maze) { mutableFloatStateOf(physics.y) }
     var ballRotation by remember(maze) { mutableFloatStateOf(0f) }
+    var ballHeading by remember(maze) { mutableFloatStateOf(0f) }
     var ballSquash by remember(maze) { mutableFloatStateOf(0f) }
     var ballSquashIsX by remember(maze) { mutableStateOf(false) }
     var reached by remember(maze) { mutableStateOf(false) }
@@ -497,6 +502,7 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
             ballX = physics.x
             ballY = physics.y
             ballRotation = physics.rotation
+            ballHeading = physics.headingRad
             ballSquash = physics.squashAmount
             ballSquashIsX = physics.squashAxis == SquashAxis.X
             val speed = sqrt(physics.vx * physics.vx + physics.vy * physics.vy)
@@ -517,7 +523,7 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
-            .padding(top = 28.dp, bottom = 20.dp, start = 14.dp, end = 14.dp)
+            .windowInsetsPadding(WindowInsets.systemBars)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(
@@ -542,9 +548,6 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .shadow(6.dp, RoundedCornerShape(24.dp))
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(CreamBg)
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
                 MazeCanvas(
@@ -555,6 +558,8 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
                     squashAmount = ballSquash,
                     squashAxisIsX = ballSquashIsX,
                     ballScale = breath,
+                    headingRad = ballHeading,
+                    isHappy = reached,
                     modifier = Modifier.fillMaxSize()
                 )
                 if (reached) {

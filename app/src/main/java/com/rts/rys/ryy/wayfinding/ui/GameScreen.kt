@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -94,6 +97,7 @@ fun GameScreen(
     var ballX by remember(stage.id) { mutableFloatStateOf(physics.x) }
     var ballY by remember(stage.id) { mutableFloatStateOf(physics.y) }
     var ballRotation by remember(stage.id) { mutableFloatStateOf(0f) }
+    var ballHeading by remember(stage.id) { mutableFloatStateOf(0f) }
     var ballSquash by remember(stage.id) { mutableFloatStateOf(0f) }
     var ballSquashIsX by remember(stage.id) { mutableStateOf(false) }
     var elapsedMs by remember(stage.id) { mutableLongStateOf(0L) }
@@ -193,6 +197,7 @@ fun GameScreen(
                 ballX = physics.x
                 ballY = physics.y
                 ballRotation = physics.rotation
+                ballHeading = physics.headingRad
                 ballSquash = physics.squashAmount
                 ballSquashIsX = physics.squashAxis == SquashAxis.X
                 elapsedMs = accumulatedMs
@@ -292,7 +297,7 @@ fun GameScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 28.dp, bottom = 20.dp, start = 14.dp, end = 14.dp)
+                .windowInsetsPadding(WindowInsets.systemBars)
         ) {
             Box(
                 modifier = Modifier
@@ -330,7 +335,7 @@ fun GameScreen(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
 
             Box(
                 modifier = Modifier
@@ -340,9 +345,6 @@ fun GameScreen(
                         translationX = shakeOffset.x
                         translationY = shakeOffset.y
                     }
-                    .shadow(6.dp, RoundedCornerShape(24.dp))
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(CreamBg)
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
                 MazeCanvas(
@@ -354,20 +356,9 @@ fun GameScreen(
                     squashAxisIsX = ballSquashIsX,
                     trail = trailPositions,
                     ballScale = ballScale * breath,
+                    headingRad = ballHeading,
+                    isHappy = celebrating,
                     modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.radialGradient(
-                                colorStops = arrayOf(
-                                    0f to Color.Transparent,
-                                    0.6f to Color.Transparent,
-                                    1f to Color.Black.copy(alpha = 0.22f)
-                                )
-                            )
-                        )
                 )
                 EffectsOverlay(
                     maze = stage.maze,
@@ -384,7 +375,7 @@ fun GameScreen(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
 
             DPad(
                 onInput = { dx, dy ->

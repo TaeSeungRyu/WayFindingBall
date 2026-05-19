@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -45,6 +46,8 @@ fun MazeCanvas(
     squashAxisIsX: Boolean = false,
     trail: List<androidx.compose.ui.geometry.Offset> = emptyList(),
     ballScale: Float = 1f,
+    headingRad: Float = 0f,
+    isHappy: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val infinite = rememberInfiniteTransition(label = "maze")
@@ -79,7 +82,7 @@ fun MazeCanvas(
         drawMaze(maze)
         drawGoal(maze, goalPulse, rayRotation, sparkleTime)
         if (trail.isNotEmpty() && ballScale > 0f) drawTrail(maze, trail)
-        if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale)
+        if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale, headingRad, isHappy)
     }
 }
 
@@ -122,6 +125,25 @@ private fun DrawScope.drawMaze(maze: Maze) {
         drawRect(color = tile, topLeft = tl, size = Size(cs, cs))
     }
 
+    // 바닥 위 작은 디테일 (셀 ~15%에 잎/꽃잎/조약돌)
+    for (r in 0 until maze.rows) for (c in 0 until maze.cols) {
+        if (maze.grid[r][c] == Cell.WALL) continue
+        val tl = Offset(origin.x + c * cs, origin.y + r * cs)
+        drawFloorDetail(c, r, tl, cs)
+    }
+
+    // 벽 그림자 — 우하단 방향으로 인접 바닥에 드리워짐
+    val shadowOffset = cs * 0.15f
+    for (r in 0 until maze.rows) for (c in 0 until maze.cols) {
+        if (maze.grid[r][c] != Cell.WALL) continue
+        val tl = Offset(origin.x + c * cs + shadowOffset, origin.y + r * cs + shadowOffset)
+        drawRect(
+            color = Color.Black.copy(alpha = 0.14f),
+            topLeft = tl,
+            size = Size(cs, cs)
+        )
+    }
+
     // 벽 (잔디 블록) — 셀별로 변주
     for (r in 0 until maze.rows) for (c in 0 until maze.cols) {
         if (maze.grid[r][c] != Cell.WALL) continue
@@ -129,13 +151,43 @@ private fun DrawScope.drawMaze(maze: Maze) {
         drawWallTile(c, r, tl, cs)
     }
 
-    // 외곽 라운드 보더
-    drawRect(
-        color = WallGreenDeep.copy(alpha = 0.4f),
-        topLeft = origin,
-        size = Size(cs * maze.cols, cs * maze.rows),
-        style = Stroke(width = 4f)
-    )
+}
+
+private fun DrawScope.drawFloorDetail(c: Int, r: Int, tl: Offset, cs: Float) {
+    // 시드와 별도 솔트(99)로 벽 변주와 겹치지 않게
+    val seed = tileSeed(c, r) xor 0x6f7c
+    val roll = seedFloat(seed, 99)
+    if (roll > 0.18f) return // ~18%만 디테일
+    val variant = (seedFloat(seed, 98) * 100f).toInt()
+    when {
+        variant < 45 -> {
+            // 작은 잎 2개
+            val cx = tl.x + cs * (0.30f + seedFloat(seed, 80) * 0.40f)
+            val cy = tl.y + cs * (0.30f + seedFloat(seed, 81) * 0.40f)
+            val leafColor = Color(0xFFA8C49B).copy(alpha = 0.85f)
+            drawCircle(leafColor, cs * 0.05f, Offset(cx, cy))
+            drawCircle(leafColor, cs * 0.04f, Offset(cx + cs * 0.10f, cy + cs * 0.06f))
+        }
+        variant < 75 -> {
+            // 작은 조약돌
+            val cx = tl.x + cs * (0.30f + seedFloat(seed, 82) * 0.40f)
+            val cy = tl.y + cs * (0.30f + seedFloat(seed, 83) * 0.40f)
+            val rr = cs * 0.055f
+            drawCircle(Color.Black.copy(alpha = 0.10f), rr, Offset(cx + 1f, cy + 1.5f))
+            drawCircle(Color(0xFFCBB995), rr, Offset(cx, cy))
+            drawCircle(Color.White.copy(alpha = 0.5f), rr * 0.35f, Offset(cx - rr * 0.3f, cy - rr * 0.3f))
+        }
+        else -> {
+            // 살짝 진한 바닥 얼룩 (paint splash)
+            val cx = tl.x + cs * (0.25f + seedFloat(seed, 84) * 0.50f)
+            val cy = tl.y + cs * (0.25f + seedFloat(seed, 85) * 0.50f)
+            drawCircle(
+                color = Color(0xFFE8D9B5).copy(alpha = 0.65f),
+                radius = cs * 0.13f,
+                center = Offset(cx, cy)
+            )
+        }
+    }
 }
 
 private fun DrawScope.drawWallTile(c: Int, r: Int, tl: Offset, cs: Float) {
@@ -387,7 +439,9 @@ private fun DrawScope.drawBall(
     rotation: Float,
     squashAmount: Float,
     squashAxisIsX: Boolean,
-    ballScale: Float = 1f
+    ballScale: Float = 1f,
+    headingRad: Float = 0f,
+    isHappy: Boolean = false
 ) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
@@ -455,5 +509,59 @@ private fun DrawScope.drawBall(
             radius = r,
             style = Stroke(width = 2f)
         )
+
+        // 눈
+        val eyeSpacing = r * 0.34f
+        val eyeY = cy - r * 0.08f
+        if (isHappy) {
+            val eyeW = r * 0.28f
+            val eyeH = r * 0.16f
+            val stroke = r * 0.09f
+            drawHappyEye(Offset(cx - eyeSpacing, eyeY), eyeW, eyeH, stroke)
+            drawHappyEye(Offset(cx + eyeSpacing, eyeY), eyeW, eyeH, stroke)
+        } else {
+            val eyeR = r * 0.22f
+            val pupilR = r * 0.10f
+            val pupilDx = cos(headingRad) * r * 0.06f
+            val pupilDy = sin(headingRad) * r * 0.06f
+            // 흰자
+            drawCircle(Color.White, eyeR, Offset(cx - eyeSpacing, eyeY))
+            drawCircle(Color.White, eyeR, Offset(cx + eyeSpacing, eyeY))
+            // 동공 — 이동 방향으로 살짝 이동
+            drawCircle(
+                Color(0xFF1A1A1A),
+                pupilR,
+                Offset(cx - eyeSpacing + pupilDx, eyeY + pupilDy)
+            )
+            drawCircle(
+                Color(0xFF1A1A1A),
+                pupilR,
+                Offset(cx + eyeSpacing + pupilDx, eyeY + pupilDy)
+            )
+            // 동공 광택
+            drawCircle(
+                Color.White.copy(alpha = 0.8f),
+                pupilR * 0.32f,
+                Offset(cx - eyeSpacing + pupilDx - pupilR * 0.3f, eyeY + pupilDy - pupilR * 0.3f)
+            )
+            drawCircle(
+                Color.White.copy(alpha = 0.8f),
+                pupilR * 0.32f,
+                Offset(cx + eyeSpacing + pupilDx - pupilR * 0.3f, eyeY + pupilDy - pupilR * 0.3f)
+            )
+        }
     }
+}
+
+private fun DrawScope.drawHappyEye(center: Offset, width: Float, height: Float, strokeW: Float) {
+    val path = Path().apply {
+        moveTo(center.x - width / 2f, center.y + height / 2f)
+        lineTo(center.x, center.y - height / 2f)
+        lineTo(center.x + width / 2f, center.y + height / 2f)
+    }
+    drawPath(
+        path = path,
+        color = Color(0xFF1A1A1A),
+        style = Stroke(width = strokeW, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
 }
