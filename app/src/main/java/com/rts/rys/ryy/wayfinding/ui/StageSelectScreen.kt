@@ -1,7 +1,9 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,9 +22,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -31,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
 import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stage
@@ -52,6 +58,7 @@ fun StageSelectScreen(
 ) {
     val context = LocalContext.current
     val customs by Stages.customStages
+    var deleteCandidate by remember { mutableStateOf<Stage?>(null) }
     val stagesByLevel = remember(customs) {
         (1..4).associateWith { Stages.byLevel(it) }
     }
@@ -106,6 +113,9 @@ fun StageSelectScreen(
                                     stage = stage,
                                     stars = starsByStage[stage.id] ?: 0,
                                     onClick = { onSelect(stage.id) },
+                                    onLongClick = if (stage.isCustom) {
+                                        { deleteCandidate = stage }
+                                    } else null,
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -116,6 +126,25 @@ fun StageSelectScreen(
                     }
                 }
             }
+        }
+
+        deleteCandidate?.let { candidate ->
+            DeleteConfirmDialog(
+                stage = candidate,
+                onConfirm = {
+                    val repo = CustomMazesRepository(context)
+                    repo.delete(candidate.id)
+                    val all = repo.load()
+                    Stages.setCustomStages(
+                        all.groupBy { it.level }.flatMap { (_, ms) ->
+                            ms.sortedBy { it.createdAt }
+                                .mapIndexed { i, m -> m.toStage(i + 1) }
+                        }
+                    )
+                    deleteCandidate = null
+                },
+                onCancel = { deleteCandidate = null }
+            )
         }
     }
 }
@@ -175,11 +204,13 @@ private fun SectionHeader(level: Int, difficulty: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StageCard(
     stage: Stage,
     stars: Int,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val color = levelColor(stage.level)
@@ -189,7 +220,7 @@ private fun StageCard(
             .shadow(6.dp, RoundedCornerShape(20.dp))
             .clip(RoundedCornerShape(20.dp))
             .background(color)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(10.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -217,6 +248,67 @@ private fun StageCard(
             )
             Spacer(Modifier.height(4.dp))
             StarsRow(stars = stars, size = 14)
+        }
+    }
+}
+
+@Composable
+private fun DeleteConfirmDialog(
+    stage: Stage,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Dialog(onDismissRequest = onCancel) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color.White)
+                .padding(24.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "이 미로를 지울까요?",
+                    color = InkDark,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = stage.name,
+                    color = levelColor(stage.level),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SkyBlue)
+                            .clickable(onClick = onCancel),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("취소", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(CoralPink)
+                            .clickable(onClick = onConfirm),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("지우기", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+            }
         }
     }
 }

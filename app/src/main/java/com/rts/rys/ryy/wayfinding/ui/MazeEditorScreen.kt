@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,12 +19,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -39,10 +45,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
+import com.rts.rys.ryy.wayfinding.data.SoundManager
+import com.rts.rys.ryy.wayfinding.game.BallPhysics
+import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MazeValidationResult
 import com.rts.rys.ryy.wayfinding.game.MazeValidator
+import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.Stages
+import com.rts.rys.ryy.wayfinding.game.TiltSensor
+import kotlinx.coroutines.android.awaitFrame
+import kotlinx.coroutines.delay
+import kotlin.math.sqrt
 import com.rts.rys.ryy.wayfinding.ui.theme.BallRed
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.CreamBg
@@ -94,6 +109,15 @@ fun MazeEditorScreen(
     var board by remember(level) { mutableStateOf(initialBoard(level)) }
     var tool by remember { mutableStateOf(Tool.WALL) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var previewMaze by remember { mutableStateOf<Maze?>(null) }
+
+    fun tryPreview() {
+        val lines = board.map { String(it) }
+        when (val result = MazeValidator.validate(lines)) {
+            is MazeValidationResult.Ok -> previewMaze = Maze.fromAscii(lines)
+            is MazeValidationResult.Error -> errorMessage = result.message
+        }
+    }
 
     fun applyTool(c: Int, r: Int) {
         val n = sizeForLevel(level)
@@ -196,7 +220,16 @@ fun MazeEditorScreen(
                 EditorGrid(board = board, onCellTap = ::applyTool)
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
+
+            ActionButton(
+                label = "미리보기",
+                bg = SunYellow,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = ::tryPreview
+            )
+
+            Spacer(Modifier.height(8.dp))
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -205,6 +238,13 @@ fun MazeEditorScreen(
                 ActionButton("취소", CoralPink, modifier = Modifier.weight(1f), onClick = onCancel)
                 ActionButton("저장", SkyBlue, modifier = Modifier.weight(1f), onClick = ::trySave)
             }
+        }
+
+        previewMaze?.let { maze ->
+            EditorPreview(
+                maze = maze,
+                onExit = { previewMaze = null }
+            )
         }
 
         errorMessage?.let { msg ->
@@ -389,5 +429,153 @@ private fun ActionButton(
             fontSize = 16.sp,
             fontWeight = FontWeight.ExtraBold
         )
+    }
+}
+
+@Composable
+private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
+    BackHandler { onExit() }
+
+    val context = LocalContext.current
+    val physics = remember(maze) { BallPhysics(maze) }
+    val tilt = remember { TiltSensor(context) }
+    val sensorEnabled by AppSettings.sensorEnabled
+
+    DisposableEffect(sensorEnabled) {
+        if (sensorEnabled) tilt.start() else tilt.stop()
+        onDispose { tilt.stop() }
+    }
+
+    var ballX by remember(maze) { mutableFloatStateOf(physics.x) }
+    var ballY by remember(maze) { mutableFloatStateOf(physics.y) }
+    var ballRotation by remember(maze) { mutableFloatStateOf(0f) }
+    var ballSquash by remember(maze) { mutableFloatStateOf(0f) }
+    var ballSquashIsX by remember(maze) { mutableStateOf(false) }
+    var reached by remember(maze) { mutableStateOf(false) }
+    var resetTrigger by remember { mutableIntStateOf(0) }
+
+    var kx by remember { mutableFloatStateOf(0f) }
+    var ky by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(maze, resetTrigger) {
+        physics.reset()
+        ballX = physics.x
+        ballY = physics.y
+        ballRotation = 0f
+        ballSquash = 0f
+        ballSquashIsX = false
+        reached = false
+        var last = 0L
+        while (true) {
+            val now = awaitFrame()
+            if (last == 0L) { last = now; continue }
+            val dt = ((now - last).coerceAtMost(33_000_000L)) / 1_000_000_000f
+            last = now
+
+            val sx = if (sensorEnabled) tilt.tiltX else 0f
+            val sy = if (sensorEnabled) tilt.tiltY else 0f
+            val useKeypad = kx != 0f || ky != 0f
+            val ax: Float
+            val ay: Float
+            if (useKeypad) {
+                ax = kx * 18f
+                ay = ky * 18f
+                physics.maxSpeed = 14f
+            } else {
+                ax = sx * 36f
+                ay = sy * 36f
+                physics.maxSpeed = if (sensorEnabled) 22f else 14f
+            }
+
+            val didReach = physics.step(dt, ax, ay)
+            if (physics.justImpacted) SoundManager.playBonk()
+            ballX = physics.x
+            ballY = physics.y
+            ballRotation = physics.rotation
+            ballSquash = physics.squashAmount
+            ballSquashIsX = physics.squashAxis == SquashAxis.X
+            if (didReach && !reached) {
+                reached = true
+                SoundManager.playGoal()
+                delay(1200)
+                resetTrigger++
+                break
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
+            .padding(top = 28.dp, bottom = 20.dp, start = 14.dp, end = 14.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                BackChip(
+                    onClick = onExit,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
+                Text(
+                    text = "미리보기",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = InkDark,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .shadow(6.dp, RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(CreamBg)
+            ) {
+                MazeCanvas(
+                    maze = maze,
+                    ballX = ballX,
+                    ballY = ballY,
+                    rotation = ballRotation,
+                    squashAmount = ballSquash,
+                    squashAxisIsX = ballSquashIsX,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (reached) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "✓ 잘 통과해요!",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = GoalGold
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            DPad(
+                onInput = { dx, dy ->
+                    val len = sqrt(dx * dx + dy * dy)
+                    if (len > 0f) {
+                        kx = dx / len
+                        ky = dy / len
+                    } else {
+                        kx = 0f; ky = 0f
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(end = 6.dp)
+                    .alpha(if (sensorEnabled) 0.45f else 1f)
+            )
+        }
     }
 }
