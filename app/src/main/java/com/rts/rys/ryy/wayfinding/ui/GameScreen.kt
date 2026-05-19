@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,9 +32,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.text.font.FontWeight
@@ -47,8 +51,10 @@ import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
+import com.rts.rys.ryy.wayfinding.ui.theme.BallRed
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.CreamBg
+import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
 import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
@@ -56,7 +62,10 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
+import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 import kotlinx.coroutines.android.awaitFrame
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 private const val SENSOR_ACCEL_GAIN = 36f
@@ -92,6 +101,21 @@ fun GameScreen(
     var paused by remember(stage.id) { mutableStateOf(false) }
     var attemptId by remember(stage.id) { mutableIntStateOf(0) }
 
+    // Effect state
+    val trailPositions = remember(stage.id, attemptId) { mutableStateListOf<Offset>() }
+    val dust = remember(stage.id, attemptId) { mutableStateListOf<DustParticle>() }
+    val confetti = remember(stage.id, attemptId) { mutableStateListOf<ConfettiParticle>() }
+    var shakeMs by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
+    var shakeOffset by remember(stage.id, attemptId) { mutableStateOf(Offset.Zero) }
+    var celebrating by remember(stage.id, attemptId) { mutableStateOf(false) }
+    var celebrationTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
+    var ballScale by remember(stage.id, attemptId) { mutableFloatStateOf(1f) }
+    var flashAlpha by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
+
+    val density = LocalDensity.current
+    val shakeAmplitudePx = with(density) { 7.dp.toPx() }
+    val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
+
     BackHandler(enabled = !paused) { paused = true }
 
     var kx by remember { mutableFloatStateOf(0f) }
@@ -106,49 +130,146 @@ fun GameScreen(
         ballSquashIsX = false
         elapsedMs = 0L
         finished = false
+        celebrating = false
+        celebrationTimer = 0f
+        ballScale = 1f
+        flashAlpha = 0f
+        shakeMs = 0f
+        shakeOffset = Offset.Zero
+        trailPositions.clear()
+        dust.clear()
+        confetti.clear()
+
         var last = 0L
         var accumulatedMs = 0L
         while (!finished) {
             val now = awaitFrame()
-            if (paused) { last = 0L; continue }
+            if (paused && !celebrating) { last = 0L; continue }
             if (last == 0L) { last = now; continue }
             val dt = ((now - last).coerceAtMost(33_000_000L)) / 1_000_000_000f
-            accumulatedMs += ((now - last) / 1_000_000L)
+            if (!celebrating) accumulatedMs += ((now - last) / 1_000_000L)
             last = now
 
-            val sensitivity = AppSettings.sensorSensitivity.value
-            val offX = AppSettings.sensorOffsetX.value
-            val offY = AppSettings.sensorOffsetY.value
-            val sx = if (sensorEnabled) ((tilt.tiltX - offX) * sensitivity).coerceIn(-1f, 1f) else 0f
-            val sy = if (sensorEnabled) ((tilt.tiltY - offY) * sensitivity).coerceIn(-1f, 1f) else 0f
-            val useKeypad = kx != 0f || ky != 0f
-            val ax: Float
-            val ay: Float
-            if (useKeypad) {
-                ax = kx * KEYPAD_ACCEL_GAIN
-                ay = ky * KEYPAD_ACCEL_GAIN
-                physics.maxSpeed = KEYPAD_MAX_SPEED
-            } else {
-                ax = sx * SENSOR_ACCEL_GAIN
-                ay = sy * SENSOR_ACCEL_GAIN
-                physics.maxSpeed = if (sensorEnabled) SENSOR_MAX_SPEED else KEYPAD_MAX_SPEED
+            if (!celebrating) {
+                val sensitivity = AppSettings.sensorSensitivity.value
+                val offX = AppSettings.sensorOffsetX.value
+                val offY = AppSettings.sensorOffsetY.value
+                val sx = if (sensorEnabled) ((tilt.tiltX - offX) * sensitivity).coerceIn(-1f, 1f) else 0f
+                val sy = if (sensorEnabled) ((tilt.tiltY - offY) * sensitivity).coerceIn(-1f, 1f) else 0f
+                val useKeypad = kx != 0f || ky != 0f
+                val ax: Float
+                val ay: Float
+                if (useKeypad) {
+                    ax = kx * KEYPAD_ACCEL_GAIN
+                    ay = ky * KEYPAD_ACCEL_GAIN
+                    physics.maxSpeed = KEYPAD_MAX_SPEED
+                } else {
+                    ax = sx * SENSOR_ACCEL_GAIN
+                    ay = sy * SENSOR_ACCEL_GAIN
+                    physics.maxSpeed = if (sensorEnabled) SENSOR_MAX_SPEED else KEYPAD_MAX_SPEED
+                }
+
+                val reached = physics.step(dt, ax, ay)
+                if (physics.justImpacted) {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    SoundManager.playBonk()
+                    repeat(5) {
+                        val angle = (Math.random() * 2 * Math.PI).toFloat()
+                        val speed = 1.6f + (Math.random() * 2.5).toFloat()
+                        dust.add(
+                            DustParticle(
+                                x = physics.x,
+                                y = physics.y,
+                                vx = cos(angle) * speed,
+                                vy = sin(angle) * speed,
+                                lifetime = 0.32f
+                            )
+                        )
+                    }
+                    shakeMs = 0.13f
+                }
+                ballX = physics.x
+                ballY = physics.y
+                ballRotation = physics.rotation
+                ballSquash = physics.squashAmount
+                ballSquashIsX = physics.squashAxis == SquashAxis.X
+                elapsedMs = accumulatedMs
+
+                // trail update — capture when moving fast enough
+                val ballSpeed = sqrt(physics.vx * physics.vx + physics.vy * physics.vy)
+                if (ballSpeed > 2f) {
+                    trailPositions.add(0, Offset(physics.x, physics.y))
+                    while (trailPositions.size > 6) trailPositions.removeAt(trailPositions.size - 1)
+                } else if (trailPositions.isNotEmpty()) {
+                    trailPositions.removeAt(trailPositions.size - 1)
+                }
+
+                if (reached && !celebrating) {
+                    celebrating = true
+                    SoundManager.playGoal()
+                    flashAlpha = 0.7f
+                    val gx = stage.maze.goalCol + 0.5f
+                    val gy = stage.maze.goalRow + 0.5f
+                    repeat(30) {
+                        val angle = (-Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9).toFloat()
+                        val speed = 6f + (Math.random() * 8.0).toFloat()
+                        confetti.add(
+                            ConfettiParticle(
+                                x = gx,
+                                y = gy,
+                                vx = cos(angle) * speed,
+                                vy = sin(angle) * speed,
+                                rotation = (Math.random() * 360).toFloat(),
+                                rotSpeed = ((Math.random() - 0.5) * 720).toFloat(),
+                                color = confettiColors.random(),
+                                lifetime = 1.3f
+                            )
+                        )
+                    }
+                }
             }
 
-            val reached = physics.step(dt, ax, ay)
-            if (physics.justImpacted) {
-                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                SoundManager.playBonk()
+            // ----- effect update (also during celebration) -----
+            // dust integrate
+            val dustIter = dust.listIterator()
+            while (dustIter.hasNext()) {
+                val p = dustIter.next()
+                p.x += p.vx * dt
+                p.y += p.vy * dt
+                p.vy += 4f * dt
+                p.age += dt
+                if (p.age >= p.lifetime) dustIter.remove()
             }
-            ballX = physics.x
-            ballY = physics.y
-            ballRotation = physics.rotation
-            ballSquash = physics.squashAmount
-            ballSquashIsX = physics.squashAxis == SquashAxis.X
-            elapsedMs = accumulatedMs
-            if (reached) {
-                finished = true
-                SoundManager.playGoal()
-                onFinished(elapsedMs)
+            // confetti integrate
+            val conIter = confetti.listIterator()
+            while (conIter.hasNext()) {
+                val p = conIter.next()
+                p.x += p.vx * dt
+                p.y += p.vy * dt
+                p.vy += 14f * dt
+                p.rotation += p.rotSpeed * dt
+                p.age += dt
+                if (p.age >= p.lifetime) conIter.remove()
+            }
+            // shake decay
+            shakeMs = (shakeMs - dt).coerceAtLeast(0f)
+            shakeOffset = if (shakeMs > 0f) {
+                val k = (shakeMs / 0.13f) * shakeAmplitudePx
+                Offset(
+                    ((Math.random() - 0.5) * 2 * k).toFloat(),
+                    ((Math.random() - 0.5) * 2 * k).toFloat()
+                )
+            } else Offset.Zero
+            // flash decay
+            flashAlpha = (flashAlpha - dt * 2.4f).coerceAtLeast(0f)
+
+            if (celebrating) {
+                celebrationTimer += dt
+                ballScale = (1f - celebrationTimer / 0.45f).coerceIn(0f, 1f)
+                if (celebrationTimer >= 0.75f) {
+                    finished = true
+                    onFinished(elapsedMs)
+                }
             }
         }
     }
@@ -202,6 +323,10 @@ fun GameScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .graphicsLayer {
+                        translationX = shakeOffset.x
+                        translationY = shakeOffset.y
+                    }
                     .shadow(6.dp, RoundedCornerShape(24.dp))
                     .clip(RoundedCornerShape(24.dp))
                     .background(CreamBg)
@@ -213,8 +338,23 @@ fun GameScreen(
                     rotation = ballRotation,
                     squashAmount = ballSquash,
                     squashAxisIsX = ballSquashIsX,
+                    trail = trailPositions,
+                    ballScale = ballScale,
                     modifier = Modifier.fillMaxSize()
                 )
+                EffectsOverlay(
+                    maze = stage.maze,
+                    dust = dust,
+                    confetti = confetti,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (flashAlpha > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(SunYellow.copy(alpha = flashAlpha * 0.55f))
+                    )
+                }
             }
 
             Spacer(Modifier.height(12.dp))

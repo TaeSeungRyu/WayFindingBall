@@ -41,6 +41,8 @@ fun MazeCanvas(
     rotation: Float = 0f,
     squashAmount: Float = 0f,
     squashAxisIsX: Boolean = false,
+    trail: List<androidx.compose.ui.geometry.Offset> = emptyList(),
+    ballScale: Float = 1f,
     modifier: Modifier = Modifier
 ) {
     val infinite = rememberInfiniteTransition(label = "maze")
@@ -56,7 +58,25 @@ fun MazeCanvas(
     Canvas(modifier = modifier) {
         drawMaze(maze)
         drawGoal(maze, goalPulse)
-        drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX)
+        if (trail.isNotEmpty() && ballScale > 0f) drawTrail(maze, trail)
+        if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale)
+    }
+}
+
+private fun DrawScope.drawTrail(maze: Maze, trail: List<androidx.compose.ui.geometry.Offset>) {
+    val cs = cellSize(maze)
+    val origin = originOffset(maze, cs)
+    val r = cs * 0.36f
+    for (i in trail.indices) {
+        val pos = trail[i]
+        val frac = i.toFloat() / trail.size
+        val alpha = (1f - frac) * 0.35f
+        val rr = r * (1f - frac * 0.4f)
+        drawCircle(
+            color = BallRed.copy(alpha = alpha),
+            center = Offset(origin.x + pos.x * cs, origin.y + pos.y * cs),
+            radius = rr
+        )
     }
 }
 
@@ -197,13 +217,15 @@ private fun DrawScope.drawBall(
     by: Float,
     rotation: Float,
     squashAmount: Float,
-    squashAxisIsX: Boolean
+    squashAxisIsX: Boolean,
+    ballScale: Float = 1f
 ) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
     val cx = origin.x + bx * cs
     val cy = origin.y + by * cs
-    val r = cs * 0.36f
+    val r = cs * 0.36f * ballScale.coerceIn(0f, 1f)
+    if (r <= 0f) return
 
     // squash: compress along impact axis, slightly bulge perpendicular
     val maxCompress = 0.22f
