@@ -119,6 +119,7 @@ fun GameScreen(
     var flashAlpha by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var idleStrength by remember(stage.id, attemptId) { mutableFloatStateOf(1f) }
     var idleTime by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
+    var surpriseTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
 
     val density = LocalDensity.current
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
@@ -195,6 +196,7 @@ fun GameScreen(
                         )
                     }
                     shakeMs = 0.09f
+                    surpriseTimer = 0.5f
                 }
                 ballX = physics.x
                 ballY = physics.y
@@ -271,6 +273,8 @@ fun GameScreen(
             } else Offset.Zero
             // flash decay
             flashAlpha = (flashAlpha - dt * 2.4f).coerceAtLeast(0f)
+            // surprise timer decay
+            surpriseTimer = (surpriseTimer - dt).coerceAtLeast(0f)
 
             // idle breathing tracking
             val speed = sqrt(physics.vx * physics.vx + physics.vy * physics.vy)
@@ -364,6 +368,7 @@ fun GameScreen(
                     ballScale = ballScale * breath,
                     headingRad = ballHeading,
                     isHappy = celebrating,
+                    surpriseLevel = (surpriseTimer / 0.5f).coerceIn(0f, 1f),
                     theme = theme,
                     modifier = Modifier.fillMaxSize()
                 )

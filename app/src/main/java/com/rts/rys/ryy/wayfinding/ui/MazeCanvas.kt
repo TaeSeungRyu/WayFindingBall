@@ -50,6 +50,7 @@ fun MazeCanvas(
     ballScale: Float = 1f,
     headingRad: Float = 0f,
     isHappy: Boolean = false,
+    surpriseLevel: Float = 0f,
     theme: MazeTheme = themeForLevel(1),
     modifier: Modifier = Modifier
 ) {
@@ -85,7 +86,7 @@ fun MazeCanvas(
         drawMaze(maze, theme)
         drawGoal(maze, goalPulse, rayRotation, sparkleTime)
         if (trail.isNotEmpty() && ballScale > 0f) drawTrail(maze, trail)
-        if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale, headingRad, isHappy)
+        if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale, headingRad, isHappy, surpriseLevel)
     }
 }
 
@@ -430,7 +431,8 @@ private fun DrawScope.drawBall(
     squashAxisIsX: Boolean,
     ballScale: Float = 1f,
     headingRad: Float = 0f,
-    isHappy: Boolean = false
+    isHappy: Boolean = false,
+    surpriseLevel: Float = 0f
 ) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
@@ -502,6 +504,7 @@ private fun DrawScope.drawBall(
         // 눈
         val eyeSpacing = r * 0.34f
         val eyeY = cy - r * 0.08f
+        val surprise = surpriseLevel.coerceIn(0f, 1f)
         if (isHappy) {
             val eyeW = r * 0.28f
             val eyeH = r * 0.16f
@@ -509,14 +512,24 @@ private fun DrawScope.drawBall(
             drawHappyEye(Offset(cx - eyeSpacing, eyeY), eyeW, eyeH, stroke)
             drawHappyEye(Offset(cx + eyeSpacing, eyeY), eyeW, eyeH, stroke)
         } else {
-            val eyeR = r * 0.22f
-            val pupilR = r * 0.10f
-            val pupilDx = cos(headingRad) * r * 0.06f
-            val pupilDy = sin(headingRad) * r * 0.06f
+            // 놀란 표정: 흰자 커지고, 동공 작아지고, 방향 추적 없음
+            val baseEyeR = r * 0.22f
+            val basePupilR = r * 0.10f
+            val eyeR = baseEyeR * (1f + 0.30f * surprise)
+            val pupilR = basePupilR * (1f - 0.55f * surprise)
+            val followFactor = 1f - surprise // 놀라면 동공이 중앙으로
+            val pupilDx = cos(headingRad) * r * 0.06f * followFactor
+            val pupilDy = sin(headingRad) * r * 0.06f * followFactor
             // 흰자
             drawCircle(Color.White, eyeR, Offset(cx - eyeSpacing, eyeY))
             drawCircle(Color.White, eyeR, Offset(cx + eyeSpacing, eyeY))
-            // 동공 — 이동 방향으로 살짝 이동
+            // 흰자 외곽 가는 라인 (놀랐을 때 더 또렷)
+            if (surprise > 0f) {
+                val outline = Color(0xFF1A1A1A).copy(alpha = 0.4f * surprise)
+                drawCircle(outline, eyeR, Offset(cx - eyeSpacing, eyeY), style = Stroke(width = 1.5f))
+                drawCircle(outline, eyeR, Offset(cx + eyeSpacing, eyeY), style = Stroke(width = 1.5f))
+            }
+            // 동공
             drawCircle(
                 Color(0xFF1A1A1A),
                 pupilR,
@@ -540,6 +553,44 @@ private fun DrawScope.drawBall(
             )
         }
     }
+    // 놀란 표정에 맞춰 머리 위 ! 말풍선 — scale 밖에서 그려야 squash 영향 안 받음
+    if (surpriseLevel > 0f && !isHappy) {
+        drawSurpriseBubble(Offset(cx, cy - r * 1.7f), r * 0.55f, surpriseLevel.coerceIn(0f, 1f))
+    }
+}
+
+private fun DrawScope.drawSurpriseBubble(center: Offset, size: Float, alpha: Float) {
+    // 살짝 팝업하는 듯한 스케일
+    val scale = (0.6f + 0.4f * alpha).coerceIn(0f, 1f)
+    val s = size * scale
+    val bubbleColor = Color.White.copy(alpha = alpha)
+    val outline = Color(0xFF1A1A1A).copy(alpha = alpha * 0.75f)
+    drawCircle(
+        color = Color.Black.copy(alpha = alpha * 0.15f),
+        radius = s,
+        center = Offset(center.x + 1f, center.y + 2f)
+    )
+    drawCircle(bubbleColor, s, center)
+    drawCircle(outline, s, center, style = Stroke(width = 1.6f))
+    // 말풍선 꼬리 (아래로 향한 작은 삼각)
+    val tailPath = Path().apply {
+        moveTo(center.x - s * 0.18f, center.y + s * 0.75f)
+        lineTo(center.x, center.y + s * 1.15f)
+        lineTo(center.x + s * 0.18f, center.y + s * 0.75f)
+        close()
+    }
+    drawPath(tailPath, bubbleColor)
+    drawPath(tailPath, outline, style = Stroke(width = 1.4f))
+    // "!" — 짧은 세로 막대 + 점
+    val barColor = Color(0xFFE84545).copy(alpha = alpha)
+    drawLine(
+        color = barColor,
+        start = Offset(center.x, center.y - s * 0.42f),
+        end = Offset(center.x, center.y + s * 0.10f),
+        strokeWidth = s * 0.20f,
+        cap = StrokeCap.Round
+    )
+    drawCircle(barColor, s * 0.11f, Offset(center.x, center.y + s * 0.36f))
 }
 
 private fun DrawScope.drawHappyEye(center: Offset, width: Float, height: Float, strokeW: Float) {

@@ -462,6 +462,7 @@ private fun EditorPreview(maze: Maze, level: Int, onExit: () -> Unit) {
     var resetTrigger by remember { mutableIntStateOf(0) }
     var idleStrength by remember(maze, resetTrigger) { mutableFloatStateOf(1f) }
     var idleTime by remember(maze, resetTrigger) { mutableFloatStateOf(0f) }
+    var surpriseTimer by remember(maze, resetTrigger) { mutableFloatStateOf(0f) }
 
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
@@ -500,7 +501,11 @@ private fun EditorPreview(maze: Maze, level: Int, onExit: () -> Unit) {
             }
 
             val didReach = physics.step(dt, ax, ay)
-            if (physics.justImpacted && !didReach) SoundManager.playBonk()
+            if (physics.justImpacted && !didReach) {
+                SoundManager.playBonk()
+                surpriseTimer = 0.5f
+            }
+            surpriseTimer = (surpriseTimer - dt).coerceAtLeast(0f)
             ballX = physics.x
             ballY = physics.y
             ballRotation = physics.rotation
@@ -566,6 +571,7 @@ private fun EditorPreview(maze: Maze, level: Int, onExit: () -> Unit) {
                     ballScale = breath,
                     headingRad = ballHeading,
                     isHappy = reached,
+                    surpriseLevel = (surpriseTimer / 0.5f).coerceIn(0f, 1f),
                     theme = theme,
                     modifier = Modifier.fillMaxSize()
                 )
