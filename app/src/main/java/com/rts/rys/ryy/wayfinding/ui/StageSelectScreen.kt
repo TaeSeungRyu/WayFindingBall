@@ -221,10 +221,14 @@ private fun StageCard(
             .clip(RoundedCornerShape(20.dp))
             .background(color)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(10.dp),
-        contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -248,6 +252,25 @@ private fun StageCard(
             )
             Spacer(Modifier.height(4.dp))
             StarsRow(stars = stars, size = 14)
+        }
+        if (stage.isCustom && onLongClick != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.85f))
+                    .clickable { onLongClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✕",
+                    color = CoralPink,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
         }
     }
 }

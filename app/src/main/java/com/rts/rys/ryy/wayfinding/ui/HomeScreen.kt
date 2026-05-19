@@ -116,12 +116,16 @@ fun HomeScreen(
                 onClick = onCreate
             )
 
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(24.dp))
             SettingRow(
                 label = "기울기 센서",
                 enabled = AppSettings.sensorEnabled.value,
                 onSet = { AppSettings.setSensorEnabled(it) }
             )
+            if (AppSettings.sensorEnabled.value) {
+                Spacer(Modifier.height(8.dp))
+                SensitivityRow()
+            }
             Spacer(Modifier.height(10.dp))
             SettingRow(
                 label = "소리",
@@ -129,6 +133,44 @@ fun HomeScreen(
                 onSet = { AppSettings.setSoundEnabled(it) }
             )
         }
+    }
+}
+
+@Composable
+private fun SensitivityRow() {
+    val current = AppSettings.sensorSensitivity.value
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "민감도",
+            color = InkDark,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(Modifier.size(12.dp))
+        SensorSegment(
+            label = "낮음",
+            selected = current < 0.85f,
+            selectedColor = SkyBlue,
+            onClick = { AppSettings.setSensorSensitivity(0.7f) }
+        )
+        Spacer(Modifier.size(6.dp))
+        SensorSegment(
+            label = "보통",
+            selected = current in 0.85f..1.15f,
+            selectedColor = SkyBlue,
+            onClick = { AppSettings.setSensorSensitivity(1.0f) }
+        )
+        Spacer(Modifier.size(6.dp))
+        SensorSegment(
+            label = "높음",
+            selected = current > 1.15f,
+            selectedColor = SkyBlue,
+            onClick = { AppSettings.setSensorSensitivity(1.4f) }
+        )
     }
 }
 

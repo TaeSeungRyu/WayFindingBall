@@ -51,6 +51,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.CreamBg
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
+import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
@@ -115,8 +116,11 @@ fun GameScreen(
             accumulatedMs += ((now - last) / 1_000_000L)
             last = now
 
-            val sx = if (sensorEnabled) tilt.tiltX else 0f
-            val sy = if (sensorEnabled) tilt.tiltY else 0f
+            val sensitivity = AppSettings.sensorSensitivity.value
+            val offX = AppSettings.sensorOffsetX.value
+            val offY = AppSettings.sensorOffsetY.value
+            val sx = if (sensorEnabled) ((tilt.tiltX - offX) * sensitivity).coerceIn(-1f, 1f) else 0f
+            val sy = if (sensorEnabled) ((tilt.tiltY - offY) * sensitivity).coerceIn(-1f, 1f) else 0f
             val useKeypad = kx != 0f || ky != 0f
             val ax: Float
             val ay: Float
@@ -239,6 +243,7 @@ fun GameScreen(
                 soundEnabled = soundEnabled,
                 onToggleSensor = { AppSettings.setSensorEnabled(!sensorEnabled) },
                 onToggleSound = { AppSettings.setSoundEnabled(!soundEnabled) },
+                onCalibrate = { AppSettings.setSensorOffset(tilt.tiltX, tilt.tiltY) },
                 onResume = { paused = false },
                 onRestart = {
                     paused = false
@@ -275,6 +280,7 @@ private fun PauseDialog(
     soundEnabled: Boolean,
     onToggleSensor: () -> Unit,
     onToggleSound: () -> Unit,
+    onCalibrate: () -> Unit,
     onResume: () -> Unit,
     onRestart: () -> Unit,
     onExit: () -> Unit
@@ -282,7 +288,7 @@ private fun PauseDialog(
     Dialog(onDismissRequest = onResume) {
         Box(
             modifier = Modifier
-                .size(width = 320.dp, height = 360.dp)
+                .size(width = 320.dp, height = if (sensorEnabled) 420.dp else 360.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(Color.White)
                 .padding(24.dp)
@@ -303,6 +309,14 @@ private fun PauseDialog(
                         label = if (soundEnabled) "소리 ON" else "소리 OFF",
                         enabled = soundEnabled,
                         onClick = onToggleSound
+                    )
+                }
+                if (sensorEnabled) {
+                    DialogButton(
+                        label = "지금 각도를 가운데로",
+                        bg = Lavender,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onCalibrate
                     )
                 }
                 DialogButton(

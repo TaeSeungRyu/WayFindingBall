@@ -472,8 +472,11 @@ private fun EditorPreview(maze: Maze, onExit: () -> Unit) {
             val dt = ((now - last).coerceAtMost(33_000_000L)) / 1_000_000_000f
             last = now
 
-            val sx = if (sensorEnabled) tilt.tiltX else 0f
-            val sy = if (sensorEnabled) tilt.tiltY else 0f
+            val sensitivity = AppSettings.sensorSensitivity.value
+            val offX = AppSettings.sensorOffsetX.value
+            val offY = AppSettings.sensorOffsetY.value
+            val sx = if (sensorEnabled) ((tilt.tiltX - offX) * sensitivity).coerceIn(-1f, 1f) else 0f
+            val sy = if (sensorEnabled) ((tilt.tiltY - offY) * sensitivity).coerceIn(-1f, 1f) else 0f
             val useKeypad = kx != 0f || ky != 0f
             val ax: Float
             val ay: Float
