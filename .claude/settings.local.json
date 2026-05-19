@@ -11,7 +11,8 @@
       "PowerShell($env:JAVA_HOME = 'C:\\\\Program Files\\\\Java\\\\jdk-17.0.19'; $env:PATH = \"$env:JAVA_HOME\\\\bin;$env:PATH\"; & .\\\\gradlew.bat assembleDebug --no-daemon 2>&1 | Select-Object -Last 80)",
       "PowerShell($env:JAVA_HOME = 'C:\\\\Program Files\\\\Java\\\\jdk-17.0.19'; $env:PATH = \"$env:JAVA_HOME\\\\bin;$env:PATH\"; & .\\\\gradlew.bat assembleDebug --no-daemon 2>&1 | Select-Object -Last 60)",
       "Bash(./gradlew :app:compileDebugKotlin -q)",
-      "Bash(java -version)"
+      "Bash(java -version)",
+      "Bash(curl -fsSL -o app/src/main/res/font/jua.ttf \"https://github.com/google/fonts/raw/main/ofl/jua/Jua-Regular.ttf\")"
     ]
   }
 }

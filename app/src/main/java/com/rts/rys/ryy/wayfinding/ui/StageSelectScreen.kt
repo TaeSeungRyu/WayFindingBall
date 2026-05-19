@@ -57,14 +57,21 @@ fun StageSelectScreen(
             .padding(20.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BackChip(onClick = onBack)
-                Spacer(Modifier.size(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                BackChip(
+                    onClick = onBack,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
                 Text(
                     text = "게임 고르기",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = InkDark
+                    color = InkDark,
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -99,9 +106,9 @@ fun StageSelectScreen(
 }
 
 @Composable
-fun BackChip(onClick: () -> Unit) {
+fun BackChip(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .height(40.dp)
             .shadow(3.dp, RoundedCornerShape(20.dp))
             .clip(RoundedCornerShape(20.dp))

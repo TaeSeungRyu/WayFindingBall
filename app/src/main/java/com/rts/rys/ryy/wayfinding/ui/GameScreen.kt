@@ -130,26 +130,25 @@ fun GameScreen(
             .padding(top = 28.dp, bottom = 20.dp, start = 14.dp, end = 14.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
             ) {
-                BackChip(onClick = { paused = true })
-                Spacer(Modifier.width(12.dp))
+                BackChip(
+                    onClick = { paused = true },
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
                 Text(
                     text = stage.name,
                     color = InkDark,
                     fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.align(Alignment.Center)
                 )
-                Spacer(Modifier.weight(1f))
-                SensorToggleChip(
-                    enabled = sensorEnabled,
-                    onClick = { AppSettings.setSensorEnabled(!sensorEnabled) }
-                )
-                Spacer(Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
+                        .align(Alignment.CenterEnd)
                         .clip(RoundedCornerShape(18.dp))
                         .background(SunYellow)
                         .padding(horizontal = 14.dp, vertical = 8.dp)
@@ -198,6 +197,8 @@ fun GameScreen(
 
         if (paused) {
             PauseDialog(
+                sensorEnabled = sensorEnabled,
+                onToggleSensor = { AppSettings.setSensorEnabled(!sensorEnabled) },
                 onResume = { paused = false },
                 onExit = onExit
             )
@@ -226,11 +227,16 @@ private fun SensorToggleChip(enabled: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PauseDialog(onResume: () -> Unit, onExit: () -> Unit) {
+private fun PauseDialog(
+    sensorEnabled: Boolean,
+    onToggleSensor: () -> Unit,
+    onResume: () -> Unit,
+    onExit: () -> Unit
+) {
     Dialog(onDismissRequest = onResume) {
         Box(
             modifier = Modifier
-                .size(width = 300.dp, height = 220.dp)
+                .size(width = 320.dp, height = 280.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(Color.White)
                 .padding(24.dp)
@@ -241,7 +247,7 @@ private fun PauseDialog(onResume: () -> Unit, onExit: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("잠깐 멈췄어요", color = InkDark, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                Text("계속 놀까요?", color = InkSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                SensorToggleChip(enabled = sensorEnabled, onClick = onToggleSensor)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     DialogButton("그만할래요", CoralPink, modifier = Modifier.weight(1f), onClick = onExit)
                     DialogButton("계속해요", SkyBlue, modifier = Modifier.weight(1f), onClick = onResume)

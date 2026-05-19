@@ -58,14 +58,21 @@ fun RecordsScreen(onBack: () -> Unit) {
             .padding(20.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BackChip(onClick = onBack)
-                Spacer(Modifier.size(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                BackChip(
+                    onClick = onBack,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
                 Text(
                     text = "내 기록",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = InkDark
+                    color = InkDark,
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
             Spacer(Modifier.height(16.dp))

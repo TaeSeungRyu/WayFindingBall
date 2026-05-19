@@ -147,14 +147,21 @@ fun MazeEditorScreen(
             .padding(20.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BackChip(onClick = onCancel)
-                Spacer(Modifier.size(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                BackChip(
+                    onClick = onCancel,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
                 Text(
-                    text = "새 게임 만들기",
+                    text = "나만의 게임 만들기",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = InkDark
+                    color = InkDark,
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
             Spacer(Modifier.height(12.dp))

@@ -110,7 +110,7 @@ fun HomeScreen(
             )
             Spacer(Modifier.height(20.dp))
             BigButton(
-                label = "새 게임 만들기",
+                label = "나만의 게임 만들기",
                 emoji = "＋",
                 bg = Lavender,
                 onClick = onCreate
