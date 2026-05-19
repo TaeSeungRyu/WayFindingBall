@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -17,9 +18,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.rts.rys.ryy.wayfinding.data.AppSettings
+import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.ui.GameScreen
 import com.rts.rys.ryy.wayfinding.ui.HomeScreen
+import com.rts.rys.ryy.wayfinding.ui.MazeEditorScreen
 import com.rts.rys.ryy.wayfinding.ui.RecordsScreen
 import com.rts.rys.ryy.wayfinding.ui.ResultScreen
 import com.rts.rys.ryy.wayfinding.ui.Routes
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppSettings.init(applicationContext)
+        loadCustomMazes(applicationContext)
         enableEdgeToEdge()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -58,7 +62,8 @@ fun MazeApp() {
         composable(Routes.HOME) {
             HomeScreen(
                 onStart = { navController.navigate(Routes.STAGE_SELECT) },
-                onRecords = { navController.navigate(Routes.RECORDS) }
+                onRecords = { navController.navigate(Routes.RECORDS) },
+                onCreate = { navController.navigate(Routes.editor(1)) }
             )
         }
         composable(Routes.STAGE_SELECT) {
@@ -112,5 +117,24 @@ fun MazeApp() {
         composable(Routes.RECORDS) {
             RecordsScreen(onBack = { navController.popBackStack() })
         }
+        composable(
+            route = Routes.EDITOR,
+            arguments = listOf(navArgument("level") { type = NavType.IntType })
+        ) { entry ->
+            val initialLevel = entry.arguments?.getInt("level") ?: 1
+            MazeEditorScreen(
+                initialLevel = initialLevel,
+                onSaved = { navController.popBackStack() },
+                onCancel = { navController.popBackStack() }
+            )
+        }
     }
+}
+
+private fun loadCustomMazes(context: Context) {
+    val all = CustomMazesRepository(context).load()
+    val stages = all.groupBy { it.level }.flatMap { (_, ms) ->
+        ms.sortedBy { it.createdAt }.mapIndexed { i, m -> m.toStage(i + 1) }
+    }
+    Stages.setCustomStages(stages)
 }

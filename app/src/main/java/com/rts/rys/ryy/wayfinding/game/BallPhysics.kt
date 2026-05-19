@@ -14,7 +14,7 @@ import kotlin.math.min
 class BallPhysics(
     private val maze: Maze,
     private val radius: Float = 0.32f,
-    private val maxSpeed: Float = 14f,
+    var maxSpeed: Float = 14f,
     private val friction: Float = 1.8f
 ) {
     var x: Float = maze.startCol + 0.5f

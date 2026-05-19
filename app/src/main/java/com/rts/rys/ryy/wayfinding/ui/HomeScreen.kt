@@ -41,7 +41,8 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
 @Composable
 fun HomeScreen(
     onStart: () -> Unit,
-    onRecords: () -> Unit
+    onRecords: () -> Unit,
+    onCreate: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -107,6 +108,13 @@ fun HomeScreen(
                 bg = SunYellow,
                 onClick = onRecords
             )
+            Spacer(Modifier.height(20.dp))
+            BigButton(
+                label = "새 게임 만들기",
+                emoji = "＋",
+                bg = Lavender,
+                onClick = onCreate
+            )
 
             Spacer(Modifier.height(32.dp))
             SensorSettingRow()
@@ -123,7 +131,7 @@ private fun SensorSettingRow() {
         horizontalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "센서",
+            text = "기울기 센서",
             color = InkDark,
             fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold

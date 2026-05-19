@@ -50,8 +50,10 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
 import kotlinx.coroutines.android.awaitFrame
 import kotlin.math.sqrt
 
-private const val SENSOR_ACCEL_GAIN = 22f
+private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
+private const val SENSOR_MAX_SPEED = 22f
+private const val KEYPAD_MAX_SPEED = 14f
 
 @Composable
 fun GameScreen(
@@ -103,9 +105,11 @@ fun GameScreen(
             if (useKeypad) {
                 ax = kx * KEYPAD_ACCEL_GAIN
                 ay = ky * KEYPAD_ACCEL_GAIN
+                physics.maxSpeed = KEYPAD_MAX_SPEED
             } else {
                 ax = sx * SENSOR_ACCEL_GAIN
                 ay = sy * SENSOR_ACCEL_GAIN
+                physics.maxSpeed = if (sensorEnabled) SENSOR_MAX_SPEED else KEYPAD_MAX_SPEED
             }
 
             val reached = physics.step(dt, ax, ay)
