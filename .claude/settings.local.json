@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew.bat assembleDebug --no-daemon)",
+      "Bash(./gradlew.bat assembleDebug --no-daemon --stacktrace)",
+      "Bash(./gradlew.bat assembleDebug --no-daemon --info)",
+      "Read(//c/Program Files/Java/**)",
+      "Read(//c/Program Files/**)",
+      "PowerShell(Get-ChildItem 'C:\\\\Program Files\\\\Java' -ErrorAction SilentlyContinue; Get-ChildItem 'C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr' -ErrorAction SilentlyContinue; Get-ChildItem 'D:\\\\' -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'jdk|java|android' } | Select-Object FullName)",
+      "PowerShell($env:JAVA_HOME = 'C:\\\\Program Files\\\\Java\\\\jdk-17.0.19'; $env:PATH = \"$env:JAVA_HOME\\\\bin;$env:PATH\"; & .\\\\gradlew.bat assembleDebug --no-daemon 2>&1 | Select-Object -Last 100)",
+      "PowerShell($env:JAVA_HOME = 'C:\\\\Program Files\\\\Java\\\\jdk-17.0.19'; $env:PATH = \"$env:JAVA_HOME\\\\bin;$env:PATH\"; & .\\\\gradlew.bat assembleDebug --no-daemon 2>&1 | Select-Object -Last 80)"
+    ]
+  }
+}
