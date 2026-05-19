@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,12 +27,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Canvas
-import com.rts.rys.ryy.wayfinding.ui.theme.DeepNight
-import com.rts.rys.ryy.wayfinding.ui.theme.MidNight
-import com.rts.rys.ryy.wayfinding.ui.theme.NeonCyan
-import com.rts.rys.ryy.wayfinding.ui.theme.NeonPink
-import com.rts.rys.ryy.wayfinding.ui.theme.NeonYellow
+import com.rts.rys.ryy.wayfinding.ui.theme.BallRed
+import com.rts.rys.ryy.wayfinding.ui.theme.BallRedDeep
+import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
+import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
+import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
+import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
 import kotlinx.coroutines.delay
 
 @Composable
@@ -43,73 +46,101 @@ fun SplashScreen(onFinished: () -> Unit) {
     }
 
     val infinite = rememberInfiniteTransition(label = "splash")
-    val angle by infinite.animateFloat(
+    val bounce by infinite.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
         ),
-        label = "rot"
+        label = "bounce"
     )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(MidNight, DeepNight),
-                    radius = 1400f
-                )
-            ),
+            .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom))),
         contentAlignment = Alignment.Center
     ) {
+        // 해님
+        Canvas(modifier = Modifier
+            .size(120.dp)
+            .padding(top = 20.dp)
+            .align(Alignment.TopEnd)) {
+            drawCircle(
+                color = SunYellow.copy(alpha = 0.3f),
+                radius = size.minDimension / 2f,
+                center = center
+            )
+            drawCircle(
+                color = SunYellow,
+                radius = size.minDimension / 3f,
+                center = center
+            )
+        }
+        // 구름
+        Canvas(modifier = Modifier
+            .size(150.dp)
+            .padding(start = 8.dp, top = 60.dp)
+            .align(Alignment.TopStart)) {
+            val cy = size.height / 2f
+            drawCircle(color = Color.White, radius = size.minDimension * 0.22f, center = Offset(size.width * 0.3f, cy))
+            drawCircle(color = Color.White, radius = size.minDimension * 0.28f, center = Offset(size.width * 0.5f, cy - size.height * 0.06f))
+            drawCircle(color = Color.White, radius = size.minDimension * 0.22f, center = Offset(size.width * 0.7f, cy))
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Canvas(modifier = Modifier.size(160.dp)) {
-                    val sweep = 280f
-                    drawArc(
-                        color = NeonCyan,
-                        startAngle = angle,
-                        sweepAngle = sweep,
-                        useCenter = false,
-                        style = Stroke(width = 10f)
-                    )
-                    drawArc(
-                        color = NeonPink,
-                        startAngle = angle + 180f,
-                        sweepAngle = sweep / 2,
-                        useCenter = false,
-                        topLeft = Offset(size.width * 0.15f, size.height * 0.15f),
-                        size = androidx.compose.ui.geometry.Size(
-                            size.width * 0.7f, size.height * 0.7f
-                        ),
-                        style = Stroke(width = 8f)
+            // 통통 튀는 공
+            Box(
+                modifier = Modifier
+                    .padding(bottom = ((1f - bounce) * 24).dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.size(140.dp)) {
+                    val r = size.minDimension / 2.4f
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.12f),
+                        radius = r,
+                        center = Offset(center.x + 4f, center.y + 8f)
                     )
                     drawCircle(
-                        color = NeonYellow,
-                        radius = 16f,
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color.White, BallRed, BallRedDeep),
+                            center = Offset(center.x - r * 0.35f, center.y - r * 0.4f),
+                            radius = r * 1.5f
+                        ),
+                        radius = r,
                         center = center
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.95f),
+                        radius = r * 0.22f,
+                        center = Offset(center.x - r * 0.38f, center.y - r * 0.38f)
+                    )
+                    drawCircle(
+                        color = BallRedDeep,
+                        radius = r,
+                        center = center,
+                        style = Stroke(width = 3f)
                     )
                 }
             }
+
             Text(
-                text = "MAZE BALL",
-                color = Color.White,
-                fontSize = 34.sp,
+                text = "통통 미로",
+                color = InkDark,
+                fontSize = 42.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 6.sp
+                letterSpacing = 4.sp
             )
             Text(
-                text = "tilt . roll . solve",
-                color = NeonCyan,
-                fontSize = 12.sp,
-                letterSpacing = 4.sp,
-                modifier = Modifier.padding(top = 4.dp),
-                style = MaterialTheme.typography.bodyLarge
+                text = "기울이고 굴려서 도착해요!",
+                color = InkSoft,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }

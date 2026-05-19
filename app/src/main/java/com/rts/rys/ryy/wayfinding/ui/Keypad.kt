@@ -1,7 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,18 +24,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rts.rys.ryy.wayfinding.ui.theme.NeonCyan
-import com.rts.rys.ryy.wayfinding.ui.theme.SoftWhite
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 
-/**
- * 4-direction D-pad. Each button holds an independent press state.
- * The composable reports the currently-pressed direction vector via [onInput]
- * (only fires when state changes).
- */
 @Composable
 fun DPad(
     onInput: (dx: Float, dy: Float) -> Unit,
@@ -56,12 +46,12 @@ fun DPad(
     Box(modifier = modifier) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             DirButton("▲", up)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DirButton("◀", left)
-                Spacer(Modifier.size(56.dp))
+                Spacer(Modifier.size(64.dp))
                 DirButton("▶", right)
             }
             DirButton("▼", down)
@@ -71,13 +61,13 @@ fun DPad(
 
 @Composable
 private fun DirButton(glyph: String, pressed: MutableState<Boolean>) {
+    val bg = if (pressed.value) CoralPink else SkyBlue
     Box(
         modifier = Modifier
-            .size(56.dp)
-            .shadow(if (pressed.value) 2.dp else 8.dp, CircleShape, ambientColor = NeonCyan, spotColor = NeonCyan)
+            .size(64.dp)
+            .shadow(if (pressed.value) 2.dp else 6.dp, CircleShape)
             .clip(CircleShape)
-            .background(if (pressed.value) NeonCyan.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.08f))
-            .border(1.5.dp, NeonCyan.copy(alpha = 0.7f), CircleShape)
+            .background(bg)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -94,9 +84,9 @@ private fun DirButton(glyph: String, pressed: MutableState<Boolean>) {
     ) {
         Text(
             text = glyph,
-            color = SoftWhite,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
+            color = Color.White,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.ExtraBold
         )
     }
 }

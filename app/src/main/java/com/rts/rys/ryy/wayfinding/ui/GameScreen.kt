@@ -1,7 +1,7 @@
 package com.rts.rys.ryy.wayfinding.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -24,26 +24,28 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
-import com.rts.rys.ryy.wayfinding.ui.theme.DeepNight
-import com.rts.rys.ryy.wayfinding.ui.theme.MidNight
-import com.rts.rys.ryy.wayfinding.ui.theme.NeonCyan
-import com.rts.rys.ryy.wayfinding.ui.theme.NeonPink
-import com.rts.rys.ryy.wayfinding.ui.theme.SoftWhite
+import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
+import com.rts.rys.ryy.wayfinding.ui.theme.CreamBg
+import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
+import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
+import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
 import kotlinx.coroutines.android.awaitFrame
 import kotlin.math.sqrt
 
@@ -71,7 +73,6 @@ fun GameScreen(
     var finished by remember(stage.id) { mutableStateOf(false) }
     var paused by remember(stage.id) { mutableStateOf(false) }
 
-    // keypad input
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
 
@@ -118,11 +119,10 @@ fun GameScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(MidNight, DeepNight)))
+            .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
             .padding(top = 28.dp, bottom = 20.dp, start = 14.dp, end = 14.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // top HUD
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -131,26 +131,22 @@ fun GameScreen(
                 Spacer(Modifier.width(12.dp))
                 Text(
                     text = stage.name,
-                    color = SoftWhite,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 3.sp
+                    color = InkDark,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
-                Spacer(modifier = Modifier.width(0.dp))
+                Spacer(Modifier.width(12.dp))
                 Box(
                     modifier = Modifier
-                        .padding(start = 12.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(NeonCyan.copy(alpha = 0.12f))
-                        .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(SunYellow)
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = formatElapsed(elapsedMs),
-                        color = NeonCyan,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
                 }
             }
@@ -160,6 +156,9 @@ fun GameScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .shadow(6.dp, RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(CreamBg)
             ) {
                 MazeCanvas(
                     maze = stage.maze,
@@ -170,7 +169,6 @@ fun GameScreen(
 
                 DPad(
                     onInput = { dx, dy ->
-                        // normalize so diagonals aren't faster
                         val len = sqrt(dx * dx + dy * dy)
                         if (len > 0f) {
                             kx = dx / len
@@ -181,7 +179,7 @@ fun GameScreen(
                     },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 4.dp, bottom = 4.dp)
+                        .padding(end = 10.dp, bottom = 10.dp)
                 )
             }
         }
@@ -200,32 +198,38 @@ private fun PauseDialog(onResume: () -> Unit, onExit: () -> Unit) {
     Dialog(onDismissRequest = onResume) {
         Box(
             modifier = Modifier
-                .size(width = 280.dp, height = 200.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(MidNight)
-                .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                .padding(20.dp)
+                .size(width = 300.dp, height = 220.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color.White)
+                .padding(24.dp)
         ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.SpaceBetween,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("일시정지", color = SoftWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
-                        onClick = onExit,
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonPink.copy(alpha = 0.2f), contentColor = NeonPink),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text("나가기") }
-                    Button(
-                        onClick = onResume,
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.2f), contentColor = NeonCyan),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text("계속하기") }
+                Text("잠깐 멈췄어요", color = InkDark, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                Text("계속 놀까요?", color = InkSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    DialogButton("그만할래요", CoralPink, modifier = Modifier.weight(1f), onClick = onExit)
+                    DialogButton("계속해요", SkyBlue, modifier = Modifier.weight(1f), onClick = onResume)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DialogButton(label: String, bg: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .height(56.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 

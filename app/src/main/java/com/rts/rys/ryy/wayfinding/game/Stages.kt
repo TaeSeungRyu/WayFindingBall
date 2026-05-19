@@ -11,8 +11,8 @@ object Stages {
     val all: List<Stage> = listOf(
         Stage(
             id = 1,
-            name = "스테이지 1",
-            difficulty = "쉬움",
+            name = "1단계",
+            difficulty = "쉬워요",
             maze = Maze.fromAscii(listOf(
                 "#########",
                 "#S      #",
@@ -27,8 +27,8 @@ object Stages {
         ),
         Stage(
             id = 2,
-            name = "스테이지 2",
-            difficulty = "보통",
+            name = "2단계",
+            difficulty = "보통이에요",
             maze = Maze.fromAscii(listOf(
                 "#############",
                 "#S    #     #",
@@ -47,8 +47,8 @@ object Stages {
         ),
         Stage(
             id = 3,
-            name = "스테이지 3",
-            difficulty = "어려움",
+            name = "3단계",
+            difficulty = "조금 어려워요",
             maze = Maze.fromAscii(listOf(
                 "#################",
                 "#S  #     #     #",
@@ -71,8 +71,8 @@ object Stages {
         ),
         Stage(
             id = 4,
-            name = "스테이지 4",
-            difficulty = "전문가",
+            name = "4단계",
+            difficulty = "엄청 어려워요",
             maze = Maze.fromAscii(listOf(
                 "#####################",
                 "#S    #       #     #",
