@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +41,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -53,6 +55,7 @@ import androidx.compose.ui.window.Dialog
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
+import com.rts.rys.ryy.wayfinding.game.Cell
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MovingGoalController
@@ -75,6 +78,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 import kotlinx.coroutines.android.awaitFrame
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -142,6 +146,49 @@ fun GameScreen(
     val density = LocalDensity.current
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
+
+    val bombEnabled = stage.level in 6..7
+    var bombAvailable by remember(stage.id, attemptId) { mutableStateOf(bombEnabled) }
+    var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
+
+    fun useBomb() {
+        if (!bombAvailable) return
+        val bc = floor(physics.x).toInt()
+        val br = floor(physics.y).toInt()
+        var changed = false
+        for (dr in -1..1) for (dc in -1..1) {
+            if (dc == 0 && dr == 0) continue
+            val c = bc + dc
+            val r = br + dr
+            if (c <= 0 || c >= workingMaze.cols - 1) continue
+            if (r <= 0 || r >= workingMaze.rows - 1) continue
+            if (c == workingMaze.startCol && r == workingMaze.startRow) continue
+            if (c == workingMaze.goalCol && r == workingMaze.goalRow) continue
+            if (workingMaze.grid[r][c] == Cell.WALL) {
+                workingMaze.grid[r][c] = Cell.EMPTY
+                changed = true
+            }
+        }
+        if (changed) {
+            bombAvailable = false
+            bombVersion++
+            repeat(24) {
+                val angle = (Math.random() * 2 * Math.PI).toFloat()
+                val speed = 4f + (Math.random() * 4).toFloat()
+                dust.add(
+                    DustParticle(
+                        x = physics.x,
+                        y = physics.y,
+                        vx = cos(angle) * speed,
+                        vy = sin(angle) * speed,
+                        lifetime = 0.55f
+                    )
+                )
+            }
+            shakeMs = 0.18f
+            SoundManager.playBonk()
+        }
+    }
 
     BackHandler(enabled = !paused) { paused = true }
 
@@ -395,7 +442,7 @@ fun GameScreen(
                     }
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
-                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0)
+                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + bombVersion
                 MazeCanvas(
                     maze = workingMaze,
                     ballX = ballX,
@@ -489,6 +536,40 @@ fun GameScreen(
                         )
                     }
                 }
+                if (bombEnabled) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 16.dp, bottom = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .shadow(6.dp, CircleShape)
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(if (bombAvailable) CoralPink else Color.White.copy(alpha = 0.7f))
+                                .clickable(enabled = bombAvailable, onClick = ::useBomb),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BombIcon(
+                                available = bombAvailable,
+                                modifier = Modifier.size(44.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = if (bombAvailable) "폭탄" else "사용 완료",
+                            color = InkDark,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.85f))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(4.dp))
@@ -579,6 +660,57 @@ private fun PillToggleChip(label: String, enabled: Boolean, onClick: () -> Unit)
             fontSize = 14.sp,
             fontWeight = FontWeight.ExtraBold
         )
+    }
+}
+
+@Composable
+private fun BombIcon(available: Boolean, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val d = size.minDimension
+        val cx = size.width / 2f
+        val cy = size.height / 2f + d * 0.06f
+        val bodyR = d * 0.34f
+        val bodyColor = if (available) Color(0xFF1E1E1E) else Color(0xFF888888)
+        // 폭탄 몸체
+        drawCircle(color = bodyColor, radius = bodyR, center = Offset(cx, cy))
+        // 광택
+        drawCircle(
+            color = Color.White.copy(alpha = if (available) 0.45f else 0.25f),
+            radius = bodyR * 0.22f,
+            center = Offset(cx - bodyR * 0.38f, cy - bodyR * 0.38f)
+        )
+        // 도화선 받침 (몸체 위 작은 갈색 박스)
+        val capW = bodyR * 0.45f
+        val capH = bodyR * 0.18f
+        drawRect(
+            color = Color(0xFF7A5A2E),
+            topLeft = Offset(cx - capW / 2f, cy - bodyR - capH),
+            size = Size(capW, capH)
+        )
+        // 도화선 (오른쪽 위로 비스듬히)
+        val fuseStart = Offset(cx + capW * 0.2f, cy - bodyR - capH)
+        val fuseEnd = Offset(cx + bodyR * 0.9f, cy - bodyR * 1.55f)
+        drawLine(
+            color = Color(0xFF8A6235),
+            start = fuseStart,
+            end = fuseEnd,
+            strokeWidth = d * 0.05f,
+            cap = StrokeCap.Round
+        )
+        if (available) {
+            // 불꽃 외곽 (노랑)
+            drawCircle(
+                color = Color(0xFFFFD24A),
+                radius = d * 0.10f,
+                center = fuseEnd
+            )
+            // 불꽃 안쪽 (주황)
+            drawCircle(
+                color = Color(0xFFFF6A2C),
+                radius = d * 0.06f,
+                center = fuseEnd
+            )
+        }
     }
 }
 

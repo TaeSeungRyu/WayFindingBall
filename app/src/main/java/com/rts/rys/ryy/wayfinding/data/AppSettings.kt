@@ -10,6 +10,7 @@ object AppSettings {
     private const val PREFS = "maze_settings"
     private const val KEY_SENSOR_ENABLED = "sensor_enabled"
     private const val KEY_SOUND_ENABLED = "sound_enabled"
+    private const val KEY_BGM_ENABLED = "bgm_enabled"
     private const val KEY_SENSOR_SENSITIVITY = "sensor_sensitivity"
     private const val KEY_SENSOR_OFFSET_X = "sensor_offset_x"
     private const val KEY_SENSOR_OFFSET_Y = "sensor_offset_y"
@@ -21,6 +22,9 @@ object AppSettings {
 
     private val _soundEnabled: MutableState<Boolean> = mutableStateOf(true)
     val soundEnabled: MutableState<Boolean> get() = _soundEnabled
+
+    private val _bgmEnabled: MutableState<Boolean> = mutableStateOf(true)
+    val bgmEnabled: MutableState<Boolean> get() = _bgmEnabled
 
     private val _sensorSensitivity = mutableFloatStateOf(1.0f)
     val sensorSensitivity: MutableState<Float> get() = _sensorSensitivity
@@ -38,6 +42,7 @@ object AppSettings {
             prefs = p
             _sensorEnabled.value = p.getBoolean(KEY_SENSOR_ENABLED, true)
             _soundEnabled.value = p.getBoolean(KEY_SOUND_ENABLED, true)
+            _bgmEnabled.value = p.getBoolean(KEY_BGM_ENABLED, true)
             _sensorSensitivity.value = p.getFloat(KEY_SENSOR_SENSITIVITY, 1.0f)
             _sensorOffsetX.value = p.getFloat(KEY_SENSOR_OFFSET_X, 0f)
             _sensorOffsetY.value = p.getFloat(KEY_SENSOR_OFFSET_Y, 0f)
@@ -52,6 +57,11 @@ object AppSettings {
     fun setSoundEnabled(value: Boolean) {
         _soundEnabled.value = value
         prefs?.edit()?.putBoolean(KEY_SOUND_ENABLED, value)?.apply()
+    }
+
+    fun setBgmEnabled(value: Boolean) {
+        _bgmEnabled.value = value
+        prefs?.edit()?.putBoolean(KEY_BGM_ENABLED, value)?.apply()
     }
 
     fun setSensorSensitivity(value: Float) {

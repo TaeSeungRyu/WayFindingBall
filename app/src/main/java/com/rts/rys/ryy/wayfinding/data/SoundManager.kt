@@ -2,12 +2,14 @@ package com.rts.rys.ryy.wayfinding.data
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.media.SoundPool
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sin
 
@@ -19,12 +21,17 @@ object SoundManager {
     private const val SAMPLE_RATE = 44100
     private const val BONK_FILE = "sfx_bonk.wav"
     private const val GOAL_FILE = "sfx_goal.wav"
+    private const val BGM_FILE = "bgm_loop.wav"
+    private const val BGM_VERSION = 2
 
     private var soundPool: SoundPool? = null
     private var bonkId: Int = 0
     private var goalId: Int = 0
     private var bonkLoaded = false
     private var goalLoaded = false
+
+    private var bgmPlayer: MediaPlayer? = null
+    private var bgmFile: File? = null
 
     fun init(context: Context) {
         if (soundPool != null) return
@@ -53,7 +60,51 @@ object SoundManager {
             val goalFile = File(context.cacheDir, GOAL_FILE)
             if (!goalFile.exists()) writeWav(goalFile, generateGoal())
             goalId = pool.load(goalFile.absolutePath, 1)
+
+            val bgmFile = File(context.cacheDir, "bgm_loop_v${BGM_VERSION}.wav")
+            if (!bgmFile.exists()) writeWav(bgmFile, generateBgm())
+            this.bgmFile = bgmFile
         }
+    }
+
+    fun startBgm() {
+        if (!AppSettings.bgmEnabled.value) return
+        val file = bgmFile ?: return
+        if (bgmPlayer?.isPlaying == true) return
+        runCatching {
+            val mp = bgmPlayer ?: MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                setDataSource(file.absolutePath)
+                isLooping = true
+                setVolume(0.45f, 0.45f)
+                prepare()
+            }
+            bgmPlayer = mp
+            mp.start()
+        }
+    }
+
+    fun pauseBgm() {
+        runCatching { bgmPlayer?.takeIf { it.isPlaying }?.pause() }
+    }
+
+    fun stopBgm() {
+        runCatching {
+            bgmPlayer?.let {
+                if (it.isPlaying) it.stop()
+                it.release()
+            }
+        }
+        bgmPlayer = null
+    }
+
+    fun applyBgmEnabled() {
+        if (AppSettings.bgmEnabled.value) startBgm() else pauseBgm()
     }
 
     fun playBonk() {
@@ -113,6 +164,111 @@ object SoundManager {
             }
         }
         return out
+    }
+
+    /**
+     * Calm loopable BGM, ~16s. Chord progression I–vi–IV–V in C major with a
+     * gentle arpeggio + soft bass. Pure sine waves with attack/release shaping
+     * so the loop point doesn't click.
+     */
+    private fun generateBgm(): ShortArray {
+        val durationS = 16.0
+        val n = (SAMPLE_RATE * durationS).toInt()
+        val out = DoubleArray(n)
+
+        // 4 chords, 4초 each. C major - A minor - F major - G major.
+        val chords = arrayOf(
+            doubleArrayOf(261.63, 329.63, 392.00),  // C  E  G
+            doubleArrayOf(220.00, 261.63, 329.63),  // A  C  E
+            doubleArrayOf(174.61, 220.00, 261.63),  // F  A  C
+            doubleArrayOf(196.00, 246.94, 293.66),  // G  B  D
+        )
+        val chordDurS = durationS / chords.size
+        val crossfadeS = 0.6
+
+        // Pad layer: sustained chord stack with soft crossfade between chords.
+        for (i in 0 until n) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val chordIdx = (t / chordDurS).toInt().coerceIn(0, chords.size - 1)
+            val nextIdx = (chordIdx + 1) % chords.size
+            val tIn = t - chordIdx * chordDurS
+            val mainAmp = if (tIn > chordDurS - crossfadeS) {
+                (chordDurS - tIn) / crossfadeS
+            } else 1.0
+            val nextAmp = 1.0 - mainAmp
+
+            var s = 0.0
+            for (f in chords[chordIdx]) s += sin(2 * PI * f * t) * 0.10 * mainAmp
+            if (nextAmp > 0.0) {
+                for (f in chords[nextIdx]) s += sin(2 * PI * f * t) * 0.10 * nextAmp
+            }
+            out[i] = s
+        }
+
+        // Bass layer: root of each chord, one octave down, soft attack.
+        for (m in chords.indices) {
+            val rootHz = chords[m][0] / 2.0
+            val start = (m * chordDurS * SAMPLE_RATE).toInt()
+            val len = (chordDurS * SAMPLE_RATE).toInt()
+            val attack = 0.08
+            val release = 0.4
+            for (k in 0 until len) {
+                val idx = start + k
+                if (idx >= n) break
+                val tk = k.toDouble() / SAMPLE_RATE
+                val env = when {
+                    tk < attack -> tk / attack
+                    tk > chordDurS - release -> ((chordDurS - tk) / release).coerceAtLeast(0.0)
+                    else -> 1.0
+                }
+                out[idx] += sin(2 * PI * rootHz * (start + k).toDouble() / SAMPLE_RATE) * 0.16 * env
+            }
+        }
+
+        // Arpeggio layer: pluck the chord tones one octave up, 2 notes per second.
+        val plucksPerSec = 2
+        val pluckDurS = 1.0 / plucksPerSec
+        val pluckLen = (pluckDurS * SAMPLE_RATE).toInt()
+        val totalPlucks = (durationS * plucksPerSec).toInt()
+        for (p in 0 until totalPlucks) {
+            val tStart = p * pluckDurS
+            val chordIdx = (tStart / chordDurS).toInt().coerceIn(0, chords.size - 1)
+            val chord = chords[chordIdx]
+            // pattern within each chord period: root, fifth, third, fifth (4 plucks per 2s chord = 4)
+            val withinChord = p - chordIdx * plucksPerSec * (chordDurS).toInt()
+            val pattern = intArrayOf(0, 2, 1, 2)
+            val note = chord[pattern[withinChord.mod(pattern.size)]] * 2.0
+            val startSample = (tStart * SAMPLE_RATE).toInt()
+            val attack = 0.01
+            for (k in 0 until pluckLen) {
+                val idx = startSample + k
+                if (idx >= n) break
+                val tk = k.toDouble() / SAMPLE_RATE
+                val env = when {
+                    tk < attack -> tk / attack
+                    else -> exp(-(tk - attack) * 4.0)
+                }
+                out[idx] += sin(2 * PI * note * (startSample + k).toDouble() / SAMPLE_RATE) * 0.09 * env
+            }
+        }
+
+        // Edge taper to avoid loop click.
+        val edgeS = 0.12
+        val edgeN = (edgeS * SAMPLE_RATE).toInt()
+        for (i in 0 until edgeN) {
+            val gain = i.toDouble() / edgeN
+            out[i] *= gain
+            out[n - 1 - i] *= gain
+        }
+
+        // Normalize to safe peak.
+        var peak = 0.0
+        for (v in out) { val a = abs(v); if (a > peak) peak = a }
+        val scale = if (peak > 0.0) 0.65 / peak else 1.0
+        return ShortArray(n) { i ->
+            val s = (out[i] * scale).coerceIn(-0.99, 0.99)
+            (s * Short.MAX_VALUE).toInt().toShort()
+        }
     }
 
     private fun writeWav(file: File, samples: ShortArray) {

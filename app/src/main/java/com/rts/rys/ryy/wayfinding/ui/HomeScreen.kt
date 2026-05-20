@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.AppSettings
+import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
@@ -131,6 +132,15 @@ fun HomeScreen(
                 label = "소리",
                 enabled = AppSettings.soundEnabled.value,
                 onSet = { AppSettings.setSoundEnabled(it) }
+            )
+            Spacer(Modifier.height(10.dp))
+            SettingRow(
+                label = "음악",
+                enabled = AppSettings.bgmEnabled.value,
+                onSet = {
+                    AppSettings.setBgmEnabled(it)
+                    SoundManager.applyBgmEnabled()
+                }
             )
         }
     }
