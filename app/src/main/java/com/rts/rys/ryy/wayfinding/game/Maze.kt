@@ -13,6 +13,10 @@ data class Maze(
         internal set
     var goalRow: Int
         internal set
+    var enemyCol: Int = -1
+        internal set
+    var enemyRow: Int = -1
+        internal set
 
     init {
         var sc = 0; var sr = 0; var gc = cols - 1; var gr = rows - 1
@@ -35,17 +39,27 @@ data class Maze(
         fun fromAscii(lines: List<String>): Maze {
             val rows = lines.size
             val cols = lines[0].length
+            var ec = -1
+            var er = -1
             val grid = Array(rows) { r ->
                 Array(cols) { c ->
                     when (lines[r][c]) {
                         '#' -> Cell.WALL
                         'S' -> Cell.START
                         'G' -> Cell.GOAL
+                        'E' -> {
+                            ec = c
+                            er = r
+                            Cell.EMPTY
+                        }
                         else -> Cell.EMPTY
                     }
                 }
             }
-            return Maze(cols, rows, grid)
+            return Maze(cols, rows, grid).also {
+                it.enemyCol = ec
+                it.enemyRow = er
+            }
         }
     }
 }

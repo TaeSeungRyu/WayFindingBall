@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,6 +88,7 @@ private fun sizeForLevel(level: Int): Int = when (level) {
     4 -> 21
     5 -> 13
     6 -> 13
+    7 -> 13
     else -> 13
 }
 
@@ -129,7 +132,44 @@ private fun randomBoard(level: Int): Array<CharArray> {
     val (gc, gr) = farthestCell(board, 1, 1)
     board[1][1] = 'S'
     board[gr][gc] = 'G'
+    if (level == 8) placeRandomEnemy(board, 1, 1, gc, gr)
     return board
+}
+
+private fun placeRandomEnemy(board: Array<CharArray>, sc: Int, sr: Int, gc: Int, gr: Int) {
+    val n = board.size
+    val dist = Array(n) { IntArray(n) { -1 } }
+    val queue: MutableList<Pair<Int, Int>> = mutableListOf()
+    queue.add(sc to sr)
+    dist[sr][sc] = 0
+    val dirs = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
+    var maxD = 0
+    while (queue.isNotEmpty()) {
+        val (c, r) = queue.removeAt(0)
+        for ((dc, dr) in dirs) {
+            val nc = c + dc
+            val nr = r + dr
+            if (nc !in 0 until n || nr !in 0 until n) continue
+            if (dist[nr][nc] != -1) continue
+            if (board[nr][nc] == '#') continue
+            dist[nr][nc] = dist[r][c] + 1
+            if (dist[nr][nc] > maxD) maxD = dist[nr][nc]
+            queue.add(nc to nr)
+        }
+    }
+    val threshold = maxD / 2
+    val candidates = mutableListOf<Pair<Int, Int>>()
+    for (r in 0 until n) for (c in 0 until n) {
+        if (board[r][c] != ' ') continue
+        if (c == sc && r == sr) continue
+        if (c == gc && r == gr) continue
+        if (dist[r][c] < threshold) continue
+        candidates.add(c to r)
+    }
+    if (candidates.isNotEmpty()) {
+        val (ec, er) = candidates.random()
+        board[er][ec] = 'E'
+    }
 }
 
 private fun farthestCell(board: Array<CharArray>, sc: Int, sr: Int): Pair<Int, Int> {
@@ -160,7 +200,7 @@ private fun farthestCell(board: Array<CharArray>, sc: Int, sr: Int): Pair<Int, I
     return bestC to bestR
 }
 
-private enum class Tool { WALL, EMPTY, START, GOAL }
+private enum class Tool { WALL, EMPTY, START, GOAL, ENEMY }
 
 @Composable
 fun MazeEditorScreen(
@@ -169,9 +209,12 @@ fun MazeEditorScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 7)) }
+    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 8)) }
     var board by remember(level) { mutableStateOf(initialBoard(level)) }
     var tool by remember { mutableStateOf(Tool.WALL) }
+    LaunchedEffect(level) {
+        if (level != 8 && tool == Tool.ENEMY) tool = Tool.WALL
+    }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var previewMaze by remember { mutableStateOf<Maze?>(null) }
 
@@ -204,6 +247,13 @@ fun MazeEditorScreen(
                     if (newBoard[rr][cc] == 'G') newBoard[rr][cc] = ' '
                 }
                 newBoard[r][c] = 'G'
+            }
+            Tool.ENEMY -> {
+                if (cur == 'S' || cur == 'G') return
+                for (rr in 0 until n) for (cc in 0 until n) {
+                    if (newBoard[rr][cc] == 'E') newBoard[rr][cc] = ' '
+                }
+                newBoard[r][c] = 'E'
             }
         }
         board = newBoard
@@ -263,8 +313,11 @@ fun MazeEditorScreen(
 
             SectionLabel("난이도")
             Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (lv in 1..7) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                for (lv in 1..8) {
                     DifficultyPill(level = lv, selected = lv == level, onClick = { level = lv })
                 }
             }
@@ -277,6 +330,9 @@ fun MazeEditorScreen(
                 ToolPill("길", tool == Tool.EMPTY) { tool = Tool.EMPTY }
                 ToolPill("시작", tool == Tool.START) { tool = Tool.START }
                 ToolPill("도착", tool == Tool.GOAL) { tool = Tool.GOAL }
+                if (level == 8) {
+                    ToolPill("적", tool == Tool.ENEMY) { tool = Tool.ENEMY }
+                }
             }
             Spacer(Modifier.height(12.dp))
 
@@ -410,6 +466,16 @@ private fun EditorGrid(
                         stroke = GoalGoldDeep
                     )
                 }
+                'E' -> {
+                    drawRect(FloorTile, tl, sz)
+                    val center = Offset(tl.x + cs / 2f, tl.y + cs / 2f)
+                    val br = cs * 0.36f
+                    drawCircle(color = Color(0xFF1A0606), radius = br * 1.05f, center = center)
+                    drawCircle(color = Color(0xFF6B1A0A), radius = br * 0.85f, center = center)
+                    val eyeR = br * 0.18f
+                    drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(center.x - br * 0.32f, center.y - br * 0.15f))
+                    drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(center.x + br * 0.32f, center.y - br * 0.15f))
+                }
             }
             drawRect(
                 color = Color.Black.copy(alpha = 0.08f),
@@ -462,8 +528,18 @@ private fun DifficultyPill(level: Int, selected: Boolean, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Text(
-            text = "난$level",
+            text = "난이도$level",
             color = textColor,
+
+
+
+
+
+
+
+
+
+
             fontSize = 14.sp,
             fontWeight = FontWeight.ExtraBold
         )

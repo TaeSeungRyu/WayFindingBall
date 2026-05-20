@@ -113,8 +113,8 @@ fun MazeApp() {
             val stage = remember(stageId) { Stages.byId(stageId) }
             GameScreen(
                 stage = stage,
-                onFinished = { elapsed ->
-                    navController.navigate(Routes.result(stageId, elapsed)) {
+                onFinished = { elapsed, caught ->
+                    navController.navigate(Routes.result(stageId, elapsed, caught)) {
                         popUpTo(Routes.GAME) { inclusive = true }
                     }
                 },
@@ -127,14 +127,17 @@ fun MazeApp() {
             route = Routes.RESULT,
             arguments = listOf(
                 navArgument("stageId") { type = NavType.IntType },
-                navArgument("elapsed") { type = NavType.LongType }
+                navArgument("elapsed") { type = NavType.LongType },
+                navArgument("caught") { type = NavType.BoolType }
             )
         ) { entry ->
             val stageId = entry.arguments?.getInt("stageId") ?: 1
             val elapsed = entry.arguments?.getLong("elapsed") ?: 0L
+            val caught = entry.arguments?.getBoolean("caught") ?: false
             ResultScreen(
                 stageId = stageId,
                 elapsedMs = elapsed,
+                caught = caught,
                 onRetry = {
                     navController.navigate(Routes.game(stageId)) {
                         popUpTo(Routes.STAGE_SELECT) { inclusive = false }

@@ -59,21 +59,25 @@ import kotlin.math.sin
 fun ResultScreen(
     stageId: Int,
     elapsedMs: Long,
+    caught: Boolean = false,
     onRetry: () -> Unit,
     onHome: () -> Unit
 ) {
     val context = LocalContext.current
     val stage = remember(stageId) { Stages.byId(stageId) }
-    val earnedStars = remember(stageId, elapsedMs) { MazePar.starsFor(stage, elapsedMs) }
+    val earnedStars = remember(stageId, elapsedMs, caught) {
+        if (caught) 0 else MazePar.starsFor(stage, elapsedMs)
+    }
     val previousBest = remember(stageId) {
         RecordsRepository(context).load()
             .filter { it.stageId == stageId }
             .minByOrNull { it.elapsedMs }
             ?.elapsedMs
     }
-    val isNewBest = previousBest == null || elapsedMs < previousBest
+    val isNewBest = !caught && (previousBest == null || elapsedMs < previousBest)
 
-    LaunchedEffect(stageId, elapsedMs) {
+    LaunchedEffect(stageId, elapsedMs, caught) {
+        if (caught) return@LaunchedEffect
         val repo = RecordsRepository(context)
         repo.add(
             GameRecord(
@@ -112,20 +116,20 @@ fun ResultScreen(
                     center = center,
                     outerR = size.minDimension * 0.45f,
                     innerR = size.minDimension * 0.2f,
-                    fill = GoalGold,
-                    stroke = GoalGoldDeep
+                    fill = if (caught) InkSoft else GoalGold,
+                    stroke = if (caught) InkDark else GoalGoldDeep
                 )
             }
             Spacer(Modifier.height(20.dp))
             Text(
-                text = "참 잘했어요!",
+                text = if (caught) "사로잡혔어요" else "참 잘했어요!",
                 fontSize = 40.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = InkDark
+                color = if (caught) CoralPink else InkDark
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "${stage.name} 도착!",
+                text = if (caught) "${stage.name}에서 잡혔어요" else "${stage.name} 도착!",
                 fontSize = 16.sp,
                 color = InkSoft,
                 fontWeight = FontWeight.SemiBold

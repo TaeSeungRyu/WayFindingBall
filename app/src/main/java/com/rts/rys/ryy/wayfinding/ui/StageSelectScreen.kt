@@ -358,7 +358,8 @@ fun levelColor(level: Int): Color = when (level) {
     4 -> Lavender
     5 -> BallRed
     6 -> WallGreen
-    else -> Color(0xFF3D2C5C)
+    7 -> Color(0xFF3D2C5C)
+    else -> Color(0xFFA42818)
 }
 
 fun stageColor(id: Int): Color {

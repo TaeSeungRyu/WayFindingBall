@@ -56,6 +56,7 @@ import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.Cell
+import com.rts.rys.ryy.wayfinding.game.ChaserController
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MovingGoalController
@@ -90,7 +91,7 @@ private const val KEYPAD_MAX_SPEED = 14f
 @Composable
 fun GameScreen(
     stage: Stage,
-    onFinished: (elapsedMs: Long) -> Unit,
+    onFinished: (elapsedMs: Long, caught: Boolean) -> Unit,
     onExit: () -> Unit
 ) {
     val context = LocalContext.current
@@ -99,14 +100,20 @@ fun GameScreen(
     val workingMaze = remember(stage.id, attemptId) {
         val src = stage.maze
         val grid = Array(src.rows) { r -> src.grid[r].copyOf() }
-        Maze(src.cols, src.rows, grid)
+        Maze(src.cols, src.rows, grid).also {
+            it.enemyCol = src.enemyCol
+            it.enemyRow = src.enemyRow
+        }
     }
     val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
     val dynamicMaze = remember(stage.id, attemptId) {
-        if (stage.level in 5..7) DynamicMazeController(workingMaze) else null
+        if (stage.level in 5..8) DynamicMazeController(workingMaze) else null
     }
     val movingGoal = remember(stage.id, attemptId) {
         if (stage.level == 6) MovingGoalController(workingMaze) else null
+    }
+    val chaser = remember(stage.id, attemptId) {
+        if (stage.level == 8) ChaserController(workingMaze) else null
     }
     val isDarkLevel = stage.level == 7
     val tilt = remember { TiltSensor(context) }
@@ -147,7 +154,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..7
+    val bombEnabled = stage.level in 6..8
     var bombAvailable by remember(stage.id, attemptId) { mutableStateOf(bombEnabled) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
 
@@ -246,6 +253,18 @@ fun GameScreen(
                 val reached = physics.step(dt, ax, ay)
                 dynamicMaze?.tick(dt, physics.x, physics.y)
                 movingGoal?.tick(dt, physics.x, physics.y)
+                if (chaser != null) {
+                    chaser.tick(dt, floor(physics.x).toInt(), floor(physics.y).toInt())
+                    val dxc = physics.x - chaser.visualX
+                    val dyc = physics.y - chaser.visualY
+                    if (dxc * dxc + dyc * dyc < 0.55f * 0.55f && !reached && !finished) {
+                        finished = true
+                        shakeMs = 0.3f
+                        SoundManager.playBonk()
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onFinished(elapsedMs, true)
+                    }
+                }
                 if (physics.justImpacted && !reached) {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     SoundManager.playBonk()
@@ -355,7 +374,7 @@ fun GameScreen(
                 ballScale = (1f - celebrationTimer / 0.45f).coerceIn(0f, 1f)
                 if (celebrationTimer >= 0.75f) {
                     finished = true
-                    onFinished(elapsedMs)
+                    onFinished(elapsedMs, false)
                 }
             }
         }
@@ -491,6 +510,23 @@ fun GameScreen(
                                 size = Size(cs, cs)
                             )
                         }
+                    }
+                }
+                if (chaser != null) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                        val ox = (size.width - cs * workingMaze.cols) / 2f
+                        val oy = (size.height - cs * workingMaze.rows) / 2f
+                        val cx = ox + chaser.visualX * cs
+                        val cy = oy + chaser.visualY * cs
+                        val br = cs * 0.38f
+                        drawCircle(color = Color(0xFF1A0606), radius = br * 1.05f, center = Offset(cx, cy))
+                        drawCircle(color = Color(0xFF6B1A0A), radius = br * 0.85f, center = Offset(cx, cy))
+                        val eyeR = br * 0.18f
+                        drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(cx - br * 0.32f, cy - br * 0.15f))
+                        drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(cx + br * 0.32f, cy - br * 0.15f))
+                        drawCircle(color = Color.Black, radius = eyeR * 0.45f, center = Offset(cx - br * 0.32f, cy - br * 0.15f))
+                        drawCircle(color = Color.Black, radius = eyeR * 0.45f, center = Offset(cx + br * 0.32f, cy - br * 0.15f))
                     }
                 }
                 EffectsOverlay(

@@ -153,6 +153,25 @@ private val ShadowTheme = MazeTheme(
     isDark = true
 )
 
+private val EmberTheme = MazeTheme(
+    wallTop = Color(0xFFFF9457),
+    wallMid = Color(0xFFD24F1F),
+    wallDeep = Color(0xFF6E1E08),
+    wallAccent = Color(0xFFFFC79A),
+    floorTile = Color(0xFF2C1812),
+    floorTileAlt = Color(0xFF1A0F0A),
+    floorDetailDot = Color(0xFFB8623A),
+    floorDetailSplotch = Color(0xFF402218),
+    skyTop = Color(0xFF4A1410),
+    skyBottom = Color(0xFF0E0303),
+    rockTop = Color(0xFF6E3826),
+    rockBottom = Color(0xFF2E1410),
+    flowerColors = listOf(Color(0xFFFFC53D), Color(0xFFFF6A2C), Color(0xFFFF4D4D)),
+    flowerCenter = Color(0xFFFFE066),
+    cloudOpacity = 0.3f,
+    isDark = true
+)
+
 fun themeForLevel(level: Int): MazeTheme = when (level) {
     1 -> GrassTheme
     2 -> IceTheme
@@ -160,5 +179,6 @@ fun themeForLevel(level: Int): MazeTheme = when (level) {
     4 -> NightTheme
     5 -> MagicTheme
     6 -> OceanTheme
-    else -> ShadowTheme
+    7 -> ShadowTheme
+    else -> EmberTheme
 }
