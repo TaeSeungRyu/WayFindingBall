@@ -1,6 +1,7 @@
 package com.rts.rys.ryy.wayfinding.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,8 +36,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
+import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import java.text.SimpleDateFormat
@@ -47,8 +50,18 @@ import java.util.Locale
 fun RecordsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var records by remember { mutableStateOf<List<GameRecord>>(emptyList()) }
+    var selectedLevel by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(Unit) {
         records = RecordsRepository(context).load()
+    }
+    val recordsWithLevel = remember(records) {
+        records.map { r ->
+            r to runCatching { Stages.byId(r.stageId).level }.getOrNull()
+        }
+    }
+    val filtered = remember(recordsWithLevel, selectedLevel) {
+        if (selectedLevel == null) recordsWithLevel
+        else recordsWithLevel.filter { it.second == selectedLevel }
     }
 
     Box(
@@ -75,29 +88,116 @@ fun RecordsScreen(onBack: () -> Unit) {
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
-            if (records.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+            if (records.isNotEmpty()) {
+                LevelFilterRow(
+                    selected = selectedLevel,
+                    onSelect = { selectedLevel = it }
+                )
+                Spacer(Modifier.height(14.dp))
+            }
+
+            when {
+                records.isEmpty() -> EmptyState(
+                    modifier = Modifier.weight(1f),
+                    text = "아직 기록이 없어요\n게임을 한 번 해봐요!"
+                )
+                filtered.isEmpty() -> EmptyState(
+                    modifier = Modifier.weight(1f),
+                    text = "이 난이도의 기록이 없어요"
+                )
+                else -> LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = "아직 기록이 없어요\n게임을 한 번 해봐요!",
-                        color = InkSoft,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(records) { record ->
+                    items(filtered) { (record, _) ->
                         RecordRow(record)
                     }
                 }
             }
+
+            if (records.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "500개가 넘어가는 경우 자동으로 이전 기록이 제거됩니다 (최고점수 제외)",
+                    color = InkSoft,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun EmptyState(text: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = InkSoft,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun LevelFilterRow(selected: Int?, onSelect: (Int?) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        FilterChip(
+            label = "전체",
+            selected = selected == null,
+            selectedColor = SkyBlue,
+            modifier = Modifier.weight(1.2f),
+            onClick = { onSelect(null) }
+        )
+        for (lv in 1..4) {
+            FilterChip(
+                label = "$lv",
+                selected = selected == lv,
+                selectedColor = levelColor(lv),
+                modifier = Modifier.weight(1f),
+                onClick = { onSelect(lv) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilterChip(
+    label: String,
+    selected: Boolean,
+    selectedColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val bg = if (selected) selectedColor else Color.White
+    val textColor = if (selected) Color.White else InkSoft
+    Box(
+        modifier = modifier
+            .shadow(if (selected) 4.dp else 2.dp, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
     }
 }
 

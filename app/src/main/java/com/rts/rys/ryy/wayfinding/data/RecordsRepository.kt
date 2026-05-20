@@ -29,9 +29,10 @@ class RecordsRepository(context: Context) {
     }
 
     fun add(record: GameRecord) {
-        val all = (load() + record).sortedByDescending { it.timestamp }
+        val combined = load() + record
+        val trimmed = trim(combined).sortedByDescending { it.timestamp }
         val arr = JSONArray()
-        for (r in all) {
+        for (r in trimmed) {
             arr.put(
                 JSONObject()
                     .put("stageId", r.stageId)
@@ -47,8 +48,21 @@ class RecordsRepository(context: Context) {
         prefs.edit().remove(KEY).apply()
     }
 
+    private fun trim(records: List<GameRecord>): List<GameRecord> {
+        if (records.size <= MAX_RECORDS) return records
+        val bests = records.groupBy { it.stageId }
+            .mapNotNull { (_, rs) -> rs.minByOrNull { it.elapsedMs } }
+            .toSet()
+        val rest = records
+            .filterNot { it in bests }
+            .sortedByDescending { it.timestamp }
+        val keepCount = (MAX_RECORDS - bests.size).coerceAtLeast(0)
+        return bests.toList() + rest.take(keepCount)
+    }
+
     companion object {
         private const val PREFS = "maze_records"
         private const val KEY = "records"
+        private const val MAX_RECORDS = 500
     }
 }
