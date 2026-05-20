@@ -55,6 +55,7 @@ import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.Maze
+import com.rts.rys.ryy.wayfinding.game.MovingGoalController
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
@@ -98,7 +99,10 @@ fun GameScreen(
     }
     val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
     val dynamicMaze = remember(stage.id, attemptId) {
-        if (stage.level == 5) DynamicMazeController(workingMaze) else null
+        if (stage.level == 5 || stage.level == 6) DynamicMazeController(workingMaze) else null
+    }
+    val movingGoal = remember(stage.id, attemptId) {
+        if (stage.level == 6) MovingGoalController(workingMaze) else null
     }
     val tilt = remember { TiltSensor(context) }
     val theme = remember(stage.level) { themeForLevel(stage.level) }
@@ -193,6 +197,7 @@ fun GameScreen(
 
                 val reached = physics.step(dt, ax, ay)
                 dynamicMaze?.tick(dt, physics.x, physics.y)
+                movingGoal?.tick(dt, physics.x, physics.y)
                 if (physics.justImpacted && !reached) {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     SoundManager.playBonk()
@@ -389,7 +394,7 @@ fun GameScreen(
                     }
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
-                @Suppress("UNUSED_VARIABLE") val mazeVersion = dynamicMaze?.version ?: 0
+                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0)
                 MazeCanvas(
                     maze = workingMaze,
                     ballX = ballX,
@@ -421,6 +426,22 @@ fun GameScreen(
                                     size = Size(cs, cs)
                                 )
                             }
+                        }
+                    }
+                }
+                if (movingGoal != null) {
+                    val pg = movingGoal.pendingGoal
+                    if (pg != null) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                            val ox = (size.width - cs * workingMaze.cols) / 2f
+                            val oy = (size.height - cs * workingMaze.rows) / 2f
+                            val pulse = 0.35f + 0.55f * abs(sin(movingGoal.previewProgress * Math.PI.toFloat() * 3f))
+                            drawRect(
+                                color = Color(0xFFFFD24A).copy(alpha = pulse),
+                                topLeft = Offset(ox + pg.first * cs, oy + pg.second * cs),
+                                size = Size(cs, cs)
+                            )
                         }
                     }
                 }

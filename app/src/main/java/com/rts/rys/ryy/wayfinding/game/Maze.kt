@@ -9,8 +9,10 @@ data class Maze(
 ) {
     val startCol: Int
     val startRow: Int
-    val goalCol: Int
-    val goalRow: Int
+    var goalCol: Int
+        internal set
+    var goalRow: Int
+        internal set
 
     init {
         var sc = 0; var sr = 0; var gc = cols - 1; var gr = rows - 1

@@ -116,10 +116,29 @@ private val MagicTheme = MazeTheme(
     cloudOpacity = 0.7f
 )
 
+private val OceanTheme = MazeTheme(
+    wallTop = Color(0xFF7AD7F0),
+    wallMid = Color(0xFF2196C2),
+    wallDeep = Color(0xFF0F4F73),
+    wallAccent = Color(0xFFCFEFFA),
+    floorTile = Color(0xFFE2F4FB),
+    floorTileAlt = Color(0xFFC9E4F0),
+    floorDetailDot = Color(0xFF6BAEC8),
+    floorDetailSplotch = Color(0xFFB6D7E6),
+    skyTop = Color(0xFFB7E8FA),
+    skyBottom = Color(0xFF3478A8),
+    rockTop = Color(0xFFADC5D2),
+    rockBottom = Color(0xFF5C7785),
+    flowerColors = listOf(Color(0xFFFFB8C4), Color(0xFFFFE08A), Color(0xFFA8E9C9)),
+    flowerCenter = Color(0xFFFFE066),
+    cloudOpacity = 0.85f
+)
+
 fun themeForLevel(level: Int): MazeTheme = when (level) {
     1 -> GrassTheme
     2 -> IceTheme
     3 -> SandTheme
     4 -> NightTheme
-    else -> MagicTheme
+    5 -> MagicTheme
+    else -> OceanTheme
 }

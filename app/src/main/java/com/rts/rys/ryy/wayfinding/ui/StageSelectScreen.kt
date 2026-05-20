@@ -54,6 +54,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
+import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 
 @Composable
 fun StageSelectScreen(
@@ -355,7 +356,8 @@ fun levelColor(level: Int): Color = when (level) {
     2 -> SunYellow
     3 -> CoralPink
     4 -> Lavender
-    else -> BallRed
+    5 -> BallRed
+    else -> WallGreen
 }
 
 fun stageColor(id: Int): Color {
