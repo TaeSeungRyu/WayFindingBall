@@ -85,6 +85,7 @@ private fun sizeForLevel(level: Int): Int = when (level) {
     3 -> 15
     4 -> 21
     5 -> 13
+    6 -> 13
     else -> 13
 }
 
@@ -168,7 +169,7 @@ fun MazeEditorScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 6)) }
+    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 7)) }
     var board by remember(level) { mutableStateOf(initialBoard(level)) }
     var tool by remember { mutableStateOf(Tool.WALL) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -263,7 +264,7 @@ fun MazeEditorScreen(
             SectionLabel("난이도")
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (lv in 1..6) {
+                for (lv in 1..7) {
                     DifficultyPill(level = lv, selected = lv == level, onClick = { level = lv })
                 }
             }

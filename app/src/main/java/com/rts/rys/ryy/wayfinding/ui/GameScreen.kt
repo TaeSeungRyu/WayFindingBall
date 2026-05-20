@@ -99,11 +99,12 @@ fun GameScreen(
     }
     val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
     val dynamicMaze = remember(stage.id, attemptId) {
-        if (stage.level == 5 || stage.level == 6) DynamicMazeController(workingMaze) else null
+        if (stage.level in 5..7) DynamicMazeController(workingMaze) else null
     }
     val movingGoal = remember(stage.id, attemptId) {
         if (stage.level == 6) MovingGoalController(workingMaze) else null
     }
+    val isDarkLevel = stage.level == 7
     val tilt = remember { TiltSensor(context) }
     val theme = remember(stage.level) { themeForLevel(stage.level) }
 
@@ -458,19 +459,28 @@ fun GameScreen(
                             .background(SunYellow.copy(alpha = flashAlpha * 0.55f))
                     )
                 }
-                if (spotlightAlpha > 0f) {
+                val effectiveSpotlight = if (isDarkLevel) {
+                    // 7단계: 카운트(10~15s) 동안 밝음. 9~10s 페이드인, 15~16s 페이드아웃.
+                    when {
+                        phaseMs in 10000L..14999L -> 0f
+                        phaseMs in 9000L..9999L -> 1f - (phaseMs - 9000L) / 1000f
+                        phaseMs in 15000L..15999L -> (phaseMs - 15000L) / 1000f
+                        else -> 1f
+                    }.coerceIn(0f, 1f)
+                } else spotlightAlpha
+                if (effectiveSpotlight > 0f) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
                         val ox = (size.width - cs * workingMaze.cols) / 2f
                         val oy = (size.height - cs * workingMaze.rows) / 2f
                         val ballPx = Offset(ox + ballX * cs, oy + ballY * cs)
-                        val holeR = cs * 2.0f
+                        val holeR = if (isDarkLevel) cs * 2.4f else cs * 2.0f
                         drawRect(
                             brush = Brush.radialGradient(
                                 colorStops = arrayOf(
                                     0f to Color.Black.copy(alpha = 0f),
                                     0.20f to Color.Black.copy(alpha = 0f),
-                                    1f to Color.Black.copy(alpha = 0.88f * spotlightAlpha)
+                                    1f to Color.Black.copy(alpha = 0.92f * effectiveSpotlight)
                                 ),
                                 center = ballPx,
                                 radius = holeR
