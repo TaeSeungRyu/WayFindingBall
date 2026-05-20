@@ -70,6 +70,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGoldDeep
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
+import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
@@ -97,6 +98,63 @@ private fun initialBoard(level: Int): Array<CharArray> {
     board[1][1] = 'S'
     board[n - 2][n - 2] = 'G'
     return board
+}
+
+private fun randomBoard(level: Int): Array<CharArray> {
+    val n = sizeForLevel(level)
+    val board = Array(n) { CharArray(n) { '#' } }
+    board[1][1] = ' '
+    val stack: MutableList<Pair<Int, Int>> = mutableListOf()
+    stack.add(1 to 1)
+    val dirs = listOf(2 to 0, -2 to 0, 0 to 2, 0 to -2)
+    while (stack.isNotEmpty()) {
+        val (c, r) = stack.last()
+        var moved = false
+        for ((dc, dr) in dirs.shuffled()) {
+            val nc = c + dc
+            val nr = r + dr
+            if (nc in 1 until n - 1 && nr in 1 until n - 1 && board[nr][nc] == '#') {
+                board[(r + nr) / 2][(c + nc) / 2] = ' '
+                board[nr][nc] = ' '
+                stack.add(nc to nr)
+                moved = true
+                break
+            }
+        }
+        if (!moved) stack.removeAt(stack.lastIndex)
+    }
+    val (gc, gr) = farthestCell(board, 1, 1)
+    board[1][1] = 'S'
+    board[gr][gc] = 'G'
+    return board
+}
+
+private fun farthestCell(board: Array<CharArray>, sc: Int, sr: Int): Pair<Int, Int> {
+    val n = board.size
+    val dist = Array(n) { IntArray(n) { -1 } }
+    val queue: MutableList<Pair<Int, Int>> = mutableListOf()
+    queue.add(sc to sr)
+    dist[sr][sc] = 0
+    var bestC = sc
+    var bestR = sr
+    val dirs = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
+    while (queue.isNotEmpty()) {
+        val (c, r) = queue.removeAt(0)
+        for ((dc, dr) in dirs) {
+            val nc = c + dc
+            val nr = r + dr
+            if (nc !in 0 until n || nr !in 0 until n) continue
+            if (dist[nr][nc] != -1) continue
+            if (board[nr][nc] == '#') continue
+            dist[nr][nc] = dist[r][c] + 1
+            if (dist[nr][nc] > dist[bestR][bestC]) {
+                bestC = nc
+                bestR = nr
+            }
+            queue.add(nc to nr)
+        }
+    }
+    return bestC to bestR
 }
 
 private enum class Tool { WALL, EMPTY, START, GOAL }
@@ -146,6 +204,12 @@ fun MazeEditorScreen(
             }
         }
         board = newBoard
+    }
+
+    fun randomize() {
+        board = randomBoard(level)
+        previewMaze = null
+        errorMessage = null
     }
 
     fun trySave() {
@@ -226,12 +290,23 @@ fun MazeEditorScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            ActionButton(
-                label = "미리보기",
-                bg = SunYellow,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = ::tryPreview
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                ActionButton(
+                    label = "랜덤 만들기",
+                    bg = Lavender,
+                    modifier = Modifier.weight(1f),
+                    onClick = ::randomize
+                )
+                ActionButton(
+                    label = "미리보기",
+                    bg = SunYellow,
+                    modifier = Modifier.weight(1f),
+                    onClick = ::tryPreview
+                )
+            }
 
             Spacer(Modifier.height(8.dp))
 
