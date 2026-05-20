@@ -98,9 +98,28 @@ private val NightTheme = MazeTheme(
     isDark = true
 )
 
+private val MagicTheme = MazeTheme(
+    wallTop = Color(0xFFE5B6FF),
+    wallMid = Color(0xFFA465D9),
+    wallDeep = Color(0xFF5C2B8E),
+    wallAccent = Color(0xFFF6D8FF),
+    floorTile = Color(0xFFFBEAFF),
+    floorTileAlt = Color(0xFFF0D6F8),
+    floorDetailDot = Color(0xFFC393E1),
+    floorDetailSplotch = Color(0xFFE3C9F0),
+    skyTop = Color(0xFFFFD1F3),
+    skyBottom = Color(0xFFA886E2),
+    rockTop = Color(0xFFC8B6D6),
+    rockBottom = Color(0xFF867594),
+    flowerColors = listOf(Color(0xFFFFC1CC), Color(0xFFFFD89C), Color(0xFFFFE066)),
+    flowerCenter = Color(0xFFFFE066),
+    cloudOpacity = 0.7f
+)
+
 fun themeForLevel(level: Int): MazeTheme = when (level) {
     1 -> GrassTheme
     2 -> IceTheme
     3 -> SandTheme
-    else -> NightTheme
+    4 -> NightTheme
+    else -> MagicTheme
 }

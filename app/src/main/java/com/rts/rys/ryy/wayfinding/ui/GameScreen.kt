@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -52,6 +53,8 @@ import androidx.compose.ui.window.Dialog
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
+import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
+import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
@@ -69,6 +72,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
 import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 import kotlinx.coroutines.android.awaitFrame
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -86,7 +90,16 @@ fun GameScreen(
 ) {
     val context = LocalContext.current
     val view = LocalView.current
-    val physics = remember(stage.id) { BallPhysics(stage.maze) }
+    var attemptId by remember(stage.id) { mutableIntStateOf(0) }
+    val workingMaze = remember(stage.id, attemptId) {
+        val src = stage.maze
+        val grid = Array(src.rows) { r -> src.grid[r].copyOf() }
+        Maze(src.cols, src.rows, grid)
+    }
+    val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
+    val dynamicMaze = remember(stage.id, attemptId) {
+        if (stage.level == 5) DynamicMazeController(workingMaze) else null
+    }
     val tilt = remember { TiltSensor(context) }
     val theme = remember(stage.level) { themeForLevel(stage.level) }
 
@@ -106,7 +119,6 @@ fun GameScreen(
     var elapsedMs by remember(stage.id) { mutableLongStateOf(0L) }
     var finished by remember(stage.id) { mutableStateOf(false) }
     var paused by remember(stage.id) { mutableStateOf(false) }
-    var attemptId by remember(stage.id) { mutableIntStateOf(0) }
 
     // Effect state
     val trailPositions = remember(stage.id, attemptId) { mutableStateListOf<Offset>() }
@@ -180,6 +192,7 @@ fun GameScreen(
                 }
 
                 val reached = physics.step(dt, ax, ay)
+                dynamicMaze?.tick(dt, physics.x, physics.y)
                 if (physics.justImpacted && !reached) {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     SoundManager.playBonk()
@@ -220,8 +233,8 @@ fun GameScreen(
                     celebrating = true
                     SoundManager.playGoal()
                     flashAlpha = 0.7f
-                    val gx = stage.maze.goalCol + 0.5f
-                    val gy = stage.maze.goalRow + 0.5f
+                    val gx = workingMaze.goalCol + 0.5f
+                    val gy = workingMaze.goalRow + 0.5f
                     repeat(30) {
                         val angle = (-Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9).toFloat()
                         val speed = 6f + (Math.random() * 8.0).toFloat()
@@ -376,8 +389,9 @@ fun GameScreen(
                     }
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
+                @Suppress("UNUSED_VARIABLE") val mazeVersion = dynamicMaze?.version ?: 0
                 MazeCanvas(
-                    maze = stage.maze,
+                    maze = workingMaze,
                     ballX = ballX,
                     ballY = ballY,
                     rotation = ballRotation,
@@ -391,8 +405,27 @@ fun GameScreen(
                     theme = theme,
                     modifier = Modifier.fillMaxSize()
                 )
+                if (dynamicMaze != null) {
+                    val previews = dynamicMaze.pendingPreview.toList()
+                    if (previews.isNotEmpty()) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                            val ox = (size.width - cs * workingMaze.cols) / 2f
+                            val oy = (size.height - cs * workingMaze.rows) / 2f
+                            val pulse = 0.30f + 0.50f * abs(sin(dynamicMaze.previewProgress * Math.PI.toFloat() * 3f))
+                            for (p in previews) {
+                                val color = if (p.toWall) Color(0xFFFF5677) else Color(0xFF6BD18B)
+                                drawRect(
+                                    color = color.copy(alpha = pulse),
+                                    topLeft = Offset(ox + p.c * cs, oy + p.r * cs),
+                                    size = Size(cs, cs)
+                                )
+                            }
+                        }
+                    }
+                }
                 EffectsOverlay(
-                    maze = stage.maze,
+                    maze = workingMaze,
                     dust = dust,
                     confetti = confetti,
                     modifier = Modifier.fillMaxSize()
@@ -406,9 +439,9 @@ fun GameScreen(
                 }
                 if (spotlightAlpha > 0f) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val cs = minOf(size.width / stage.maze.cols, size.height / stage.maze.rows)
-                        val ox = (size.width - cs * stage.maze.cols) / 2f
-                        val oy = (size.height - cs * stage.maze.rows) / 2f
+                        val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                        val ox = (size.width - cs * workingMaze.cols) / 2f
+                        val oy = (size.height - cs * workingMaze.rows) / 2f
                         val ballPx = Offset(ox + ballX * cs, oy + ballY * cs)
                         val holeR = cs * 2.0f
                         drawRect(

@@ -45,6 +45,7 @@ import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.game.difficultyLabel
+import com.rts.rys.ryy.wayfinding.ui.theme.BallRed
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
@@ -353,7 +354,8 @@ fun levelColor(level: Int): Color = when (level) {
     1 -> SkyBlue
     2 -> SunYellow
     3 -> CoralPink
-    else -> Lavender
+    4 -> Lavender
+    else -> BallRed
 }
 
 fun stageColor(id: Int): Color {
