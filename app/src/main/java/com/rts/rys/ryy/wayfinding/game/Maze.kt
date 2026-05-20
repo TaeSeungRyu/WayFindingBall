@@ -17,6 +17,8 @@ data class Maze(
         internal set
     var enemyRow: Int = -1
         internal set
+    var stars: List<Pair<Int, Int>> = emptyList()
+        internal set
 
     init {
         var sc = 0; var sr = 0; var gc = cols - 1; var gr = rows - 1
@@ -41,6 +43,7 @@ data class Maze(
             val cols = lines[0].length
             var ec = -1
             var er = -1
+            val starsBuilder = mutableListOf<Pair<Int, Int>>()
             val grid = Array(rows) { r ->
                 Array(cols) { c ->
                     when (lines[r][c]) {
@@ -52,6 +55,10 @@ data class Maze(
                             er = r
                             Cell.EMPTY
                         }
+                        '*' -> {
+                            starsBuilder.add(c to r)
+                            Cell.EMPTY
+                        }
                         else -> Cell.EMPTY
                     }
                 }
@@ -59,6 +66,7 @@ data class Maze(
             return Maze(cols, rows, grid).also {
                 it.enemyCol = ec
                 it.enemyRow = er
+                it.stars = starsBuilder.toList()
             }
         }
     }

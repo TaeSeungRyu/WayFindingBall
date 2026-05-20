@@ -61,6 +61,7 @@ import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MovingGoalController
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
+import com.rts.rys.ryy.wayfinding.game.StarsController
 import com.rts.rys.ryy.wayfinding.game.Stage
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
 import com.rts.rys.ryy.wayfinding.game.themeForLevel
@@ -103,17 +104,21 @@ fun GameScreen(
         Maze(src.cols, src.rows, grid).also {
             it.enemyCol = src.enemyCol
             it.enemyRow = src.enemyRow
+            it.stars = src.stars
         }
     }
     val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
     val dynamicMaze = remember(stage.id, attemptId) {
-        if (stage.level in 5..8) DynamicMazeController(workingMaze) else null
+        if (stage.level in 5..9) DynamicMazeController(workingMaze) else null
     }
     val movingGoal = remember(stage.id, attemptId) {
         if (stage.level == 6) MovingGoalController(workingMaze) else null
     }
     val chaser = remember(stage.id, attemptId) {
         if (stage.level == 8) ChaserController(workingMaze) else null
+    }
+    val starsCtrl = remember(stage.id, attemptId) {
+        if (stage.level == 9) StarsController(workingMaze) else null
     }
     val isDarkLevel = stage.level == 7
     val tilt = remember { TiltSensor(context) }
@@ -154,7 +159,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..8
+    val bombEnabled = stage.level in 6..9
     var bombAvailable by remember(stage.id, attemptId) { mutableStateOf(bombEnabled) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
 
@@ -250,9 +255,30 @@ fun GameScreen(
                     physics.maxSpeed = if (sensorEnabled) SENSOR_MAX_SPEED else KEYPAD_MAX_SPEED
                 }
 
-                val reached = physics.step(dt, ax, ay)
+                var reached = physics.step(dt, ax, ay)
                 dynamicMaze?.tick(dt, physics.x, physics.y)
                 movingGoal?.tick(dt, physics.x, physics.y)
+                if (starsCtrl != null) {
+                    val before = starsCtrl.collected
+                    starsCtrl.tick(physics.x, physics.y)
+                    if (starsCtrl.collected > before) {
+                        SoundManager.playGoal()
+                        repeat(8) {
+                            val angle = (Math.random() * 2 * Math.PI).toFloat()
+                            val speed = 2f + (Math.random() * 3.0).toFloat()
+                            dust.add(
+                                DustParticle(
+                                    x = physics.x,
+                                    y = physics.y,
+                                    vx = cos(angle) * speed,
+                                    vy = sin(angle) * speed,
+                                    lifetime = 0.45f
+                                )
+                            )
+                        }
+                    }
+                    if (!starsCtrl.allCollected) reached = false
+                }
                 if (chaser != null) {
                     chaser.tick(dt, floor(physics.x).toInt(), floor(physics.y).toInt())
                     val dxc = physics.x - chaser.visualX
@@ -431,6 +457,24 @@ fun GameScreen(
                 }
             }
 
+            if (starsCtrl != null) {
+                Spacer(Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.85f))
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "★ ${starsCtrl.collected} / ${starsCtrl.totalCount}",
+                        color = if (starsCtrl.allCollected) GoalGold else InkDark,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+
             Spacer(Modifier.height(4.dp))
 
             // 20초 주기 스포트라이트: 10s 일반 → 5s 카운트 → 5s 어두움
@@ -461,7 +505,7 @@ fun GameScreen(
                     }
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
-                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + bombVersion
+                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + bombVersion
                 MazeCanvas(
                     maze = workingMaze,
                     ballX = ballX,
@@ -509,6 +553,28 @@ fun GameScreen(
                                 topLeft = Offset(ox + pg.first * cs, oy + pg.second * cs),
                                 size = Size(cs, cs)
                             )
+                        }
+                    }
+                }
+                if (starsCtrl != null) {
+                    val remaining = starsCtrl.remaining.toList()
+                    if (remaining.isNotEmpty()) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                            val ox = (size.width - cs * workingMaze.cols) / 2f
+                            val oy = (size.height - cs * workingMaze.rows) / 2f
+                            for ((c, r) in remaining) {
+                                drawCircle(
+                                    color = Color(0xFFFFD24A),
+                                    radius = cs * 0.22f,
+                                    center = Offset(ox + (c + 0.5f) * cs, oy + (r + 0.5f) * cs)
+                                )
+                                drawCircle(
+                                    color = Color(0xFFFF9F1C),
+                                    radius = cs * 0.10f,
+                                    center = Offset(ox + (c + 0.5f) * cs, oy + (r + 0.5f) * cs)
+                                )
+                            }
                         }
                     }
                 }

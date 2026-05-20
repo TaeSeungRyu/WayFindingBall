@@ -17,16 +17,19 @@ object MazeValidator {
         var sc = -1; var sr = -1; var gc = -1; var gr = -1
         var ec = -1; var er = -1
         var sCount = 0; var gCount = 0; var eCount = 0
+        val stars = mutableListOf<Pair<Int, Int>>()
         for (r in 0 until rows) for (c in 0 until cols) {
             when (lines[r][c]) {
                 'S' -> { sc = c; sr = r; sCount++ }
                 'G' -> { gc = c; gr = r; gCount++ }
                 'E' -> { ec = c; er = r; eCount++ }
+                '*' -> stars.add(c to r)
             }
         }
         if (sCount != 1) return MazeValidationResult.Error("시작점(S)을 하나만 두세요")
         if (gCount != 1) return MazeValidationResult.Error("도착점(G)을 하나만 두세요")
         if (eCount > 1) return MazeValidationResult.Error("적은 한 마리만 두세요")
+        if (stars.size > 5) return MazeValidationResult.Error("별은 5개까지만 둘 수 있어요")
 
         val visited = Array(rows) { BooleanArray(cols) }
         val queue: MutableList<IntArray> = mutableListOf()
@@ -50,6 +53,9 @@ object MazeValidator {
         if (!visited[gr][gc]) return MazeValidationResult.Error("도착점까지 길이 막혔어요")
         if (eCount == 1 && !visited[er][ec]) {
             return MazeValidationResult.Error("적이 갇혔어요. 다른 곳으로 옮겨요")
+        }
+        for ((sc2, sr2) in stars) {
+            if (!visited[sr2][sc2]) return MazeValidationResult.Error("별에 닿을 수 없어요")
         }
         return MazeValidationResult.Ok
     }

@@ -172,6 +172,24 @@ private val EmberTheme = MazeTheme(
     isDark = true
 )
 
+private val MeadowTheme = MazeTheme(
+    wallTop = Color(0xFFC8E37D),
+    wallMid = Color(0xFF6FB034),
+    wallDeep = Color(0xFF2E6E1A),
+    wallAccent = Color(0xFFE6F3B0),
+    floorTile = Color(0xFFFDF9DC),
+    floorTileAlt = Color(0xFFEEE8B8),
+    floorDetailDot = Color(0xFFA0BD68),
+    floorDetailSplotch = Color(0xFFD9DA88),
+    skyTop = Color(0xFFDFF1B0),
+    skyBottom = Color(0xFF9BC962),
+    rockTop = Color(0xFFBFC2A0),
+    rockBottom = Color(0xFF6E7350),
+    flowerColors = listOf(Color(0xFFFFC1CC), Color(0xFFFFD89C), Color(0xFFA5D4FF)),
+    flowerCenter = Color(0xFFFFE066),
+    cloudOpacity = 0.9f
+)
+
 fun themeForLevel(level: Int): MazeTheme = when (level) {
     1 -> GrassTheme
     2 -> IceTheme
@@ -180,5 +198,6 @@ fun themeForLevel(level: Int): MazeTheme = when (level) {
     5 -> MagicTheme
     6 -> OceanTheme
     7 -> ShadowTheme
-    else -> EmberTheme
+    8 -> EmberTheme
+    else -> MeadowTheme
 }

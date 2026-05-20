@@ -89,6 +89,7 @@ private fun sizeForLevel(level: Int): Int = when (level) {
     5 -> 13
     6 -> 13
     7 -> 13
+    8 -> 13
     else -> 13
 }
 
@@ -133,7 +134,24 @@ private fun randomBoard(level: Int): Array<CharArray> {
     board[1][1] = 'S'
     board[gr][gc] = 'G'
     if (level == 8) placeRandomEnemy(board, 1, 1, gc, gr)
+    if (level == 9) placeRandomStars(board, 1, 1, gc, gr, 3)
     return board
+}
+
+private fun placeRandomStars(board: Array<CharArray>, sc: Int, sr: Int, gc: Int, gr: Int, count: Int) {
+    val n = board.size
+    val candidates = mutableListOf<Pair<Int, Int>>()
+    for (r in 0 until n) for (c in 0 until n) {
+        if (board[r][c] != ' ') continue
+        if (c == sc && r == sr) continue
+        if (c == gc && r == gr) continue
+        candidates.add(c to r)
+    }
+    candidates.shuffle()
+    for (i in 0 until count.coerceAtMost(candidates.size)) {
+        val (c, r) = candidates[i]
+        board[r][c] = '*'
+    }
 }
 
 private fun placeRandomEnemy(board: Array<CharArray>, sc: Int, sr: Int, gc: Int, gr: Int) {
@@ -200,7 +218,7 @@ private fun farthestCell(board: Array<CharArray>, sc: Int, sr: Int): Pair<Int, I
     return bestC to bestR
 }
 
-private enum class Tool { WALL, EMPTY, START, GOAL, ENEMY }
+private enum class Tool { WALL, EMPTY, START, GOAL, ENEMY, STAR }
 
 @Composable
 fun MazeEditorScreen(
@@ -209,11 +227,12 @@ fun MazeEditorScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 8)) }
+    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 9)) }
     var board by remember(level) { mutableStateOf(initialBoard(level)) }
     var tool by remember { mutableStateOf(Tool.WALL) }
     LaunchedEffect(level) {
         if (level != 8 && tool == Tool.ENEMY) tool = Tool.WALL
+        if (level != 9 && tool == Tool.STAR) tool = Tool.WALL
     }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var previewMaze by remember { mutableStateOf<Maze?>(null) }
@@ -254,6 +273,19 @@ fun MazeEditorScreen(
                     if (newBoard[rr][cc] == 'E') newBoard[rr][cc] = ' '
                 }
                 newBoard[r][c] = 'E'
+            }
+            Tool.STAR -> {
+                if (cur == 'S' || cur == 'G' || cur == 'E' || cur == '#') return
+                if (cur == '*') {
+                    newBoard[r][c] = ' '
+                } else {
+                    var starCount = 0
+                    for (rr in 0 until n) for (cc in 0 until n) {
+                        if (newBoard[rr][cc] == '*') starCount++
+                    }
+                    if (starCount >= 5) return
+                    newBoard[r][c] = '*'
+                }
             }
         }
         board = newBoard
@@ -317,7 +349,7 @@ fun MazeEditorScreen(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                for (lv in 1..8) {
+                for (lv in 1..9) {
                     DifficultyPill(level = lv, selected = lv == level, onClick = { level = lv })
                 }
             }
@@ -332,6 +364,9 @@ fun MazeEditorScreen(
                 ToolPill("도착", tool == Tool.GOAL) { tool = Tool.GOAL }
                 if (level == 8) {
                     ToolPill("적", tool == Tool.ENEMY) { tool = Tool.ENEMY }
+                }
+                if (level == 9) {
+                    ToolPill("별", tool == Tool.STAR) { tool = Tool.STAR }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -475,6 +510,16 @@ private fun EditorGrid(
                     val eyeR = br * 0.18f
                     drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(center.x - br * 0.32f, center.y - br * 0.15f))
                     drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(center.x + br * 0.32f, center.y - br * 0.15f))
+                }
+                '*' -> {
+                    drawRect(FloorTile, tl, sz)
+                    drawStarShape(
+                        center = Offset(tl.x + cs / 2f, tl.y + cs / 2f),
+                        outerR = cs * 0.3f,
+                        innerR = cs * 0.13f,
+                        fill = GoalGold,
+                        stroke = GoalGoldDeep
+                    )
                 }
             }
             drawRect(
