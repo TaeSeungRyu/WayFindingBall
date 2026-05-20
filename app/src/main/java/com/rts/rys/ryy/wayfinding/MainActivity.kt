@@ -23,6 +23,7 @@ import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.ui.GameScreen
 import com.rts.rys.ryy.wayfinding.ui.HomeScreen
+import com.rts.rys.ryy.wayfinding.ui.LevelSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.MazeEditorScreen
 import com.rts.rys.ryy.wayfinding.ui.RecordsScreen
 import com.rts.rys.ryy.wayfinding.ui.ResultScreen
@@ -63,13 +64,26 @@ fun MazeApp() {
         }
         composable(Routes.HOME) {
             HomeScreen(
-                onStart = { navController.navigate(Routes.STAGE_SELECT) },
+                onStart = { navController.navigate(Routes.LEVEL_SELECT) },
                 onRecords = { navController.navigate(Routes.RECORDS) },
                 onCreate = { navController.navigate(Routes.editor(1)) }
             )
         }
-        composable(Routes.STAGE_SELECT) {
+        composable(Routes.LEVEL_SELECT) {
+            LevelSelectScreen(
+                onBack = { navController.popBackStack() },
+                onSelect = { level ->
+                    navController.navigate(Routes.stages(level))
+                }
+            )
+        }
+        composable(
+            route = Routes.STAGE_SELECT,
+            arguments = listOf(navArgument("level") { type = NavType.IntType })
+        ) { entry ->
+            val level = entry.arguments?.getInt("level") ?: 1
             StageSelectScreen(
+                level = level,
                 onBack = { navController.popBackStack() },
                 onSelect = { stageId ->
                     navController.navigate(Routes.game(stageId))

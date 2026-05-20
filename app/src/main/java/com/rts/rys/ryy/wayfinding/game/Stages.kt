@@ -28,19 +28,14 @@ object Stages {
         _customStages.value = stages
     }
 
-    private fun stage(id: Int, level: Int, indexInLevel: Int, lines: List<String>): Stage =
-        Stage(
-            id = id,
-            level = level,
-            indexInLevel = indexInLevel,
-            name = "난이도${level}-${indexInLevel}",
-            difficulty = difficultyLabel(level),
-            maze = Maze.fromAscii(lines)
-        )
+    private data class StageSpec(val level: Int, val lines: List<String>)
 
-    val all: List<Stage> = listOf(
+    private fun stage(level: Int, lines: List<String>): StageSpec =
+        StageSpec(level, lines)
+
+    private val specs: List<StageSpec> = listOf(
         // 난이도 1 — 9x9
-        stage(1, 1, 1, listOf(
+        stage(1, listOf(
             "#########",
             "#S      #",
             "####### #",
@@ -51,7 +46,7 @@ object Stages {
             "#      G#",
             "#########",
         )),
-        stage(2, 1, 2, listOf(
+        stage(1, listOf(
             "#########",
             "#S      #",
             "# #######",
@@ -62,7 +57,7 @@ object Stages {
             "#      G#",
             "#########",
         )),
-        stage(3, 1, 3, listOf(
+        stage(1, listOf(
             "#########",
             "#S      #",
             "##### ###",
@@ -73,7 +68,7 @@ object Stages {
             "#      G#",
             "#########",
         )),
-        stage(4, 1, 4, listOf(
+        stage(1, listOf(
             "#########",
             "#S      #",
             "###### ##",
@@ -84,7 +79,7 @@ object Stages {
             "#       #",
             "#########",
         )),
-        stage(5, 1, 5, listOf(
+        stage(1, listOf(
             "#########",
             "#S      #",
             "####### #",
@@ -95,7 +90,7 @@ object Stages {
             "#G      #",
             "#########",
         )),
-        stage(6, 1, 6, listOf(
+        stage(1, listOf(
             "#########",
             "#S      #",
             "##### ###",
@@ -106,8 +101,41 @@ object Stages {
             "#       #",
             "#########",
         )),
+        stage(1, listOf(
+            "#########",
+            "#S      #",
+            "##### ###",
+            "#G#    ##",
+            "# ##### #",
+            "#     # #",
+            "### ### #",
+            "#       #",
+            "#########",
+        )),
+        stage(1, listOf(
+            "#########",
+            "#S#G  ###",
+            "# ### ###",
+            "#    #  #",
+            "#### ## #",
+            "#     # #",
+            "# ##### #",
+            "#       #",
+            "#########",
+        )),
+        stage(1, listOf(
+            "#########",
+            "#S ######",
+            "##  #####",
+            "###  ####",
+            "#### ####",
+            "####  ###",
+            "#####  ##",
+            "#G      #",
+            "#########",
+        )),
         // 난이도 2 — 13x13
-        stage(7, 2, 1, listOf(
+        stage(2, listOf(
             "#############",
             "#S          #",
             "########### #",
@@ -122,7 +150,7 @@ object Stages {
             "#          G#",
             "#############",
         )),
-        stage(8, 2, 2, listOf(
+        stage(2, listOf(
             "#############",
             "#S          #",
             "##### #######",
@@ -137,7 +165,7 @@ object Stages {
             "#           #",
             "#############",
         )),
-        stage(9, 2, 3, listOf(
+        stage(2, listOf(
             "#############",
             "#S    #    G#",
             "##### ####  #",
@@ -152,8 +180,68 @@ object Stages {
             "#           #",
             "#############",
         )),
+        stage(2, listOf(
+            "#############",
+            "#     S     #",
+            "# ###########",
+            "#     #G    #",
+            "### # ####  #",
+            "#     #     #",
+            "### ##### ###",
+            "#      ##   #",
+            "##### ##### #",
+            "#     #     #",
+            "### ####### #",
+            "#           #",
+            "#############",
+        )),
+        stage(2, listOf(
+            "#############",
+            "#           #",
+            "# ####### ###",
+            "#     #G    #",
+            "### # #######",
+            "#     #     #",
+            "### #########",
+            "#           #",
+            "########### #",
+            "#           #",
+            "# ###########",
+            "#          S#",
+            "#############",
+        )),
+        stage(2, listOf(
+            "#############",
+            "#           #",
+            "######### ###",
+            "#    S#G    #",
+            "### ####### #",
+            "#     #     #",
+            "### ##### ###",
+            "#     #     #",
+            "# ######### #",
+            "#      ##   #",
+            "###### ### ##",
+            "#           #",
+            "#############",
+        )),
+        stage(2, listOf(
+            "#############",
+            "#G          #",
+            "######### ###",
+            "#     ###   #",
+            "# # ####### #",
+            "# # ######  #",
+            "# # ###### ##",
+            "# #  S####  #",
+            "# ######### #",
+            "#  ######   #",
+            "## ####### ##",
+            "#           #",
+            "#############",
+        )),
         // 난이도 3 — 15x15
-        stage(10, 3, 1, listOf(
+        stage(3, listOf(
             "###############",
             "#S            #",
             "############# #",
@@ -170,7 +258,7 @@ object Stages {
             "#            G#",
             "###############",
         )),
-        stage(11, 3, 2, listOf(
+        stage(3, listOf(
             "###############",
             "#S            #",
             "##### #########",
@@ -187,7 +275,7 @@ object Stages {
             "#             #",
             "###############",
         )),
-        stage(12, 3, 3, listOf(
+        stage(3, listOf(
             "###############",
             "#S###G        #",
             "# ########### #",
@@ -204,8 +292,25 @@ object Stages {
             "#             #",
             "###############",
         )),
+        stage(3, listOf(
+            "###############",
+            "# ###G        #",
+            "# ########### #",
+            "#    #######  #",
+            "# ## #######  #",
+            "# #     ##    #",
+            "# ####  ## ####",
+            "# #   # #     #",
+            "# ## ## #### ##",
+            "#    ##       #",
+            "### ###########",
+            "#             #",
+            "############ ##",
+            "#S            #",
+            "###############",
+        )),
         // 난이도 4 — 21x21
-        stage(13, 4, 1, listOf(
+        stage(4, listOf(
             "#####################",
             "#S                  #",
             "################### #",
@@ -228,7 +333,7 @@ object Stages {
             "#                  G#",
             "#####################",
         )),
-        stage(14, 4, 2, listOf(
+        stage(4, listOf(
             "#####################",
             "#S                  #",
             "##################  #",
@@ -251,7 +356,7 @@ object Stages {
             "#G                 G#",
             "#####################",
         )),
-        stage(15, 4, 3, listOf(
+        stage(4, listOf(
             "#####################",
             "#S                  #",
             "################### #",
@@ -273,8 +378,24 @@ object Stages {
             "###  ############## #",
             "#                   #",
             "#####################",
-        ))
+        )),
     )
+
+    val all: List<Stage> = run {
+        val counter = mutableMapOf<Int, Int>()
+        specs.mapIndexed { i, spec ->
+            val idx = (counter[spec.level] ?: 0) + 1
+            counter[spec.level] = idx
+            Stage(
+                id = i + 1,
+                level = spec.level,
+                indexInLevel = idx,
+                name = "난이도${spec.level}-${idx}",
+                difficulty = difficultyLabel(spec.level),
+                maze = Maze.fromAscii(spec.lines)
+            )
+        }
+    }
 
     fun byId(id: Int): Stage =
         all.firstOrNull { it.id == id }
@@ -283,4 +404,3 @@ object Stages {
     fun byLevel(level: Int): List<Stage> =
         all.filter { it.level == level } + _customStages.value.filter { it.level == level }
 }
-

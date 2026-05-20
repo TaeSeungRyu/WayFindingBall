@@ -10,9 +10,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,24 +56,25 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
 
 @Composable
 fun StageSelectScreen(
+    level: Int,
     onBack: () -> Unit,
     onSelect: (Int) -> Unit
 ) {
     val context = LocalContext.current
     val customs by Stages.customStages
     var deleteCandidate by remember { mutableStateOf<Stage?>(null) }
-    val stagesByLevel = remember(customs) {
-        (1..4).associateWith { Stages.byLevel(it) }
-    }
-    val starsByStage = remember(customs) {
+    val stages = remember(customs, level) { Stages.byLevel(level) }
+    val starsByStage = remember(customs, level) {
         val records = RecordsRepository(context).load()
         val bestByStage = records.groupBy { it.stageId }
             .mapValues { (_, rs) -> rs.minOf { it.elapsedMs } }
-        stagesByLevel.values.flatten().associate { stage ->
+        stages.associate { stage ->
             val best = bestByStage[stage.id]
             stage.id to if (best != null) MazePar.starsFor(stage, best) else 0
         }
     }
+    val difficulty = stages.firstOrNull()?.difficulty ?: difficultyLabel(level)
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -88,7 +92,7 @@ fun StageSelectScreen(
                     modifier = Modifier.align(Alignment.CenterStart)
                 )
                 Text(
-                    text = "게임 고르기",
+                    text = "난이도 $level",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = InkDark,
@@ -96,32 +100,27 @@ fun StageSelectScreen(
                 )
             }
             Spacer(Modifier.height(12.dp))
+            SectionHeader(level = level, difficulty = difficulty)
+            Spacer(Modifier.height(8.dp))
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
+                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp + navBottom)
             ) {
-                for (level in 1..4) {
-                    val stages = stagesByLevel[level].orEmpty()
-                    val difficulty = stages.firstOrNull()?.difficulty ?: difficultyLabel(level)
-                    item(key = "header-$level") {
-                        SectionHeader(level = level, difficulty = difficulty)
-                    }
-                    items(stages.chunked(3)) { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            row.forEach { stage ->
-                                StageCard(
-                                    stage = stage,
-                                    stars = starsByStage[stage.id] ?: 0,
-                                    onClick = { onSelect(stage.id) },
-                                    onLongClick = if (stage.isCustom) {
-                                        { deleteCandidate = stage }
-                                    } else null,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                            repeat(3 - row.size) {
-                                Spacer(Modifier.weight(1f))
-                            }
+                items(stages.chunked(3)) { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        row.forEach { stage ->
+                            StageCard(
+                                stage = stage,
+                                stars = starsByStage[stage.id] ?: 0,
+                                onClick = { onSelect(stage.id) },
+                                onLongClick = if (stage.isCustom) {
+                                    { deleteCandidate = stage }
+                                } else null,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        repeat(3 - row.size) {
+                            Spacer(Modifier.weight(1f))
                         }
                     }
                 }
