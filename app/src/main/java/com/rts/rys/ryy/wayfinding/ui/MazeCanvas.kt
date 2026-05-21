@@ -438,7 +438,7 @@ private fun DrawScope.drawBall(
     val origin = originOffset(maze, cs)
     val cx = origin.x + bx * cs
     val cy = origin.y + by * cs
-    val r = cs * 0.36f * ballScale.coerceIn(0f, 1f)
+    val r = cs * 0.36f * ballScale.coerceIn(0f, 2f)
     if (r <= 0f) return
 
     // squash: compress along impact axis, slightly bulge perpendicular

@@ -115,9 +115,11 @@ fun GameScreen(
     val isSurvival = stage.level == 15
     val isIce = stage.level == 16
     val isFire = stage.level == 17
-    val isInfinite = isInfiniteClears || isSurvival || isIce || isFire
+    val isGrow = stage.level == 18
+    val isInfinite = isInfiniteClears || isSurvival || isIce || isFire || isGrow
+    val growMultiplier = if (isGrow) (1f + infiniteRound * 0.15f).coerceAtMost(1.7f) else 1f
     val workingMaze = remember(stage.id, attemptId, infiniteRound) {
-        if (isInfiniteClears || isIce || isFire) {
+        if (isInfiniteClears || isIce || isFire || isGrow) {
             generateRandomMaze(13)
         } else if (isSurvival) {
             generateRandomMaze(21)
@@ -135,7 +137,11 @@ fun GameScreen(
     }
     var portalCooldown by remember(stage.id, attemptId, infiniteRound) { mutableFloatStateOf(0f) }
     val physics = remember(stage.id, attemptId, infiniteRound) {
-        BallPhysics(workingMaze, friction = if (isIce) 0.3f else 1.8f)
+        BallPhysics(
+            workingMaze,
+            radius = 0.32f * growMultiplier,
+            friction = if (isIce) 0.3f else 1.8f
+        )
     }
     val dynamicMaze = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level in 5..13 || isInfinite) DynamicMazeController(workingMaze) else null
@@ -166,6 +172,7 @@ fun GameScreen(
             isFire -> List(fireEnemyCount.coerceAtLeast(1)) { i ->
                 ChaserController(workingMaze, spawnIndex = i, randomMove = true, randomSpawnMinDistance = 6)
             }
+            isGrow -> listOf(ChaserController(workingMaze, randomSpawnMinDistance = 6))
             stage.level == 8 || stage.level == 10 -> listOf(ChaserController(workingMaze))
             else -> emptyList()
         }
@@ -225,7 +232,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..17
+    val bombEnabled = stage.level in 6..18
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -691,6 +698,7 @@ fun GameScreen(
                         isSurvival -> "생존 모드 · 적 ${chasers.size}"
                         isIce -> "얼음 미로 · 통과 $infiniteRound"
                         isFire -> "타는 길 · 통과 $infiniteRound"
+                        isGrow -> "공이 커져요 · 통과 $infiniteRound"
                         else -> stage.name
                     },
                     color = InkDark,
@@ -775,7 +783,7 @@ fun GameScreen(
                     squashAmount = ballSquash,
                     squashAxisIsX = ballSquashIsX,
                     trail = trailPositions,
-                    ballScale = ballScale * breath,
+                    ballScale = ballScale * breath * growMultiplier,
                     headingRad = ballHeading,
                     isHappy = celebrating,
                     surpriseLevel = (surpriseTimer / 0.5f).coerceIn(0f, 1f),
