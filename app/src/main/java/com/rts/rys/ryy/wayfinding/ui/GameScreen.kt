@@ -114,16 +114,16 @@ fun GameScreen(
     }
     val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
     val dynamicMaze = remember(stage.id, attemptId) {
-        if (stage.level in 5..9) DynamicMazeController(workingMaze) else null
+        if (stage.level in 5..10) DynamicMazeController(workingMaze) else null
     }
     val movingGoal = remember(stage.id, attemptId) {
-        if (stage.level == 6) MovingGoalController(workingMaze) else null
+        if (stage.level == 6 || stage.level == 10) MovingGoalController(workingMaze) else null
     }
     val chaser = remember(stage.id, attemptId) {
-        if (stage.level == 8) ChaserController(workingMaze) else null
+        if (stage.level == 8 || stage.level == 10) ChaserController(workingMaze) else null
     }
     val starsCtrl = remember(stage.id, attemptId) {
-        if (stage.level == 9) StarsController(workingMaze) else null
+        if (stage.level == 9 || stage.level == 10) StarsController(workingMaze) else null
     }
     val isDarkLevel = stage.level == 7
     val tilt = remember { TiltSensor(context) }
@@ -164,7 +164,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..9
+    val bombEnabled = stage.level in 6..10
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }

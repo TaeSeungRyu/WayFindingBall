@@ -90,6 +90,7 @@ private fun sizeForLevel(level: Int): Int = when (level) {
     6 -> 13
     7 -> 13
     8 -> 13
+    9 -> 13
     else -> 13
 }
 
@@ -133,8 +134,8 @@ private fun randomBoard(level: Int): Array<CharArray> {
     val (gc, gr) = farthestCell(board, 1, 1)
     board[1][1] = 'S'
     board[gr][gc] = 'G'
-    if (level == 8) placeRandomEnemy(board, 1, 1, gc, gr)
-    if (level == 9) placeRandomStars(board, 1, 1, gc, gr, 3)
+    if (level == 8 || level == 10) placeRandomEnemy(board, 1, 1, gc, gr)
+    if (level == 9 || level == 10) placeRandomStars(board, 1, 1, gc, gr, 3)
     return board
 }
 
@@ -227,12 +228,12 @@ fun MazeEditorScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 9)) }
+    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 10)) }
     var board by remember(level) { mutableStateOf(initialBoard(level)) }
     var tool by remember { mutableStateOf(Tool.WALL) }
     LaunchedEffect(level) {
-        if (level != 8 && tool == Tool.ENEMY) tool = Tool.WALL
-        if (level != 9 && tool == Tool.STAR) tool = Tool.WALL
+        if (level != 8 && level != 10 && tool == Tool.ENEMY) tool = Tool.WALL
+        if (level != 9 && level != 10 && tool == Tool.STAR) tool = Tool.WALL
     }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var previewMaze by remember { mutableStateOf<Maze?>(null) }
@@ -349,7 +350,7 @@ fun MazeEditorScreen(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                for (lv in 1..9) {
+                for (lv in 1..10) {
                     DifficultyPill(level = lv, selected = lv == level, onClick = { level = lv })
                 }
             }
@@ -362,10 +363,10 @@ fun MazeEditorScreen(
                 ToolPill("길", tool == Tool.EMPTY) { tool = Tool.EMPTY }
                 ToolPill("시작", tool == Tool.START) { tool = Tool.START }
                 ToolPill("도착", tool == Tool.GOAL) { tool = Tool.GOAL }
-                if (level == 8) {
+                if (level == 8 || level == 10) {
                     ToolPill("적", tool == Tool.ENEMY) { tool = Tool.ENEMY }
                 }
-                if (level == 9) {
+                if (level == 9 || level == 10) {
                     ToolPill("별", tool == Tool.STAR) { tool = Tool.STAR }
                 }
             }
