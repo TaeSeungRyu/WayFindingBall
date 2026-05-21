@@ -84,6 +84,11 @@ import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+private enum class BombState { IDLE, ARMED, COOLDOWN }
+
+private const val BOMB_FUSE_S = 3f
+private const val BOMB_COOLDOWN_S = 10f
+
 private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
 private const val SENSOR_MAX_SPEED = 22f
@@ -160,11 +165,11 @@ fun GameScreen(
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
     val bombEnabled = stage.level in 6..9
-    var bombAvailable by remember(stage.id, attemptId) { mutableStateOf(bombEnabled) }
+    var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
+    var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
 
-    fun useBomb() {
-        if (!bombAvailable) return
+    fun explodeBomb() {
         val bc = floor(physics.x).toInt()
         val br = floor(physics.y).toInt()
         var changed = false
@@ -181,24 +186,35 @@ fun GameScreen(
                 changed = true
             }
         }
-        if (changed) {
-            bombAvailable = false
-            bombVersion++
-            repeat(24) {
-                val angle = (Math.random() * 2 * Math.PI).toFloat()
-                val speed = 4f + (Math.random() * 4).toFloat()
-                dust.add(
-                    DustParticle(
-                        x = physics.x,
-                        y = physics.y,
-                        vx = cos(angle) * speed,
-                        vy = sin(angle) * speed,
-                        lifetime = 0.55f
-                    )
+        if (changed) bombVersion++
+        repeat(24) {
+            val angle = (Math.random() * 2 * Math.PI).toFloat()
+            val speed = 4f + (Math.random() * 4).toFloat()
+            dust.add(
+                DustParticle(
+                    x = physics.x,
+                    y = physics.y,
+                    vx = cos(angle) * speed,
+                    vy = sin(angle) * speed,
+                    lifetime = 0.55f
                 )
+            )
+        }
+        shakeMs = 0.18f
+        SoundManager.playBonk()
+    }
+
+    fun onBombClick() {
+        when (bombState) {
+            BombState.IDLE -> {
+                bombState = BombState.ARMED
+                bombTimer = BOMB_FUSE_S
             }
-            shakeMs = 0.18f
-            SoundManager.playBonk()
+            BombState.ARMED -> {
+                bombState = BombState.IDLE
+                bombTimer = 0f
+            }
+            BombState.COOLDOWN -> Unit
         }
     }
 
@@ -387,6 +403,27 @@ fun GameScreen(
             flashAlpha = (flashAlpha - dt * 2.4f).coerceAtLeast(0f)
             // surprise timer decay
             surpriseTimer = (surpriseTimer - dt).coerceAtLeast(0f)
+            // bomb timer tick
+            if (!celebrating) {
+                when (bombState) {
+                    BombState.ARMED -> {
+                        bombTimer -= dt
+                        if (bombTimer <= 0f) {
+                            explodeBomb()
+                            bombState = BombState.COOLDOWN
+                            bombTimer = BOMB_COOLDOWN_S
+                        }
+                    }
+                    BombState.COOLDOWN -> {
+                        bombTimer -= dt
+                        if (bombTimer <= 0f) {
+                            bombState = BombState.IDLE
+                            bombTimer = 0f
+                        }
+                    }
+                    BombState.IDLE -> Unit
+                }
+            }
 
             // idle breathing tracking
             val speed = sqrt(physics.vx * physics.vx + physics.vy * physics.vy)
@@ -556,6 +593,28 @@ fun GameScreen(
                         }
                     }
                 }
+                if (bombState == BombState.ARMED) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                        val ox = (size.width - cs * workingMaze.cols) / 2f
+                        val oy = (size.height - cs * workingMaze.rows) / 2f
+                        val bc = floor(ballX).toInt()
+                        val br = floor(ballY).toInt()
+                        val pulse = 0.35f + 0.30f * abs(sin((BOMB_FUSE_S - bombTimer) * Math.PI.toFloat() * 4f))
+                        for (dr in -1..1) for (dc in -1..1) {
+                            if (dc == 0 && dr == 0) continue
+                            val c = bc + dc
+                            val r = br + dr
+                            if (c <= 0 || c >= workingMaze.cols - 1) continue
+                            if (r <= 0 || r >= workingMaze.rows - 1) continue
+                            drawRect(
+                                color = Color(0xFF00BFFF).copy(alpha = pulse),
+                                topLeft = Offset(ox + c * cs, oy + r * cs),
+                                size = Size(cs, cs)
+                            )
+                        }
+                    }
+                }
                 if (starsCtrl != null) {
                     val remaining = starsCtrl.remaining.toList()
                     if (remaining.isNotEmpty()) {
@@ -639,6 +698,20 @@ fun GameScreen(
                     }
                 }
                 if (bombEnabled) {
+                    val bombBg = when (bombState) {
+                        BombState.IDLE -> CoralPink
+                        BombState.ARMED -> Color(0xFFCC1A1A)
+                        BombState.COOLDOWN -> Color.White.copy(alpha = 0.7f)
+                    }
+                    val bombLabel = when (bombState) {
+                        BombState.IDLE -> "폭탄"
+                        BombState.ARMED -> "취소"
+                        BombState.COOLDOWN -> "${(bombTimer + 0.99f).toInt()}초"
+                    }
+                    val centerText: String? = when (bombState) {
+                        BombState.ARMED -> (bombTimer + 0.99f).toInt().coerceAtLeast(1).toString()
+                        else -> null
+                    }
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -650,18 +723,30 @@ fun GameScreen(
                                 .shadow(6.dp, CircleShape)
                                 .size(64.dp)
                                 .clip(CircleShape)
-                                .background(if (bombAvailable) CoralPink else Color.White.copy(alpha = 0.7f))
-                                .clickable(enabled = bombAvailable, onClick = ::useBomb),
+                                .background(bombBg)
+                                .clickable(
+                                    enabled = bombState != BombState.COOLDOWN,
+                                    onClick = ::onBombClick
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
-                            BombIcon(
-                                available = bombAvailable,
-                                modifier = Modifier.size(44.dp)
-                            )
+                            if (centerText != null) {
+                                Text(
+                                    text = centerText,
+                                    color = Color.White,
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            } else {
+                                BombIcon(
+                                    state = bombState,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                            }
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = if (bombAvailable) "폭탄" else "사용 완료",
+                            text = bombLabel,
                             color = InkDark,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -766,18 +851,22 @@ private fun PillToggleChip(label: String, enabled: Boolean, onClick: () -> Unit)
 }
 
 @Composable
-private fun BombIcon(available: Boolean, modifier: Modifier = Modifier) {
+private fun BombIcon(state: BombState, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val d = size.minDimension
         val cx = size.width / 2f
         val cy = size.height / 2f + d * 0.06f
         val bodyR = d * 0.34f
-        val bodyColor = if (available) Color(0xFF1E1E1E) else Color(0xFF888888)
+        val bodyColor = when (state) {
+            BombState.IDLE -> Color(0xFF1E1E1E)
+            BombState.ARMED -> Color(0xFF2A0000)
+            BombState.COOLDOWN -> Color(0xFF888888)
+        }
         // 폭탄 몸체
         drawCircle(color = bodyColor, radius = bodyR, center = Offset(cx, cy))
         // 광택
         drawCircle(
-            color = Color.White.copy(alpha = if (available) 0.45f else 0.25f),
+            color = Color.White.copy(alpha = if (state == BombState.COOLDOWN) 0.25f else 0.45f),
             radius = bodyR * 0.22f,
             center = Offset(cx - bodyR * 0.38f, cy - bodyR * 0.38f)
         )
@@ -799,7 +888,7 @@ private fun BombIcon(available: Boolean, modifier: Modifier = Modifier) {
             strokeWidth = d * 0.05f,
             cap = StrokeCap.Round
         )
-        if (available) {
+        if (state != BombState.COOLDOWN) {
             // 불꽃 외곽 (노랑)
             drawCircle(
                 color = Color(0xFFFFD24A),
