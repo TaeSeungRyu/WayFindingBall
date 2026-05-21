@@ -91,6 +91,8 @@ import kotlin.math.sqrt
 
 private enum class BombState { IDLE, ARMED, COOLDOWN }
 
+private class FireTrail(val col: Int, val row: Int, var age: Float)
+
 private const val BOMB_FUSE_S = 3f
 private const val BOMB_COOLDOWN_S = 10f
 
@@ -112,9 +114,10 @@ fun GameScreen(
     val isInfiniteClears = stage.level == 14
     val isSurvival = stage.level == 15
     val isIce = stage.level == 16
-    val isInfinite = isInfiniteClears || isSurvival || isIce
+    val isFire = stage.level == 17
+    val isInfinite = isInfiniteClears || isSurvival || isIce || isFire
     val workingMaze = remember(stage.id, attemptId, infiniteRound) {
-        if (isInfiniteClears || isIce) {
+        if (isInfiniteClears || isIce || isFire) {
             generateRandomMaze(13)
         } else if (isSurvival) {
             generateRandomMaze(21)
@@ -151,6 +154,7 @@ fun GameScreen(
         if (stage.level == 6 || stage.level == 10 || stage.level == 12) MovingGoalController(workingMaze) else null
     }
     var survivalEnemyCount by remember(stage.id, attemptId) { mutableIntStateOf(3) }
+    var fireEnemyCount by remember(stage.id, attemptId) { mutableIntStateOf(1) }
     val chasers = remember(stage.id, attemptId, infiniteRound) {
         val initial: List<ChaserController> = when {
             isInfiniteClears -> List(infiniteRound + 1) { i ->
@@ -158,6 +162,9 @@ fun GameScreen(
             }
             isSurvival -> List(survivalEnemyCount.coerceAtLeast(1)) { i ->
                 ChaserController(workingMaze, spawnIndex = i, randomMove = true, randomSpawnMinDistance = 8)
+            }
+            isFire -> List(fireEnemyCount.coerceAtLeast(1)) { i ->
+                ChaserController(workingMaze, spawnIndex = i, randomMove = true, randomSpawnMinDistance = 6)
             }
             stage.level == 8 || stage.level == 10 -> listOf(ChaserController(workingMaze))
             else -> emptyList()
@@ -170,6 +177,11 @@ fun GameScreen(
     }
     var stormTimer by remember(stage.id, attemptId, infiniteRound) { mutableFloatStateOf(0f) }
     var stormPhase by remember(stage.id, attemptId, infiniteRound) { mutableFloatStateOf(0f) }
+    val fireTrails = remember(stage.id, attemptId, infiniteRound) {
+        mutableStateListOf<FireTrail>()
+    }
+    var lastFireCell by remember(stage.id, attemptId, infiniteRound) { mutableStateOf(-1 to -1) }
+    var fireVersion by remember(stage.id, attemptId, infiniteRound) { mutableIntStateOf(0) }
     val starsCtrl = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level == 9 || stage.level == 10) StarsController(workingMaze) else null
     }
@@ -213,7 +225,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..16
+    val bombEnabled = stage.level in 6..17
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -242,6 +254,7 @@ fun GameScreen(
         if (toRemove.isNotEmpty()) {
             chasers.removeAll(toRemove)
             if (isSurvival) survivalEnemyCount = chasers.size
+            if (isFire) fireEnemyCount = chasers.size
             changed = true
         }
         if (changed) bombVersion++
@@ -390,6 +403,39 @@ fun GameScreen(
                     }
                     if (!starsCtrl.allCollected) reached = false
                 }
+                if (isFire) {
+                    val bc = floor(physics.x).toInt()
+                    val br = floor(physics.y).toInt()
+                    val current = bc to br
+                    if (current != lastFireCell &&
+                        bc in 1 until workingMaze.cols - 1 &&
+                        br in 1 until workingMaze.rows - 1
+                    ) {
+                        val (lc, lr) = lastFireCell
+                        if (lc >= 0 && lr >= 0 &&
+                            !(lc == workingMaze.startCol && lr == workingMaze.startRow) &&
+                            !(lc == workingMaze.goalCol && lr == workingMaze.goalRow) &&
+                            workingMaze.grid[lr][lc] == Cell.EMPTY
+                        ) {
+                            fireTrails.add(FireTrail(lc, lr, 0f))
+                        }
+                        lastFireCell = current
+                    }
+                    val it = fireTrails.listIterator()
+                    var anyConverted = false
+                    while (it.hasNext()) {
+                        val t = it.next()
+                        t.age += dt
+                        if (t.age >= 1.5f) {
+                            if (!(t.col == bc && t.row == br)) {
+                                workingMaze.grid[t.row][t.col] = Cell.WALL
+                                anyConverted = true
+                            }
+                            it.remove()
+                        }
+                    }
+                    if (anyConverted) fireVersion++
+                }
                 if (isIce) {
                     stormTimer -= dt
                     stormPhase += dt
@@ -433,7 +479,7 @@ fun GameScreen(
                         }
                     }
                 }
-                if (isSurvival) {
+                if (isSurvival || isFire) {
                     nextEnemySpawnIn -= dt
                     if (nextEnemySpawnIn <= 0f) {
                         val addCount = (2..3).random()
@@ -443,11 +489,12 @@ fun GameScreen(
                                     workingMaze,
                                     spawnIndex = chasers.size,
                                     randomMove = true,
-                                    randomSpawnMinDistance = 8,
+                                    randomSpawnMinDistance = if (isSurvival) 8 else 6,
                                 )
                             )
                         }
-                        survivalEnemyCount = chasers.size
+                        if (isSurvival) survivalEnemyCount = chasers.size
+                        if (isFire) fireEnemyCount = chasers.size
                         nextEnemySpawnIn = 10f
                     }
                 }
@@ -582,7 +629,7 @@ fun GameScreen(
                         if (bombTimer <= 0f) {
                             explodeBomb()
                             bombState = BombState.COOLDOWN
-                            bombTimer = BOMB_COOLDOWN_S
+                            bombTimer = if (isFire) 5f else BOMB_COOLDOWN_S
                         }
                     }
                     BombState.COOLDOWN -> {
@@ -643,6 +690,7 @@ fun GameScreen(
                         isInfiniteClears -> "무한 도전 · 통과 $infiniteRound"
                         isSurvival -> "생존 모드 · 적 ${chasers.size}"
                         isIce -> "얼음 미로 · 통과 $infiniteRound"
+                        isFire -> "타는 길 · 통과 $infiniteRound"
                         else -> stage.name
                     },
                     color = InkDark,
@@ -718,7 +766,7 @@ fun GameScreen(
                     }
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
-                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + (rotatingMaze?.version ?: 0) + bombVersion
+                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + (rotatingMaze?.version ?: 0) + bombVersion + fireVersion
                 MazeCanvas(
                     maze = workingMaze,
                     ballX = ballX,
@@ -846,6 +894,33 @@ fun GameScreen(
                                     center = Offset(ox + (c + 0.5f) * cs, oy + (r + 0.5f) * cs)
                                 )
                             }
+                        }
+                    }
+                }
+                if (isFire && fireTrails.isNotEmpty()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                        val ox = (size.width - cs * workingMaze.cols) / 2f
+                        val oy = (size.height - cs * workingMaze.rows) / 2f
+                        for (t in fireTrails) {
+                            val progress = (t.age / 1.5f).coerceIn(0f, 1f)
+                            // 노랑→주황→빨강으로 점진 변화
+                            val r = (0.95f + progress * 0.0f)
+                            val g = (0.7f - progress * 0.55f)
+                            val b = (0.15f - progress * 0.10f).coerceAtLeast(0f)
+                            val baseAlpha = 0.5f + 0.40f * progress
+                            drawRect(
+                                color = Color(r, g, b, baseAlpha),
+                                topLeft = Offset(ox + t.col * cs, oy + t.row * cs),
+                                size = Size(cs, cs)
+                            )
+                            // 깜빡임 효과
+                            val flicker = 0.3f + 0.3f * abs(sin((t.age + t.col + t.row) * 12f))
+                            drawCircle(
+                                color = Color(1f, 0.85f, 0.3f, flicker * (1f - progress * 0.5f)),
+                                radius = cs * 0.25f,
+                                center = Offset(ox + (t.col + 0.5f) * cs, oy + (t.row + 0.5f) * cs)
+                            )
                         }
                     }
                 }
