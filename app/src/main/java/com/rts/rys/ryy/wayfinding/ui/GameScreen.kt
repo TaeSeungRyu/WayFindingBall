@@ -62,6 +62,7 @@ import com.rts.rys.ryy.wayfinding.game.Cell
 import com.rts.rys.ryy.wayfinding.game.ChaserController
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.generateRandomMaze
+import com.rts.rys.ryy.wayfinding.game.KeyDoorController
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MovingGoalController
 import com.rts.rys.ryy.wayfinding.game.RotatingMazeController
@@ -116,10 +117,11 @@ fun GameScreen(
     val isIce = stage.level == 16
     val isFire = stage.level == 17
     val isGrow = stage.level == 18
-    val isInfinite = isInfiniteClears || isSurvival || isIce || isFire || isGrow
+    val isKeyDoor = stage.level == 19
+    val isInfinite = isInfiniteClears || isSurvival || isIce || isFire || isGrow || isKeyDoor
     val growMultiplier = if (isGrow) (1f + infiniteRound * 0.15f).coerceAtMost(1.7f) else 1f
     val workingMaze = remember(stage.id, attemptId, infiniteRound) {
-        if (isInfiniteClears || isIce || isFire || isGrow) {
+        if (isInfiniteClears || isIce || isFire || isGrow || isKeyDoor) {
             generateRandomMaze(13)
         } else if (isSurvival) {
             generateRandomMaze(21)
@@ -192,6 +194,9 @@ fun GameScreen(
     val starsCtrl = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level == 9 || stage.level == 10) StarsController(workingMaze) else null
     }
+    val keyDoorCtrl = remember(stage.id, attemptId, infiniteRound) {
+        if (isKeyDoor) KeyDoorController(workingMaze, keyCount = (3 + infiniteRound).coerceAtMost(7)) else null
+    }
     val isDarkLevel = stage.level == 7
     val tilt = remember { TiltSensor(context) }
     val theme = remember(stage.level) { themeForLevel(stage.level) }
@@ -232,7 +237,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..18
+    val bombEnabled = stage.level in 6..19
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -249,6 +254,10 @@ fun GameScreen(
             if (r <= 0 || r >= workingMaze.rows - 1) continue
             if (c == workingMaze.startCol && r == workingMaze.startRow) continue
             if (c == workingMaze.goalCol && r == workingMaze.goalRow) continue
+            // 19단계: G의 4방향 인접 셀(문 포함)은 폭탄으로 못 뚫음. 키로만 열림.
+            if (isKeyDoor &&
+                abs(c - workingMaze.goalCol) + abs(r - workingMaze.goalRow) == 1
+            ) continue
             if (workingMaze.grid[r][c] == Cell.WALL) {
                 workingMaze.grid[r][c] = Cell.EMPTY
                 changed = true
@@ -389,6 +398,14 @@ fun GameScreen(
                         }
                     }
                 }
+                if (keyDoorCtrl != null) {
+                    val before = keyDoorCtrl.collected
+                    keyDoorCtrl.tick(physics.x, physics.y)
+                    if (keyDoorCtrl.collected > before) {
+                        SoundManager.playGoal()
+                    }
+                    if (!keyDoorCtrl.allCollected) reached = false
+                }
                 if (starsCtrl != null) {
                     val before = starsCtrl.collected
                     starsCtrl.tick(physics.x, physics.y)
@@ -443,7 +460,7 @@ fun GameScreen(
                     }
                     if (anyConverted) fireVersion++
                 }
-                if (isIce) {
+                if (isIce || isKeyDoor) {
                     stormTimer -= dt
                     stormPhase += dt
                     if (stormTimer <= 0f || storms.isEmpty()) {
@@ -699,6 +716,7 @@ fun GameScreen(
                         isIce -> "얼음 미로 · 통과 $infiniteRound"
                         isFire -> "타는 길 · 통과 $infiniteRound"
                         isGrow -> "공이 커져요 · 통과 $infiniteRound"
+                        isKeyDoor -> "열쇠 ${keyDoorCtrl?.collected ?: 0}/${keyDoorCtrl?.totalKeys ?: 0} · 통과 $infiniteRound"
                         else -> stage.name
                     },
                     color = InkDark,
@@ -774,7 +792,7 @@ fun GameScreen(
                     }
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
-                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + (rotatingMaze?.version ?: 0) + bombVersion + fireVersion
+                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + (rotatingMaze?.version ?: 0) + (keyDoorCtrl?.version ?: 0) + bombVersion + fireVersion
                 MazeCanvas(
                     maze = workingMaze,
                     ballX = ballX,
@@ -883,6 +901,65 @@ fun GameScreen(
                         }
                     }
                 }
+                if (keyDoorCtrl != null) {
+                    val remainingKeys = keyDoorCtrl.keys.toList()
+                    val doorList = keyDoorCtrl.doors.toList()
+                    val isOpen = keyDoorCtrl.allCollected
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                        val ox = (size.width - cs * workingMaze.cols) / 2f
+                        val oy = (size.height - cs * workingMaze.rows) / 2f
+                        // 문 (잠겨 있을 때만 그림자체로) — G 인접 셀 모두
+                        if (!isOpen) {
+                            for ((dc, dr) in doorList) {
+                                drawRect(
+                                    color = Color(0xFF6B4226),
+                                    topLeft = Offset(ox + dc * cs, oy + dr * cs),
+                                    size = Size(cs, cs)
+                                )
+                                // 자물쇠 표시
+                                drawCircle(
+                                    color = Color(0xFFFFD24A),
+                                    radius = cs * 0.16f,
+                                    center = Offset(ox + (dc + 0.5f) * cs, oy + (dr + 0.5f) * cs)
+                                )
+                                drawCircle(
+                                    color = Color(0xFF6B4226),
+                                    radius = cs * 0.06f,
+                                    center = Offset(ox + (dc + 0.5f) * cs, oy + (dr + 0.5f) * cs)
+                                )
+                            }
+                        }
+                        // 키
+                        for ((kc, kr) in remainingKeys) {
+                            val cx = ox + (kc + 0.5f) * cs
+                            val cy = oy + (kr + 0.5f) * cs
+                            // 키 머리 (둥근 부분)
+                            drawCircle(
+                                color = Color(0xFFFFD24A),
+                                radius = cs * 0.18f,
+                                center = Offset(cx - cs * 0.15f, cy)
+                            )
+                            drawCircle(
+                                color = Color(0xFF6B4226),
+                                radius = cs * 0.07f,
+                                center = Offset(cx - cs * 0.15f, cy)
+                            )
+                            // 키 줄기 (사각형)
+                            drawRect(
+                                color = Color(0xFFFFD24A),
+                                topLeft = Offset(cx - cs * 0.05f, cy - cs * 0.06f),
+                                size = Size(cs * 0.30f, cs * 0.12f)
+                            )
+                            // 키 이빨
+                            drawRect(
+                                color = Color(0xFFFFD24A),
+                                topLeft = Offset(cx + cs * 0.18f, cy + cs * 0.06f),
+                                size = Size(cs * 0.06f, cs * 0.12f)
+                            )
+                        }
+                    }
+                }
                 if (starsCtrl != null) {
                     val remaining = starsCtrl.remaining.toList()
                     if (remaining.isNotEmpty()) {
@@ -932,10 +1009,14 @@ fun GameScreen(
                         }
                     }
                 }
-                if (isIce && storms.isNotEmpty()) {
+                if ((isIce || isKeyDoor) && storms.isNotEmpty()) {
                     val isStormActive = stormTimer < 5f
                     val previewAlpha = ((7f - stormTimer) / 2f).coerceIn(0f, 1f)
                     val canvasAlpha = if (isStormActive) 1f else previewAlpha
+                    // 19단계 던전 테마 색 (브라운/골드), 16단계 얼음 테마 (블루/화이트)
+                    val ringColor = if (isKeyDoor) Color(0xFF3D2615) else Color(0xFF3D708F)
+                    val swirlColor = if (isKeyDoor) Color(0xFFFFD24A) else Color(0xFFE0F4FF)
+                    val flakeColor = if (isKeyDoor) Color(0xFFE7B65A) else Color.White
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
                         val ox = (size.width - cs * workingMaze.cols) / 2f
@@ -945,7 +1026,7 @@ fun GameScreen(
                             val centerX = ox + (sc + 1f) * cs
                             val centerY = oy + (sr + 1f) * cs
                             drawCircle(
-                                color = Color(0xFF3D708F).copy(alpha = 0.55f * canvasAlpha),
+                                color = ringColor.copy(alpha = 0.55f * canvasAlpha),
                                 radius = radius,
                                 center = Offset(centerX, centerY)
                             )
@@ -962,7 +1043,7 @@ fun GameScreen(
                             }
                             drawPath(
                                 path = swirlPath,
-                                color = Color(0xFFE0F4FF).copy(alpha = 0.85f * canvasAlpha),
+                                color = swirlColor.copy(alpha = 0.85f * canvasAlpha),
                                 style = Stroke(
                                     width = radius * 0.16f,
                                     cap = StrokeCap.Round,
@@ -976,7 +1057,7 @@ fun GameScreen(
                                 val fx = centerX + fr * cos(a)
                                 val fy = centerY + fr * sin(a)
                                 drawCircle(
-                                    color = Color.White.copy(alpha = 0.85f * canvasAlpha),
+                                    color = flakeColor.copy(alpha = 0.85f * canvasAlpha),
                                     radius = radius * 0.10f,
                                     center = Offset(fx, fy)
                                 )
