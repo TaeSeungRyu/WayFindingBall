@@ -278,5 +278,6 @@ fun themeForLevel(level: Int): MazeTheme = when (level) {
     11 -> CosmicTheme
     12 -> GearTheme
     13 -> GoldenTheme
-    else -> EmberTheme
+    14 -> EmberTheme
+    else -> ShadowTheme
 }

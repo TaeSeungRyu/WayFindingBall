@@ -66,20 +66,25 @@ fun ResultScreen(
 ) {
     val context = LocalContext.current
     val stage = remember(stageId) { Stages.byId(stageId) }
-    val isInfinite = stage.level == 14
+    val isInfiniteClears = stage.level == 14
+    val isSurvival = stage.level == 15
+    val isInfinite = isInfiniteClears || isSurvival
     val earnedStars = remember(stageId, elapsedMs, caught) {
         if (caught || isInfinite) 0 else MazePar.starsFor(stage, elapsedMs)
     }
-    // 무한 모드는 "더 많은 단계를 통과할수록" 좋음 → cleared max. 일반 모드는 "빠를수록" 좋음 → elapsedMs min.
     val previousBestRecord = remember(stageId) {
         val records = RecordsRepository(context).load().filter { it.stageId == stageId }
-        if (isInfinite) records.maxByOrNull { it.cleared }
-        else records.minByOrNull { it.elapsedMs }
+        when {
+            isInfiniteClears -> records.maxByOrNull { it.cleared }
+            isSurvival -> records.maxByOrNull { it.elapsedMs }
+            else -> records.minByOrNull { it.elapsedMs }
+        }
     }
     val previousBest = previousBestRecord?.elapsedMs
     val previousBestClears = previousBestRecord?.cleared ?: 0
     val isNewBest = when {
-        isInfinite -> clears > previousBestClears
+        isInfiniteClears -> clears > previousBestClears
+        isSurvival -> elapsedMs > (previousBest ?: 0L)
         caught -> false
         else -> previousBest == null || elapsedMs < previousBest
     }
@@ -143,7 +148,8 @@ fun ResultScreen(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = when {
-                    isInfinite -> "오래 살아남았어요"
+                    isInfiniteClears -> "오래 살아남았어요"
+                    isSurvival -> "적을 피해 버텼어요"
                     caught -> "${stage.name}에서 잡혔어요"
                     else -> "${stage.name} 도착!"
                 },
@@ -156,15 +162,23 @@ fun ResultScreen(
             if (isNewBest) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = if (isInfinite) "★ 최고 기록! ★" else "★ 최고 기록! ★",
+                    text = "★ 최고 기록! ★",
                     fontSize = 14.sp,
                     color = CoralPink,
                     fontWeight = FontWeight.ExtraBold
                 )
-            } else if (isInfinite && previousBestClears > 0) {
+            } else if (isInfiniteClears && previousBestClears > 0) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = "최고 기록  ${previousBestClears}단계",
+                    fontSize = 14.sp,
+                    color = InkSoft,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            } else if (isSurvival && previousBest != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "최고 기록  ${formatElapsed(previousBest)}",
                     fontSize = 14.sp,
                     color = InkSoft,
                     fontWeight = FontWeight.ExtraBold
@@ -181,10 +195,19 @@ fun ResultScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (isInfinite) "도달 단계" else "걸린 시간", color = InkSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = when {
+                            isInfiniteClears -> "도달 단계"
+                            isSurvival -> "버틴 시간"
+                            else -> "걸린 시간"
+                        },
+                        color = InkSoft,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = if (isInfinite) "${clears}단계" else formatElapsed(elapsedMs),
+                        text = if (isInfiniteClears) "${clears}단계" else formatElapsed(elapsedMs),
                         color = CoralPink,
                         fontSize = 44.sp,
                         fontWeight = FontWeight.Black

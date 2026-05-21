@@ -106,10 +106,14 @@ fun GameScreen(
     val view = LocalView.current
     var attemptId by remember(stage.id) { mutableIntStateOf(0) }
     var infiniteRound by remember(stage.id) { mutableIntStateOf(0) }
-    val isInfinite = stage.level == 14
+    val isInfiniteClears = stage.level == 14
+    val isSurvival = stage.level == 15
+    val isInfinite = isInfiniteClears || isSurvival
     val workingMaze = remember(stage.id, attemptId, infiniteRound) {
-        if (isInfinite) {
+        if (isInfiniteClears) {
             generateRandomMaze(13)
+        } else if (isSurvival) {
+            generateRandomMaze(21)
         } else {
             val src = stage.maze
             val grid = Array(src.rows) { r -> src.grid[r].copyOf() }
@@ -141,19 +145,19 @@ fun GameScreen(
         if (stage.level == 6 || stage.level == 10 || stage.level == 12) MovingGoalController(workingMaze) else null
     }
     val chasers = remember(stage.id, attemptId, infiniteRound) {
-        when {
-            isInfinite -> List(infiniteRound + 1) { i ->
-                ChaserController(
-                    workingMaze,
-                    spawnIndex = i,
-                    randomMove = true,
-                    randomSpawnMinDistance = 6
-                )
+        val initial: List<ChaserController> = when {
+            isInfiniteClears -> List(infiniteRound + 1) { i ->
+                ChaserController(workingMaze, spawnIndex = i, randomMove = true, randomSpawnMinDistance = 6)
+            }
+            isSurvival -> List(3) { i ->
+                ChaserController(workingMaze, spawnIndex = i, randomMove = true, randomSpawnMinDistance = 8)
             }
             stage.level == 8 || stage.level == 10 -> listOf(ChaserController(workingMaze))
             else -> emptyList()
         }
+        mutableStateListOf<ChaserController>().apply { addAll(initial) }
     }
+    var nextEnemySpawnIn by remember(stage.id, attemptId) { mutableFloatStateOf(10f) }
     val starsCtrl = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level == 9 || stage.level == 10) StarsController(workingMaze) else null
     }
@@ -197,7 +201,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..14
+    val bombEnabled = stage.level in 6..15
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -218,6 +222,14 @@ fun GameScreen(
                 workingMaze.grid[r][c] = Cell.EMPTY
                 changed = true
             }
+        }
+        // 폭탄 범위 안의 적 제거 (3x3, 공이 있는 셀 포함)
+        val toRemove = chasers.filter {
+            abs(it.col - bc) <= 1 && abs(it.row - br) <= 1
+        }
+        if (toRemove.isNotEmpty()) {
+            chasers.removeAll(toRemove)
+            changed = true
         }
         if (changed) bombVersion++
         repeat(24) {
@@ -356,6 +368,23 @@ fun GameScreen(
                     }
                     if (!starsCtrl.allCollected) reached = false
                 }
+                if (isSurvival) {
+                    nextEnemySpawnIn -= dt
+                    if (nextEnemySpawnIn <= 0f) {
+                        val addCount = (2..3).random()
+                        repeat(addCount) {
+                            chasers.add(
+                                ChaserController(
+                                    workingMaze,
+                                    spawnIndex = chasers.size,
+                                    randomMove = true,
+                                    randomSpawnMinDistance = 8,
+                                )
+                            )
+                        }
+                        nextEnemySpawnIn = 10f
+                    }
+                }
                 if (chasers.isNotEmpty()) {
                     val bc = floor(physics.x).toInt()
                     val br = floor(physics.y).toInt()
@@ -371,7 +400,7 @@ fun GameScreen(
                             onFinished(
                                 if (isInfinite) totalInfiniteMs else elapsedMs,
                                 true,
-                                if (isInfinite) infiniteRound + 1 else 0
+                                if (isInfiniteClears) infiniteRound + 1 else 0
                             )
                             break
                         }
@@ -544,7 +573,11 @@ fun GameScreen(
                     modifier = Modifier.align(Alignment.CenterStart)
                 )
                 Text(
-                    text = if (isInfinite) "무한 도전 · 통과 $infiniteRound" else stage.name,
+                    text = when {
+                        isInfiniteClears -> "무한 도전 · 통과 $infiniteRound"
+                        isSurvival -> "생존 모드 · 적 ${chasers.size}"
+                        else -> stage.name
+                    },
                     color = InkDark,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,

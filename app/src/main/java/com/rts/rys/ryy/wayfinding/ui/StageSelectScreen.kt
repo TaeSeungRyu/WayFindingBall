@@ -104,11 +104,15 @@ fun StageSelectScreen(
             Spacer(Modifier.height(12.dp))
             SectionHeader(level = level, difficulty = difficulty)
             Spacer(Modifier.height(8.dp))
-            if (level == 14) {
+            if (level == 14 || level == 15) {
                 val firstStageId = stages.firstOrNull()?.id
-                val infinityBestRecord = RecordsRepository(context).load()
+                val records = RecordsRepository(context).load()
                     .filter { it.stageId == firstStageId }
-                    .maxByOrNull { it.cleared }
+                val infinityBestRecord = if (level == 14) {
+                    records.maxByOrNull { it.cleared }
+                } else {
+                    records.maxByOrNull { it.elapsedMs }
+                }
                 stages.firstOrNull()?.let { stage ->
                     Box(
                         modifier = Modifier
@@ -120,6 +124,8 @@ fun StageSelectScreen(
                             stage = stage,
                             bestMs = infinityBestRecord?.elapsedMs,
                             bestClears = infinityBestRecord?.cleared ?: 0,
+                            showTime = level == 15,
+                            title = if (level == 15) "생존 모드" else "무한 도전",
                             onClick = { onSelect(stage.id) }
                         )
                     }
@@ -232,6 +238,8 @@ private fun InfinityCard(
     stage: Stage,
     bestMs: Long?,
     bestClears: Int = 0,
+    showTime: Boolean = false,
+    title: String = "무한 도전",
     onClick: () -> Unit
 ) {
     val color = levelColor(stage.level)
@@ -257,7 +265,7 @@ private fun InfinityCard(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "무한 도전",
+                text = title,
                 color = Color.White,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -270,8 +278,13 @@ private fun InfinityCard(
                     .background(Color.White.copy(alpha = 0.18f))
                     .padding(horizontal = 18.dp, vertical = 8.dp)
             ) {
+                val bestText = when {
+                    showTime && bestMs != null -> "최고 기록  ${formatElapsed(bestMs)}"
+                    !showTime && bestClears > 0 -> "최고 기록  ${bestClears}단계"
+                    else -> "아직 기록 없어요"
+                }
                 Text(
-                    text = if (bestClears > 0) "최고 기록  ${bestClears}단계" else "아직 기록 없어요",
+                    text = bestText,
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.ExtraBold
@@ -441,7 +454,8 @@ fun levelColor(level: Int): Color = when (level) {
     11 -> Color(0xFF7A3FE0)
     12 -> Color(0xFF5C7080)
     13 -> Color(0xFFD97742)
-    else -> Color(0xFF111111)
+    14 -> Color(0xFF111111)
+    else -> Color(0xFF7B0E0E)
 }
 
 fun stageColor(id: Int): Color {
