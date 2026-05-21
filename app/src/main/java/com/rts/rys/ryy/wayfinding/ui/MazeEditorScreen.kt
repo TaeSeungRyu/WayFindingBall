@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -254,9 +255,10 @@ fun MazeEditorScreen(
 ) {
     val context = LocalContext.current
     var level by remember { mutableStateOf(initialLevel.coerceIn(1, 11)) }
-    var board by remember(level) { mutableStateOf(initialBoard(level)) }
+    var board by remember { mutableStateOf(initialBoard(initialLevel.coerceIn(1, 11))) }
     var tool by remember { mutableStateOf(Tool.WALL) }
     LaunchedEffect(level) {
+        board = initialBoard(level)
         if (level != 8 && level != 10 && tool == Tool.ENEMY) tool = Tool.WALL
         if (level != 9 && level != 10 && tool == Tool.STAR) tool = Tool.WALL
         if (level != 11 && tool == Tool.PORTAL) tool = Tool.WALL
@@ -273,7 +275,7 @@ fun MazeEditorScreen(
     }
 
     fun applyTool(c: Int, r: Int) {
-        val n = sizeForLevel(level)
+        val n = board.size
         if (c <= 0 || r <= 0 || c >= n - 1 || r >= n - 1) return
         val newBoard = Array(n) { board[it].copyOf() }
         val cur = newBoard[r][c]
@@ -510,15 +512,19 @@ private fun EditorGrid(
     onCellTap: (Int, Int) -> Unit
 ) {
     val n = board.size
+    val latestTap = rememberUpdatedState(onCellTap)
+    val latestN = rememberUpdatedState(n)
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(n) {
+            .pointerInput(Unit) {
                 detectTapGestures { offset ->
-                    val cs = size.width / n
+                    val nn = latestN.value
+                    if (nn <= 0) return@detectTapGestures
+                    val cs = size.width / nn
                     val c = (offset.x / cs).toInt()
                     val r = (offset.y / cs).toInt()
-                    if (c in 0 until n && r in 0 until n) onCellTap(c, r)
+                    if (c in 0 until nn && r in 0 until nn) latestTap.value(c, r)
                 }
             }
     ) {
