@@ -60,6 +60,7 @@ import com.rts.rys.ryy.wayfinding.game.ChaserController
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MovingGoalController
+import com.rts.rys.ryy.wayfinding.game.RotatingMazeController
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.StarsController
 import com.rts.rys.ryy.wayfinding.game.Stage
@@ -117,10 +118,20 @@ fun GameScreen(
     var portalCooldown by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
     val dynamicMaze = remember(stage.id, attemptId) {
-        if (stage.level in 5..11) DynamicMazeController(workingMaze) else null
+        if (stage.level in 5..12) DynamicMazeController(workingMaze) else null
+    }
+    val rotatingMaze = remember(stage.id, attemptId) {
+        if (stage.level == 12) RotatingMazeController(workingMaze) { m ->
+            val bc = floor(physics.x).toInt()
+            val br = floor(physics.y).toInt()
+            val n = m.cols
+            val nc = (n - 1 - br).coerceIn(1, n - 2)
+            val nr = bc.coerceIn(1, n - 2)
+            physics.setPositionAndStop(nc, nr)
+        } else null
     }
     val movingGoal = remember(stage.id, attemptId) {
-        if (stage.level == 6 || stage.level == 10) MovingGoalController(workingMaze) else null
+        if (stage.level == 6 || stage.level == 10 || stage.level == 12) MovingGoalController(workingMaze) else null
     }
     val chaser = remember(stage.id, attemptId) {
         if (stage.level == 8 || stage.level == 10) ChaserController(workingMaze) else null
@@ -167,7 +178,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..11
+    val bombEnabled = stage.level in 6..12
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -277,6 +288,11 @@ fun GameScreen(
                 var reached = physics.step(dt, ax, ay)
                 dynamicMaze?.tick(dt, physics.x, physics.y)
                 movingGoal?.tick(dt, physics.x, physics.y)
+                rotatingMaze?.tick(dt)
+                if (rotatingMaze != null) {
+                    ballX = physics.x
+                    ballY = physics.y
+                }
                 portalCooldown = (portalCooldown - dt).coerceAtLeast(0f)
                 if (portalCooldown == 0f) {
                     val pa = workingMaze.portalA
@@ -564,7 +580,7 @@ fun GameScreen(
                     }
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
-                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + bombVersion
+                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + (rotatingMaze?.version ?: 0) + bombVersion
                 MazeCanvas(
                     maze = workingMaze,
                     ballX = ballX,
@@ -633,6 +649,27 @@ fun GameScreen(
                                 color = Color(0xFF00BFFF).copy(alpha = pulse),
                                 topLeft = Offset(ox + c * cs, oy + r * cs),
                                 size = Size(cs, cs)
+                            )
+                        }
+                    }
+                }
+                if (rotatingMaze != null && rotatingMaze.pending) {
+                    val pulse = 0.4f + 0.4f * abs(sin(rotatingMaze.previewProgress * Math.PI.toFloat() * 4f))
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFF1A1A2E).copy(alpha = pulse))
+                                .padding(horizontal = 18.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = "↻ 회전!",
+                                color = Color.White,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
                     }

@@ -64,6 +64,16 @@ class BallPhysics(
         y = row + 0.5f
     }
 
+    /** Move to [col, row] center and stop. Used by rotation gimmick. */
+    fun setPositionAndStop(col: Int, row: Int) {
+        x = col + 0.5f
+        y = row + 0.5f
+        vx = 0f
+        vy = 0f
+        squashAmount = 0f
+        squashAxis = SquashAxis.NONE
+    }
+
     /**
      * Advance the simulation by [dt] seconds with the given acceleration
      * (cells per second^2). Returns true if the ball reached the goal.

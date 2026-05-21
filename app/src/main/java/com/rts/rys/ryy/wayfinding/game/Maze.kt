@@ -7,8 +7,10 @@ data class Maze(
     val rows: Int,
     val grid: Array<Array<Cell>>
 ) {
-    val startCol: Int
-    val startRow: Int
+    var startCol: Int
+        internal set
+    var startRow: Int
+        internal set
     var goalCol: Int
         internal set
     var goalRow: Int
@@ -34,6 +36,28 @@ data class Maze(
             }
         }
         startCol = sc; startRow = sr; goalCol = gc; goalRow = gr
+    }
+
+    /** Rotates the grid 90° clockwise in-place. Only valid for square mazes. */
+    fun rotateClockwise() {
+        val n = cols
+        val rotated = Array(n) { r ->
+            Array(n) { c -> grid[n - 1 - c][r] }
+        }
+        for (r in 0 until n) for (c in 0 until n) {
+            grid[r][c] = rotated[r][c]
+        }
+        val ns = n - 1 - startRow to startCol
+        startCol = ns.first; startRow = ns.second
+        val ng = n - 1 - goalRow to goalCol
+        goalCol = ng.first; goalRow = ng.second
+        if (enemyCol >= 0 && enemyRow >= 0) {
+            val ne = n - 1 - enemyRow to enemyCol
+            enemyCol = ne.first; enemyRow = ne.second
+        }
+        stars = stars.map { (c, r) -> (n - 1 - r) to c }
+        portalA = portalA?.let { (c, r) -> (n - 1 - r) to c }
+        portalB = portalB?.let { (c, r) -> (n - 1 - r) to c }
     }
 
     fun isWall(c: Int, r: Int): Boolean {
