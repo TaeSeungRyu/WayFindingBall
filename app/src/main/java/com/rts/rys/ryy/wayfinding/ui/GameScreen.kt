@@ -144,12 +144,13 @@ fun GameScreen(
     val movingGoal = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level == 6 || stage.level == 10 || stage.level == 12) MovingGoalController(workingMaze) else null
     }
+    var survivalEnemyCount by remember(stage.id, attemptId) { mutableIntStateOf(3) }
     val chasers = remember(stage.id, attemptId, infiniteRound) {
         val initial: List<ChaserController> = when {
             isInfiniteClears -> List(infiniteRound + 1) { i ->
                 ChaserController(workingMaze, spawnIndex = i, randomMove = true, randomSpawnMinDistance = 6)
             }
-            isSurvival -> List(3) { i ->
+            isSurvival -> List(survivalEnemyCount.coerceAtLeast(1)) { i ->
                 ChaserController(workingMaze, spawnIndex = i, randomMove = true, randomSpawnMinDistance = 8)
             }
             stage.level == 8 || stage.level == 10 -> listOf(ChaserController(workingMaze))
@@ -229,6 +230,7 @@ fun GameScreen(
         }
         if (toRemove.isNotEmpty()) {
             chasers.removeAll(toRemove)
+            if (isSurvival) survivalEnemyCount = chasers.size
             changed = true
         }
         if (changed) bombVersion++
@@ -382,6 +384,7 @@ fun GameScreen(
                                 )
                             )
                         }
+                        survivalEnemyCount = chasers.size
                         nextEnemySpawnIn = 10f
                     }
                 }
@@ -400,7 +403,7 @@ fun GameScreen(
                             onFinished(
                                 if (isInfinite) totalInfiniteMs else elapsedMs,
                                 true,
-                                if (isInfiniteClears) infiniteRound + 1 else 0
+                                if (isInfinite) infiniteRound + 1 else 0
                             )
                             break
                         }

@@ -261,7 +261,7 @@ private fun BigButton(
     ) {
         Box(
             modifier = Modifier
-                .size(54.dp)
+                .size(50.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.35f)),
             contentAlignment = Alignment.Center
@@ -272,7 +272,7 @@ private fun BigButton(
         Text(
             text = label,
             color = Color.White,
-            fontSize = 26.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 2.sp
         )

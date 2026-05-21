@@ -106,13 +106,9 @@ fun StageSelectScreen(
             Spacer(Modifier.height(8.dp))
             if (level == 14 || level == 15) {
                 val firstStageId = stages.firstOrNull()?.id
-                val records = RecordsRepository(context).load()
+                val infinityBestRecord = RecordsRepository(context).load()
                     .filter { it.stageId == firstStageId }
-                val infinityBestRecord = if (level == 14) {
-                    records.maxByOrNull { it.cleared }
-                } else {
-                    records.maxByOrNull { it.elapsedMs }
-                }
+                    .maxByOrNull { it.cleared }
                 stages.firstOrNull()?.let { stage ->
                     Box(
                         modifier = Modifier
@@ -124,7 +120,7 @@ fun StageSelectScreen(
                             stage = stage,
                             bestMs = infinityBestRecord?.elapsedMs,
                             bestClears = infinityBestRecord?.cleared ?: 0,
-                            showTime = level == 15,
+                            showTime = false,
                             title = if (level == 15) "생존 모드" else "무한 도전",
                             onClick = { onSelect(stage.id) }
                         )
