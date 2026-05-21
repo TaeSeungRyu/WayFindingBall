@@ -110,11 +110,14 @@ fun GameScreen(
             it.enemyCol = src.enemyCol
             it.enemyRow = src.enemyRow
             it.stars = src.stars
+            it.portalA = src.portalA
+            it.portalB = src.portalB
         }
     }
+    var portalCooldown by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
     val dynamicMaze = remember(stage.id, attemptId) {
-        if (stage.level in 5..10) DynamicMazeController(workingMaze) else null
+        if (stage.level in 5..11) DynamicMazeController(workingMaze) else null
     }
     val movingGoal = remember(stage.id, attemptId) {
         if (stage.level == 6 || stage.level == 10) MovingGoalController(workingMaze) else null
@@ -164,7 +167,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..10
+    val bombEnabled = stage.level in 6..11
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -274,6 +277,25 @@ fun GameScreen(
                 var reached = physics.step(dt, ax, ay)
                 dynamicMaze?.tick(dt, physics.x, physics.y)
                 movingGoal?.tick(dt, physics.x, physics.y)
+                portalCooldown = (portalCooldown - dt).coerceAtLeast(0f)
+                if (portalCooldown == 0f) {
+                    val pa = workingMaze.portalA
+                    val pb = workingMaze.portalB
+                    if (pa != null && pb != null) {
+                        val bc = floor(physics.x).toInt()
+                        val br = floor(physics.y).toInt()
+                        val dest = when {
+                            bc == pa.first && br == pa.second -> pb
+                            bc == pb.first && br == pb.second -> pa
+                            else -> null
+                        }
+                        if (dest != null) {
+                            physics.teleport(dest.first, dest.second)
+                            portalCooldown = 0.5f
+                            SoundManager.playGoal()
+                        }
+                    }
+                }
                 if (starsCtrl != null) {
                     val before = starsCtrl.collected
                     starsCtrl.tick(physics.x, physics.y)
@@ -612,6 +634,21 @@ fun GameScreen(
                                 topLeft = Offset(ox + c * cs, oy + r * cs),
                                 size = Size(cs, cs)
                             )
+                        }
+                    }
+                }
+                val pa = workingMaze.portalA
+                val pb = workingMaze.portalB
+                if (pa != null && pb != null) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                        val ox = (size.width - cs * workingMaze.cols) / 2f
+                        val oy = (size.height - cs * workingMaze.rows) / 2f
+                        for (p in listOf(pa, pb)) {
+                            val center = Offset(ox + (p.first + 0.5f) * cs, oy + (p.second + 0.5f) * cs)
+                            drawCircle(color = Color(0xFFB060E0), radius = cs * 0.36f, center = center)
+                            drawCircle(color = Color(0xFF5236B5), radius = cs * 0.24f, center = center)
+                            drawCircle(color = Color(0xFFE6D2FF), radius = cs * 0.12f, center = center)
                         }
                     }
                 }

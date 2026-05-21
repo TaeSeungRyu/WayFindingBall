@@ -91,6 +91,7 @@ private fun sizeForLevel(level: Int): Int = when (level) {
     7 -> 13
     8 -> 13
     9 -> 13
+    10 -> 13
     else -> 13
 }
 
@@ -136,7 +137,31 @@ private fun randomBoard(level: Int): Array<CharArray> {
     board[gr][gc] = 'G'
     if (level == 8 || level == 10) placeRandomEnemy(board, 1, 1, gc, gr)
     if (level == 9 || level == 10) placeRandomStars(board, 1, 1, gc, gr, 3)
+    if (level == 11) placeRandomPortals(board, 1, 1, gc, gr)
     return board
+}
+
+private fun placeRandomPortals(board: Array<CharArray>, sc: Int, sr: Int, gc: Int, gr: Int) {
+    val n = board.size
+    val empties = mutableListOf<Pair<Int, Int>>()
+    for (r in 1 until n - 1) for (c in 1 until n - 1) {
+        if (board[r][c] != ' ') continue
+        if (c == sc && r == sr) continue
+        if (c == gc && r == gr) continue
+        empties.add(c to r)
+    }
+    if (empties.size < 2) return
+    empties.shuffle()
+    // 두 포털이 충분히 떨어지도록 거리 최대 쌍 선정 (간단히 첫 빈 셀과 그 셀에서 가장 먼 빈 셀)
+    val first = empties[0]
+    var bestSecond = empties[1]
+    var bestD = 0
+    for (e in empties.drop(1)) {
+        val d = kotlin.math.abs(e.first - first.first) + kotlin.math.abs(e.second - first.second)
+        if (d > bestD) { bestD = d; bestSecond = e }
+    }
+    board[first.second][first.first] = 'P'
+    board[bestSecond.second][bestSecond.first] = 'Q'
 }
 
 private fun placeRandomStars(board: Array<CharArray>, sc: Int, sr: Int, gc: Int, gr: Int, count: Int) {
@@ -219,7 +244,7 @@ private fun farthestCell(board: Array<CharArray>, sc: Int, sr: Int): Pair<Int, I
     return bestC to bestR
 }
 
-private enum class Tool { WALL, EMPTY, START, GOAL, ENEMY, STAR }
+private enum class Tool { WALL, EMPTY, START, GOAL, ENEMY, STAR, PORTAL }
 
 @Composable
 fun MazeEditorScreen(
@@ -228,12 +253,13 @@ fun MazeEditorScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 10)) }
+    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 11)) }
     var board by remember(level) { mutableStateOf(initialBoard(level)) }
     var tool by remember { mutableStateOf(Tool.WALL) }
     LaunchedEffect(level) {
         if (level != 8 && level != 10 && tool == Tool.ENEMY) tool = Tool.WALL
         if (level != 9 && level != 10 && tool == Tool.STAR) tool = Tool.WALL
+        if (level != 11 && tool == Tool.PORTAL) tool = Tool.WALL
     }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var previewMaze by remember { mutableStateOf<Maze?>(null) }
@@ -286,6 +312,26 @@ fun MazeEditorScreen(
                     }
                     if (starCount >= 5) return
                     newBoard[r][c] = '*'
+                }
+            }
+            Tool.PORTAL -> {
+                if (cur == 'S' || cur == 'G' || cur == 'E' || cur == '*' || cur == '#') return
+                if (cur == 'P' || cur == 'Q') {
+                    newBoard[r][c] = ' '
+                } else {
+                    var hasP = false
+                    var hasQ = false
+                    for (rr in 0 until n) for (cc in 0 until n) {
+                        when (newBoard[rr][cc]) {
+                            'P' -> hasP = true
+                            'Q' -> hasQ = true
+                        }
+                    }
+                    when {
+                        !hasP -> newBoard[r][c] = 'P'
+                        !hasQ -> newBoard[r][c] = 'Q'
+                        else -> return
+                    }
                 }
             }
         }
@@ -350,7 +396,7 @@ fun MazeEditorScreen(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                for (lv in 1..10) {
+                for (lv in 1..11) {
                     DifficultyPill(level = lv, selected = lv == level, onClick = { level = lv })
                 }
             }
@@ -368,6 +414,9 @@ fun MazeEditorScreen(
                 }
                 if (level == 9 || level == 10) {
                     ToolPill("별", tool == Tool.STAR) { tool = Tool.STAR }
+                }
+                if (level == 11) {
+                    ToolPill("포털", tool == Tool.PORTAL) { tool = Tool.PORTAL }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -521,6 +570,13 @@ private fun EditorGrid(
                         fill = GoalGold,
                         stroke = GoalGoldDeep
                     )
+                }
+                'P', 'Q' -> {
+                    drawRect(FloorTile, tl, sz)
+                    val center = Offset(tl.x + cs / 2f, tl.y + cs / 2f)
+                    drawCircle(color = Color(0xFFB060E0), radius = cs * 0.34f, center = center)
+                    drawCircle(color = Color(0xFF5236B5), radius = cs * 0.22f, center = center)
+                    drawCircle(color = Color(0xFFE6D2FF), radius = cs * 0.10f, center = center)
                 }
             }
             drawRect(

@@ -58,6 +58,12 @@ class BallPhysics(
         justImpacted = false
     }
 
+    /** Warp to the center of [col, row], keeping velocity and rotation. */
+    fun teleport(col: Int, row: Int) {
+        x = col + 0.5f
+        y = row + 0.5f
+    }
+
     /**
      * Advance the simulation by [dt] seconds with the given acceleration
      * (cells per second^2). Returns true if the ball reached the goal.
