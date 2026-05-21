@@ -15,6 +15,9 @@ import androidx.compose.runtime.setValue
 class ChaserController(
     private val maze: Maze,
     private val moveIntervalS: Float = 0.6f,
+    private val spawnIndex: Int = 0,
+    private val randomMove: Boolean = false,
+    private val randomSpawnMinDistance: Int = 0,
 ) {
     var col by mutableIntStateOf(0)
         private set
@@ -31,13 +34,16 @@ class ChaserController(
 
     fun reset() {
         val (c, r) = if (
+            spawnIndex == 0 &&
             maze.enemyCol in 0 until maze.cols &&
             maze.enemyRow in 0 until maze.rows &&
             maze.grid[maze.enemyRow][maze.enemyCol] != Cell.WALL
         ) {
             maze.enemyCol to maze.enemyRow
+        } else if (randomSpawnMinDistance > 0) {
+            randomSpawn(randomSpawnMinDistance)
         } else {
-            farthestFromStart()
+            nthFarthestFromStart(spawnIndex)
         }
         col = c
         row = r
@@ -46,17 +52,61 @@ class ChaserController(
         elapsedSinceMove = 0f
     }
 
+    private fun randomSpawn(minDistance: Int): Pair<Int, Int> {
+        val rows = maze.rows
+        val cols = maze.cols
+        val dist = Array(rows) { IntArray(cols) { -1 } }
+        val queue: MutableList<Pair<Int, Int>> = mutableListOf()
+        queue.add(maze.startCol to maze.startRow)
+        dist[maze.startRow][maze.startCol] = 0
+        val dirs = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
+        val candidates = mutableListOf<Pair<Int, Int>>()
+        while (queue.isNotEmpty()) {
+            val (c, r) = queue.removeAt(0)
+            if (dist[r][c] >= minDistance &&
+                !(c == maze.goalCol && r == maze.goalRow) &&
+                !(c == maze.startCol && r == maze.startRow)
+            ) {
+                candidates.add(c to r)
+            }
+            for ((dc, dr) in dirs) {
+                val nc = c + dc
+                val nr = r + dr
+                if (nc !in 0 until cols || nr !in 0 until rows) continue
+                if (dist[nr][nc] != -1) continue
+                if (maze.grid[nr][nc] == Cell.WALL) continue
+                dist[nr][nc] = dist[r][c] + 1
+                queue.add(nc to nr)
+            }
+        }
+        return if (candidates.isNotEmpty()) candidates.random()
+        else nthFarthestFromStart(0)
+    }
+
     fun tick(dt: Float, ballC: Int, ballR: Int) {
         elapsedSinceMove += dt
         if (elapsedSinceMove >= moveIntervalS) {
             elapsedSinceMove -= moveIntervalS
-            advanceTowards(ballC, ballR)
+            if (randomMove) advanceRandom() else advanceTowards(ballC, ballR)
         }
         val tx = col + 0.5f
         val ty = row + 0.5f
         val smooth = (dt * 6f).coerceIn(0f, 1f)
         visualX += (tx - visualX) * smooth
         visualY += (ty - visualY) * smooth
+    }
+
+    private fun advanceRandom() {
+        val dirs = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1).shuffled()
+        for ((dc, dr) in dirs) {
+            val nc = col + dc
+            val nr = row + dr
+            if (nc !in 0 until maze.cols || nr !in 0 until maze.rows) continue
+            if (maze.grid[nr][nc] == Cell.WALL) continue
+            col = nc
+            row = nr
+            return
+        }
     }
 
     private fun advanceTowards(ballC: Int, ballR: Int) {
@@ -97,6 +147,36 @@ class ChaserController(
             c = p.first
             r = p.second
         }
+    }
+
+    private fun nthFarthestFromStart(idx: Int): Pair<Int, Int> {
+        val rows = maze.rows
+        val cols = maze.cols
+        val dist = Array(rows) { IntArray(cols) { -1 } }
+        val queue: MutableList<Pair<Int, Int>> = mutableListOf()
+        queue.add(maze.startCol to maze.startRow)
+        dist[maze.startRow][maze.startCol] = 0
+        val dirs = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
+        val reachable = mutableListOf<Triple<Int, Int, Int>>()
+        while (queue.isNotEmpty()) {
+            val (c, r) = queue.removeAt(0)
+            for ((dc, dr) in dirs) {
+                val nc = c + dc
+                val nr = r + dr
+                if (nc !in 0 until cols || nr !in 0 until rows) continue
+                if (dist[nr][nc] != -1) continue
+                if (maze.grid[nr][nc] == Cell.WALL) continue
+                dist[nr][nc] = dist[r][c] + 1
+                reachable.add(Triple(nc, nr, dist[nr][nc]))
+                queue.add(nc to nr)
+            }
+        }
+        val filtered = reachable.filter { (c, r, _) ->
+            !(c == maze.goalCol && r == maze.goalRow)
+        }.sortedByDescending { it.third }
+        if (filtered.isEmpty()) return maze.goalCol to maze.goalRow
+        val pick = filtered[idx.coerceIn(0, filtered.size - 1)]
+        return pick.first to pick.second
     }
 
     private fun farthestFromStart(): Pair<Int, Int> {

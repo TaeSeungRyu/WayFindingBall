@@ -20,7 +20,8 @@ class RecordsRepository(context: Context) {
                             stageId = o.getInt("stageId"),
                             stageName = o.getString("stageName"),
                             elapsedMs = o.getLong("elapsedMs"),
-                            timestamp = o.getLong("timestamp")
+                            timestamp = o.getLong("timestamp"),
+                            cleared = if (o.has("cleared")) o.getInt("cleared") else 0
                         )
                     )
                 }
@@ -39,6 +40,7 @@ class RecordsRepository(context: Context) {
                     .put("stageName", r.stageName)
                     .put("elapsedMs", r.elapsedMs)
                     .put("timestamp", r.timestamp)
+                    .put("cleared", r.cleared)
             )
         }
         prefs.edit().putString(KEY, arr.toString()).apply()

@@ -6,13 +6,13 @@ object Routes {
     const val LEVEL_SELECT = "levels"
     const val STAGE_SELECT = "stages/{level}"
     const val GAME = "game/{stageId}"
-    const val RESULT = "result/{stageId}/{elapsed}/{caught}"
+    const val RESULT = "result/{stageId}/{elapsed}/{caught}/{clears}"
     const val RECORDS = "records"
     const val EDITOR = "editor/{level}"
 
     fun stages(level: Int) = "stages/$level"
     fun game(stageId: Int) = "game/$stageId"
-    fun result(stageId: Int, elapsedMs: Long, caught: Boolean = false) =
-        "result/$stageId/$elapsedMs/$caught"
+    fun result(stageId: Int, elapsedMs: Long, caught: Boolean = false, clears: Int = 0) =
+        "result/$stageId/$elapsedMs/$caught/$clears"
     fun editor(level: Int) = "editor/$level"
 }

@@ -94,7 +94,8 @@ private fun sizeForLevel(level: Int): Int = when (level) {
     9 -> 13
     10 -> 13
     11 -> 13
-    else -> 13
+    12 -> 13
+    else -> 25
 }
 
 private fun initialBoard(level: Int): Array<CharArray> {
@@ -255,8 +256,8 @@ fun MazeEditorScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 12)) }
-    var board by remember { mutableStateOf(initialBoard(initialLevel.coerceIn(1, 12))) }
+    var level by remember { mutableStateOf(initialLevel.coerceIn(1, 13)) }
+    var board by remember { mutableStateOf(initialBoard(initialLevel.coerceIn(1, 13))) }
     var tool by remember { mutableStateOf(Tool.WALL) }
     LaunchedEffect(level) {
         board = initialBoard(level)
@@ -399,7 +400,7 @@ fun MazeEditorScreen(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                for (lv in 1..12) {
+                for (lv in 1..13) {
                     DifficultyPill(level = lv, selected = lv == level, onClick = { level = lv })
                 }
             }

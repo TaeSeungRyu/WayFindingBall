@@ -246,6 +246,24 @@ private val GearTheme = MazeTheme(
     cloudOpacity = 0.7f
 )
 
+private val GoldenTheme = MazeTheme(
+    wallTop = Color(0xFFFFD24A),
+    wallMid = Color(0xFFD97742),
+    wallDeep = Color(0xFF6E3C1A),
+    wallAccent = Color(0xFFFFE99A),
+    floorTile = Color(0xFFFFF6D6),
+    floorTileAlt = Color(0xFFF4E2A8),
+    floorDetailDot = Color(0xFFBE8A40),
+    floorDetailSplotch = Color(0xFFE6CC88),
+    skyTop = Color(0xFFFFD0A6),
+    skyBottom = Color(0xFFFF8A54),
+    rockTop = Color(0xFFC4A07A),
+    rockBottom = Color(0xFF7B5A38),
+    flowerColors = listOf(Color(0xFFFFC1CC), Color(0xFFFFE066), Color(0xFFCDE7FF)),
+    flowerCenter = Color(0xFFFFE066),
+    cloudOpacity = 0.7f
+)
+
 fun themeForLevel(level: Int): MazeTheme = when (level) {
     1 -> GrassTheme
     2 -> IceTheme
@@ -258,5 +276,7 @@ fun themeForLevel(level: Int): MazeTheme = when (level) {
     9 -> MeadowTheme
     10 -> VoidTheme
     11 -> CosmicTheme
-    else -> GearTheme
+    12 -> GearTheme
+    13 -> GoldenTheme
+    else -> EmberTheme
 }

@@ -104,25 +104,47 @@ fun StageSelectScreen(
             Spacer(Modifier.height(12.dp))
             SectionHeader(level = level, difficulty = difficulty)
             Spacer(Modifier.height(8.dp))
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp + navBottom)
-            ) {
-                items(stages.chunked(3)) { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        row.forEach { stage ->
-                            StageCard(
-                                stage = stage,
-                                stars = starsByStage[stage.id] ?: 0,
-                                onClick = { onSelect(stage.id) },
-                                onLongClick = if (stage.isCustom) {
-                                    { deleteCandidate = stage }
-                                } else null,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        repeat(3 - row.size) {
-                            Spacer(Modifier.weight(1f))
+            if (level == 14) {
+                val firstStageId = stages.firstOrNull()?.id
+                val infinityBestRecord = RecordsRepository(context).load()
+                    .filter { it.stageId == firstStageId }
+                    .maxByOrNull { it.cleared }
+                stages.firstOrNull()?.let { stage ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        InfinityCard(
+                            stage = stage,
+                            bestMs = infinityBestRecord?.elapsedMs,
+                            bestClears = infinityBestRecord?.cleared ?: 0,
+                            onClick = { onSelect(stage.id) }
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp + navBottom)
+                ) {
+                    items(stages.chunked(3)) { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            row.forEach { stage ->
+                                StageCard(
+                                    stage = stage,
+                                    stars = starsByStage[stage.id] ?: 0,
+                                    onClick = { onSelect(stage.id) },
+                                    onLongClick = if (stage.isCustom) {
+                                        { deleteCandidate = stage }
+                                    } else null,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            repeat(3 - row.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -201,6 +223,60 @@ private fun SectionHeader(level: Int, difficulty: String) {
                 fontWeight = FontWeight.ExtraBold,
                 color = color
             )
+        }
+    }
+}
+
+@Composable
+private fun InfinityCard(
+    stage: Stage,
+    bestMs: Long?,
+    bestClears: Int = 0,
+    onClick: () -> Unit
+) {
+    val color = levelColor(stage.level)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .shadow(8.dp, RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(28.dp))
+            .background(color)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "∞",
+                color = Color.White,
+                fontSize = 72.sp,
+                fontWeight = FontWeight.Black
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "무한 도전",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.18f))
+                    .padding(horizontal = 18.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = if (bestClears > 0) "최고 기록  ${bestClears}단계" else "아직 기록 없어요",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
         }
     }
 }
@@ -363,7 +439,9 @@ fun levelColor(level: Int): Color = when (level) {
     9 -> Color(0xFF2E9D5C)
     10 -> Color(0xFF6B1A8A)
     11 -> Color(0xFF7A3FE0)
-    else -> Color(0xFF5C7080)
+    12 -> Color(0xFF5C7080)
+    13 -> Color(0xFFD97742)
+    else -> Color(0xFF111111)
 }
 
 fun stageColor(id: Int): Color {

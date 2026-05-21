@@ -60,31 +60,40 @@ fun ResultScreen(
     stageId: Int,
     elapsedMs: Long,
     caught: Boolean = false,
+    clears: Int = 0,
     onRetry: () -> Unit,
     onHome: () -> Unit
 ) {
     val context = LocalContext.current
     val stage = remember(stageId) { Stages.byId(stageId) }
+    val isInfinite = stage.level == 14
     val earnedStars = remember(stageId, elapsedMs, caught) {
-        if (caught) 0 else MazePar.starsFor(stage, elapsedMs)
+        if (caught || isInfinite) 0 else MazePar.starsFor(stage, elapsedMs)
     }
-    val previousBest = remember(stageId) {
-        RecordsRepository(context).load()
-            .filter { it.stageId == stageId }
-            .minByOrNull { it.elapsedMs }
-            ?.elapsedMs
+    // 무한 모드는 "더 많은 단계를 통과할수록" 좋음 → cleared max. 일반 모드는 "빠를수록" 좋음 → elapsedMs min.
+    val previousBestRecord = remember(stageId) {
+        val records = RecordsRepository(context).load().filter { it.stageId == stageId }
+        if (isInfinite) records.maxByOrNull { it.cleared }
+        else records.minByOrNull { it.elapsedMs }
     }
-    val isNewBest = !caught && (previousBest == null || elapsedMs < previousBest)
+    val previousBest = previousBestRecord?.elapsedMs
+    val previousBestClears = previousBestRecord?.cleared ?: 0
+    val isNewBest = when {
+        isInfinite -> clears > previousBestClears
+        caught -> false
+        else -> previousBest == null || elapsedMs < previousBest
+    }
 
     LaunchedEffect(stageId, elapsedMs, caught) {
-        if (caught) return@LaunchedEffect
+        if (caught && !isInfinite) return@LaunchedEffect
         val repo = RecordsRepository(context)
         repo.add(
             GameRecord(
                 stageId = stage.id,
                 stageName = stage.name,
                 elapsedMs = elapsedMs,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                cleared = clears
             )
         )
     }
@@ -116,32 +125,48 @@ fun ResultScreen(
                     center = center,
                     outerR = size.minDimension * 0.45f,
                     innerR = size.minDimension * 0.2f,
-                    fill = if (caught) InkSoft else GoalGold,
-                    stroke = if (caught) InkDark else GoalGoldDeep
+                    fill = if (caught && !isInfinite) InkSoft else GoalGold,
+                    stroke = if (caught && !isInfinite) InkDark else GoalGoldDeep
                 )
             }
             Spacer(Modifier.height(20.dp))
             Text(
-                text = if (caught) "사로잡혔어요" else "참 잘했어요!",
+                text = when {
+                    isInfinite -> "끝까지 버텼어요!"
+                    caught -> "사로잡혔어요"
+                    else -> "참 잘했어요!"
+                },
                 fontSize = 40.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = if (caught) CoralPink else InkDark
+                color = if (caught && !isInfinite) CoralPink else InkDark
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = if (caught) "${stage.name}에서 잡혔어요" else "${stage.name} 도착!",
+                text = when {
+                    isInfinite -> "오래 살아남았어요"
+                    caught -> "${stage.name}에서 잡혔어요"
+                    else -> "${stage.name} 도착!"
+                },
                 fontSize = 16.sp,
                 color = InkSoft,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(18.dp))
-            BigStarsRow(stars = earnedStars)
+            if (!isInfinite) BigStarsRow(stars = earnedStars)
             if (isNewBest) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "★ 최고 기록! ★",
+                    text = if (isInfinite) "★ 최고 기록! ★" else "★ 최고 기록! ★",
                     fontSize = 14.sp,
                     color = CoralPink,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            } else if (isInfinite && previousBestClears > 0) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "최고 기록  ${previousBestClears}단계",
+                    fontSize = 14.sp,
+                    color = InkSoft,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
@@ -156,10 +181,10 @@ fun ResultScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("걸린 시간", color = InkSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (isInfinite) "도달 단계" else "걸린 시간", color = InkSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = formatElapsed(elapsedMs),
+                        text = if (isInfinite) "${clears}단계" else formatElapsed(elapsedMs),
                         color = CoralPink,
                         fontSize = 44.sp,
                         fontWeight = FontWeight.Black

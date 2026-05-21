@@ -58,6 +58,7 @@ import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.Cell
 import com.rts.rys.ryy.wayfinding.game.ChaserController
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
+import com.rts.rys.ryy.wayfinding.game.generateRandomMaze
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MovingGoalController
 import com.rts.rys.ryy.wayfinding.game.RotatingMazeController
@@ -98,29 +99,35 @@ private const val KEYPAD_MAX_SPEED = 14f
 @Composable
 fun GameScreen(
     stage: Stage,
-    onFinished: (elapsedMs: Long, caught: Boolean) -> Unit,
+    onFinished: (elapsedMs: Long, caught: Boolean, clears: Int) -> Unit,
     onExit: () -> Unit
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     var attemptId by remember(stage.id) { mutableIntStateOf(0) }
-    val workingMaze = remember(stage.id, attemptId) {
-        val src = stage.maze
-        val grid = Array(src.rows) { r -> src.grid[r].copyOf() }
-        Maze(src.cols, src.rows, grid).also {
-            it.enemyCol = src.enemyCol
-            it.enemyRow = src.enemyRow
-            it.stars = src.stars
-            it.portalA = src.portalA
-            it.portalB = src.portalB
+    var infiniteRound by remember(stage.id) { mutableIntStateOf(0) }
+    val isInfinite = stage.level == 14
+    val workingMaze = remember(stage.id, attemptId, infiniteRound) {
+        if (isInfinite) {
+            generateRandomMaze(13)
+        } else {
+            val src = stage.maze
+            val grid = Array(src.rows) { r -> src.grid[r].copyOf() }
+            Maze(src.cols, src.rows, grid).also {
+                it.enemyCol = src.enemyCol
+                it.enemyRow = src.enemyRow
+                it.stars = src.stars
+                it.portalA = src.portalA
+                it.portalB = src.portalB
+            }
         }
     }
-    var portalCooldown by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
-    val physics = remember(stage.id, attemptId) { BallPhysics(workingMaze) }
-    val dynamicMaze = remember(stage.id, attemptId) {
-        if (stage.level in 5..12) DynamicMazeController(workingMaze) else null
+    var portalCooldown by remember(stage.id, attemptId, infiniteRound) { mutableFloatStateOf(0f) }
+    val physics = remember(stage.id, attemptId, infiniteRound) { BallPhysics(workingMaze) }
+    val dynamicMaze = remember(stage.id, attemptId, infiniteRound) {
+        if (stage.level in 5..13 || isInfinite) DynamicMazeController(workingMaze) else null
     }
-    val rotatingMaze = remember(stage.id, attemptId) {
+    val rotatingMaze = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level == 12) RotatingMazeController(workingMaze) { m ->
             val bc = floor(physics.x).toInt()
             val br = floor(physics.y).toInt()
@@ -130,13 +137,24 @@ fun GameScreen(
             physics.setPositionAndStop(nc, nr)
         } else null
     }
-    val movingGoal = remember(stage.id, attemptId) {
+    val movingGoal = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level == 6 || stage.level == 10 || stage.level == 12) MovingGoalController(workingMaze) else null
     }
-    val chaser = remember(stage.id, attemptId) {
-        if (stage.level == 8 || stage.level == 10) ChaserController(workingMaze) else null
+    val chasers = remember(stage.id, attemptId, infiniteRound) {
+        when {
+            isInfinite -> List(infiniteRound + 1) { i ->
+                ChaserController(
+                    workingMaze,
+                    spawnIndex = i,
+                    randomMove = true,
+                    randomSpawnMinDistance = 6
+                )
+            }
+            stage.level == 8 || stage.level == 10 -> listOf(ChaserController(workingMaze))
+            else -> emptyList()
+        }
     }
-    val starsCtrl = remember(stage.id, attemptId) {
+    val starsCtrl = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level == 9 || stage.level == 10) StarsController(workingMaze) else null
     }
     val isDarkLevel = stage.level == 7
@@ -157,6 +175,7 @@ fun GameScreen(
     var ballSquash by remember(stage.id) { mutableFloatStateOf(0f) }
     var ballSquashIsX by remember(stage.id) { mutableStateOf(false) }
     var elapsedMs by remember(stage.id) { mutableLongStateOf(0L) }
+    var totalInfiniteMs by remember(stage.id, attemptId) { mutableLongStateOf(0L) }
     var finished by remember(stage.id) { mutableStateOf(false) }
     var paused by remember(stage.id) { mutableStateOf(false) }
 
@@ -178,7 +197,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..12
+    val bombEnabled = stage.level in 6..14
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -237,7 +256,7 @@ fun GameScreen(
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(stage.id, attemptId) {
+    LaunchedEffect(stage.id, attemptId, infiniteRound) {
         physics.reset()
         ballX = physics.x
         ballY = physics.y
@@ -263,7 +282,11 @@ fun GameScreen(
             if (paused && !celebrating) { last = 0L; continue }
             if (last == 0L) { last = now; continue }
             val dt = ((now - last).coerceAtMost(33_000_000L)) / 1_000_000_000f
-            if (!celebrating) accumulatedMs += ((now - last) / 1_000_000L)
+            if (!celebrating) {
+                val deltaMs = (now - last) / 1_000_000L
+                accumulatedMs += deltaMs
+                if (isInfinite) totalInfiniteMs += deltaMs
+            }
             last = now
 
             if (!celebrating) {
@@ -333,16 +356,25 @@ fun GameScreen(
                     }
                     if (!starsCtrl.allCollected) reached = false
                 }
-                if (chaser != null) {
-                    chaser.tick(dt, floor(physics.x).toInt(), floor(physics.y).toInt())
-                    val dxc = physics.x - chaser.visualX
-                    val dyc = physics.y - chaser.visualY
-                    if (dxc * dxc + dyc * dyc < 0.55f * 0.55f && !reached && !finished) {
-                        finished = true
-                        shakeMs = 0.3f
-                        SoundManager.playBonk()
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        onFinished(elapsedMs, true)
+                if (chasers.isNotEmpty()) {
+                    val bc = floor(physics.x).toInt()
+                    val br = floor(physics.y).toInt()
+                    for (ch in chasers) {
+                        ch.tick(dt, bc, br)
+                        val dxc = physics.x - ch.visualX
+                        val dyc = physics.y - ch.visualY
+                        if (dxc * dxc + dyc * dyc < 0.55f * 0.55f && !reached && !finished) {
+                            finished = true
+                            shakeMs = 0.3f
+                            SoundManager.playBonk()
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            onFinished(
+                                if (isInfinite) totalInfiniteMs else elapsedMs,
+                                true,
+                                if (isInfinite) infiniteRound + 1 else 0
+                            )
+                            break
+                        }
                     }
                 }
                 if (physics.justImpacted && !reached) {
@@ -381,6 +413,12 @@ fun GameScreen(
                     trailPositions.removeAt(trailPositions.size - 1)
                 }
 
+                if (reached && isInfinite && !finished) {
+                    SoundManager.playGoal()
+                    flashAlpha = 0.6f
+                    infiniteRound++
+                    break
+                }
                 if (reached && !celebrating) {
                     celebrating = true
                     SoundManager.playGoal()
@@ -475,7 +513,7 @@ fun GameScreen(
                 ballScale = (1f - celebrationTimer / 0.45f).coerceIn(0f, 1f)
                 if (celebrationTimer >= 0.75f) {
                     finished = true
-                    onFinished(elapsedMs, false)
+                    onFinished(elapsedMs, false, 0)
                 }
             }
         }
@@ -506,7 +544,7 @@ fun GameScreen(
                     modifier = Modifier.align(Alignment.CenterStart)
                 )
                 Text(
-                    text = stage.name,
+                    text = if (isInfinite) "무한 도전 · 통과 $infiniteRound" else stage.name,
                     color = InkDark,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
@@ -524,7 +562,7 @@ fun GameScreen(
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = formatElapsed(elapsedMs),
+                        text = formatElapsed(if (isInfinite) totalInfiniteMs else elapsedMs),
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold
@@ -711,21 +749,23 @@ fun GameScreen(
                         }
                     }
                 }
-                if (chaser != null) {
+                if (chasers.isNotEmpty()) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
                         val ox = (size.width - cs * workingMaze.cols) / 2f
                         val oy = (size.height - cs * workingMaze.rows) / 2f
-                        val cx = ox + chaser.visualX * cs
-                        val cy = oy + chaser.visualY * cs
                         val br = cs * 0.38f
-                        drawCircle(color = Color(0xFF1A0606), radius = br * 1.05f, center = Offset(cx, cy))
-                        drawCircle(color = Color(0xFF6B1A0A), radius = br * 0.85f, center = Offset(cx, cy))
-                        val eyeR = br * 0.18f
-                        drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(cx - br * 0.32f, cy - br * 0.15f))
-                        drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(cx + br * 0.32f, cy - br * 0.15f))
-                        drawCircle(color = Color.Black, radius = eyeR * 0.45f, center = Offset(cx - br * 0.32f, cy - br * 0.15f))
-                        drawCircle(color = Color.Black, radius = eyeR * 0.45f, center = Offset(cx + br * 0.32f, cy - br * 0.15f))
+                        for (ch in chasers) {
+                            val cx = ox + ch.visualX * cs
+                            val cy = oy + ch.visualY * cs
+                            drawCircle(color = Color(0xFF1A0606), radius = br * 1.05f, center = Offset(cx, cy))
+                            drawCircle(color = Color(0xFF6B1A0A), radius = br * 0.85f, center = Offset(cx, cy))
+                            val eyeR = br * 0.18f
+                            drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(cx - br * 0.32f, cy - br * 0.15f))
+                            drawCircle(color = Color(0xFFFFD24A), radius = eyeR, center = Offset(cx + br * 0.32f, cy - br * 0.15f))
+                            drawCircle(color = Color.Black, radius = eyeR * 0.45f, center = Offset(cx - br * 0.32f, cy - br * 0.15f))
+                            drawCircle(color = Color.Black, radius = eyeR * 0.45f, center = Offset(cx + br * 0.32f, cy - br * 0.15f))
+                        }
                     }
                 }
                 EffectsOverlay(
