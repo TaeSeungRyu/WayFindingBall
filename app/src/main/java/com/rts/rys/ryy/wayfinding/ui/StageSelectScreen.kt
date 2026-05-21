@@ -104,7 +104,7 @@ fun StageSelectScreen(
             Spacer(Modifier.height(12.dp))
             SectionHeader(level = level, difficulty = difficulty)
             Spacer(Modifier.height(8.dp))
-            if (level == 14 || level == 15) {
+            if (level == 14 || level == 15 || level == 16) {
                 val firstStageId = stages.firstOrNull()?.id
                 val infinityBestRecord = RecordsRepository(context).load()
                     .filter { it.stageId == firstStageId }
@@ -121,7 +121,11 @@ fun StageSelectScreen(
                             bestMs = infinityBestRecord?.elapsedMs,
                             bestClears = infinityBestRecord?.cleared ?: 0,
                             showTime = false,
-                            title = if (level == 15) "생존 모드" else "무한 도전",
+                            title = when (level) {
+                                15 -> "생존 모드"
+                                16 -> "얼음 미로"
+                                else -> "무한 도전"
+                            },
                             onClick = { onSelect(stage.id) }
                         )
                     }
@@ -451,7 +455,8 @@ fun levelColor(level: Int): Color = when (level) {
     12 -> Color(0xFF5C7080)
     13 -> Color(0xFFD97742)
     14 -> Color(0xFF111111)
-    else -> Color(0xFF7B0E0E)
+    15 -> Color(0xFF7B0E0E)
+    else -> Color(0xFF4FA8D8)
 }
 
 fun stageColor(id: Int): Color {

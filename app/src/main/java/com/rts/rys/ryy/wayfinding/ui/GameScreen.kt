@@ -41,7 +41,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -108,9 +111,10 @@ fun GameScreen(
     var infiniteRound by remember(stage.id) { mutableIntStateOf(0) }
     val isInfiniteClears = stage.level == 14
     val isSurvival = stage.level == 15
-    val isInfinite = isInfiniteClears || isSurvival
+    val isIce = stage.level == 16
+    val isInfinite = isInfiniteClears || isSurvival || isIce
     val workingMaze = remember(stage.id, attemptId, infiniteRound) {
-        if (isInfiniteClears) {
+        if (isInfiniteClears || isIce) {
             generateRandomMaze(13)
         } else if (isSurvival) {
             generateRandomMaze(21)
@@ -127,7 +131,9 @@ fun GameScreen(
         }
     }
     var portalCooldown by remember(stage.id, attemptId, infiniteRound) { mutableFloatStateOf(0f) }
-    val physics = remember(stage.id, attemptId, infiniteRound) { BallPhysics(workingMaze) }
+    val physics = remember(stage.id, attemptId, infiniteRound) {
+        BallPhysics(workingMaze, friction = if (isIce) 0.3f else 1.8f)
+    }
     val dynamicMaze = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level in 5..13 || isInfinite) DynamicMazeController(workingMaze) else null
     }
@@ -159,6 +165,11 @@ fun GameScreen(
         mutableStateListOf<ChaserController>().apply { addAll(initial) }
     }
     var nextEnemySpawnIn by remember(stage.id, attemptId) { mutableFloatStateOf(10f) }
+    val storms = remember(stage.id, attemptId, infiniteRound) {
+        mutableStateListOf<Pair<Int, Int>>()
+    }
+    var stormTimer by remember(stage.id, attemptId, infiniteRound) { mutableFloatStateOf(0f) }
+    var stormPhase by remember(stage.id, attemptId, infiniteRound) { mutableFloatStateOf(0f) }
     val starsCtrl = remember(stage.id, attemptId, infiniteRound) {
         if (stage.level == 9 || stage.level == 10) StarsController(workingMaze) else null
     }
@@ -202,7 +213,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..15
+    val bombEnabled = stage.level in 6..16
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -310,8 +321,8 @@ fun GameScreen(
                 val sx = if (sensorEnabled) ((tilt.tiltX - offX) * sensitivity).coerceIn(-1f, 1f) else 0f
                 val sy = if (sensorEnabled) ((tilt.tiltY - offY) * sensitivity).coerceIn(-1f, 1f) else 0f
                 val useKeypad = kx != 0f || ky != 0f
-                val ax: Float
-                val ay: Float
+                var ax: Float
+                var ay: Float
                 if (useKeypad) {
                     ax = kx * KEYPAD_ACCEL_GAIN
                     ay = ky * KEYPAD_ACCEL_GAIN
@@ -320,6 +331,15 @@ fun GameScreen(
                     ax = sx * SENSOR_ACCEL_GAIN
                     ay = sy * SENSOR_ACCEL_GAIN
                     physics.maxSpeed = if (sensorEnabled) SENSOR_MAX_SPEED else KEYPAD_MAX_SPEED
+                }
+                // 16단계 눈폭풍 (phase 15s~19s): 가속도/최대속도 둘 다 크게 감소
+                if (isIce) {
+                    val phaseInLoop = accumulatedMs % 20000L
+                    if (phaseInLoop in 15000L..19999L) {
+                        ax *= 0.25f
+                        ay *= 0.25f
+                        physics.maxSpeed *= 0.25f
+                    }
                 }
 
                 var reached = physics.step(dt, ax, ay)
@@ -369,6 +389,49 @@ fun GameScreen(
                         }
                     }
                     if (!starsCtrl.allCollected) reached = false
+                }
+                if (isIce) {
+                    stormTimer -= dt
+                    stormPhase += dt
+                    if (stormTimer <= 0f || storms.isEmpty()) {
+                        storms.clear()
+                        val bc = floor(physics.x).toInt()
+                        val br = floor(physics.y).toInt()
+                        val maxC = (workingMaze.cols - 3).coerceAtLeast(1)
+                        val maxR = (workingMaze.rows - 3).coerceAtLeast(1)
+                        val count = (3..6).random()
+                        repeat(count) {
+                            var tries = 0
+                            var nc: Int
+                            var nr: Int
+                            do {
+                                nc = (1..maxC).random()
+                                nr = (1..maxR).random()
+                                tries++
+                                val cx = nc + 1
+                                val cy = nr + 1
+                                if (abs(cx - bc) + abs(cy - br) >= 4) break
+                            } while (tries < 20)
+                            storms.add(nc to nr)
+                        }
+                        stormTimer = 7f
+                    }
+                    // 첫 2초 = 예고 (충돌 X), 그 후 5초 = 활성 (충돌 O)
+                    val isStormActive = stormTimer < 5f
+                    if (isStormActive) {
+                        val bc = floor(physics.x).toInt()
+                        val br = floor(physics.y).toInt()
+                        for ((sc, sr) in storms) {
+                            if (bc in sc..(sc + 1) && br in sr..(sr + 1) && !reached && !finished) {
+                                finished = true
+                                shakeMs = 0.3f
+                                SoundManager.playBonk()
+                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                onFinished(totalInfiniteMs, true, infiniteRound + 1)
+                                break
+                            }
+                        }
+                    }
                 }
                 if (isSurvival) {
                     nextEnemySpawnIn -= dt
@@ -579,6 +642,7 @@ fun GameScreen(
                     text = when {
                         isInfiniteClears -> "무한 도전 · 통과 $infiniteRound"
                         isSurvival -> "생존 모드 · 적 ${chasers.size}"
+                        isIce -> "얼음 미로 · 통과 $infiniteRound"
                         else -> stage.name
                     },
                     color = InkDark,
@@ -785,6 +849,58 @@ fun GameScreen(
                         }
                     }
                 }
+                if (isIce && storms.isNotEmpty()) {
+                    val isStormActive = stormTimer < 5f
+                    val previewAlpha = ((7f - stormTimer) / 2f).coerceIn(0f, 1f)
+                    val canvasAlpha = if (isStormActive) 1f else previewAlpha
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                        val ox = (size.width - cs * workingMaze.cols) / 2f
+                        val oy = (size.height - cs * workingMaze.rows) / 2f
+                        val radius = cs * 1.05f
+                        for ((sc, sr) in storms) {
+                            val centerX = ox + (sc + 1f) * cs
+                            val centerY = oy + (sr + 1f) * cs
+                            drawCircle(
+                                color = Color(0xFF3D708F).copy(alpha = 0.55f * canvasAlpha),
+                                radius = radius,
+                                center = Offset(centerX, centerY)
+                            )
+                            val swirlPath = Path()
+                            val turns = 2
+                            val steps = 60
+                            for (i in 0..steps) {
+                                val t = i / steps.toFloat()
+                                val angle = stormPhase * 2.5f + t * Math.PI.toFloat() * 2f * turns
+                                val r = radius * (0.15f + 0.75f * t)
+                                val x = centerX + r * cos(angle)
+                                val y = centerY + r * sin(angle)
+                                if (i == 0) swirlPath.moveTo(x, y) else swirlPath.lineTo(x, y)
+                            }
+                            drawPath(
+                                path = swirlPath,
+                                color = Color(0xFFE0F4FF).copy(alpha = 0.85f * canvasAlpha),
+                                style = Stroke(
+                                    width = radius * 0.16f,
+                                    cap = StrokeCap.Round,
+                                    join = StrokeJoin.Round
+                                )
+                            )
+                            val flakeCount = 5
+                            for (i in 0 until flakeCount) {
+                                val a = stormPhase * 1.5f + i * (2f * Math.PI.toFloat() / flakeCount)
+                                val fr = radius * 0.75f
+                                val fx = centerX + fr * cos(a)
+                                val fy = centerY + fr * sin(a)
+                                drawCircle(
+                                    color = Color.White.copy(alpha = 0.85f * canvasAlpha),
+                                    radius = radius * 0.10f,
+                                    center = Offset(fx, fy)
+                                )
+                            }
+                        }
+                    }
+                }
                 if (chasers.isNotEmpty()) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
@@ -845,6 +961,36 @@ fun GameScreen(
                             ),
                             size = size
                         )
+                    }
+                }
+                if (isIce && spotlightAlpha > 0f) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val alpha = spotlightAlpha
+                        // 흰 안개 배경
+                        drawRect(
+                            color = Color.White.copy(alpha = 0.45f * alpha),
+                            size = size
+                        )
+                        // 휘몰아치는 눈송이 입자
+                        val now = elapsedMs / 1000f
+                        val particleCount = 80
+                        for (i in 0 until particleCount) {
+                            val seed = (i * 73 + 11).toFloat()
+                            val baseX = ((seed * 0.6543f) % 1f + 1f) % 1f
+                            val baseY = ((seed * 0.7891f) % 1f + 1f) % 1f
+                            val speedY = 0.35f + ((seed * 0.4567f) % 1f) * 0.5f
+                            val wind = 0.18f * sin(now * 0.6f + i * 0.3f)
+                            val xRaw = baseX + now * 0.08f + wind
+                            val yRaw = baseY + now * speedY
+                            val x = ((xRaw % 1f + 1f) % 1f) * size.width
+                            val y = ((yRaw % 1f + 1f) % 1f) * size.height
+                            val radius = 2.5f + (i % 4)
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.9f * alpha),
+                                radius = radius,
+                                center = Offset(x, y)
+                            )
+                        }
                     }
                 }
                 if (bombEnabled) {
@@ -926,7 +1072,7 @@ fun GameScreen(
                         val pulse = 1f + 0.30f * (1f - secFrac)
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "🌑 곧 깜깜!",
+                                text = if (isIce) "곧 눈폭풍!" else "🌑 곧 깜깜!",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = CoralPink
