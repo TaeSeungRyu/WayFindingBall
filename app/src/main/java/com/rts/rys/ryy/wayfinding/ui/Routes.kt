@@ -8,6 +8,7 @@ object Routes {
     const val GAME = "game/{stageId}"
     const val RESULT = "result/{stageId}/{elapsed}/{caught}/{clears}"
     const val RECORDS = "records"
+    const val COLLECTION = "collection"
     const val EDITOR = "editor/{level}"
 
     fun stages(level: Int) = "stages/$level"

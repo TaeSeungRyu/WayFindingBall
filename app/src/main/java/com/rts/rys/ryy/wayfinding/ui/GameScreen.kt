@@ -55,7 +55,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.rts.rys.ryy.wayfinding.data.AchievementsRepository
 import com.rts.rys.ryy.wayfinding.data.AppSettings
+import com.rts.rys.ryy.wayfinding.data.BallSkins
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.Cell
@@ -209,6 +211,7 @@ fun GameScreen(
     val isDarkLevel = stage.level == 7
     val tilt = remember { TiltSensor(context) }
     val theme = remember(stage.level) { themeForLevel(stage.level) }
+    val currentSkin = remember { BallSkins.byId(AchievementsRepository(context).loadCurrentSkinId()) }
 
     val sensorEnabled by AppSettings.sensorEnabled
 
@@ -826,6 +829,7 @@ fun GameScreen(
                     isHappy = celebrating,
                     surpriseLevel = (surpriseTimer / 0.5f).coerceIn(0f, 1f),
                     theme = theme,
+                    ballSkin = currentSkin,
                     modifier = Modifier.fillMaxSize()
                 )
                 if (dynamicMaze != null) {

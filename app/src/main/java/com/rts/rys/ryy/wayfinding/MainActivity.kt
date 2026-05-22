@@ -21,6 +21,7 @@ import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.Stages
+import com.rts.rys.ryy.wayfinding.ui.CollectionScreen
 import com.rts.rys.ryy.wayfinding.ui.GameScreen
 import com.rts.rys.ryy.wayfinding.ui.HomeScreen
 import com.rts.rys.ryy.wayfinding.ui.LevelSelectScreen
@@ -81,7 +82,8 @@ fun MazeApp() {
             HomeScreen(
                 onStart = { navController.navigate(Routes.LEVEL_SELECT) },
                 onRecords = { navController.navigate(Routes.RECORDS) },
-                onCreate = { navController.navigate(Routes.editor(1)) }
+                onCreate = { navController.navigate(Routes.editor(1)) },
+                onCollection = { navController.navigate(Routes.COLLECTION) }
             )
         }
         composable(Routes.LEVEL_SELECT) {
@@ -153,6 +155,9 @@ fun MazeApp() {
         }
         composable(Routes.RECORDS) {
             RecordsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.COLLECTION) {
+            CollectionScreen(onBack = { navController.popBackStack() })
         }
         composable(
             route = Routes.EDITOR,

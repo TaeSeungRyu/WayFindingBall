@@ -22,11 +22,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import com.rts.rys.ryy.wayfinding.game.Cell
+import com.rts.rys.ryy.wayfinding.data.BallSkin
+import com.rts.rys.ryy.wayfinding.data.BallSkins
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MazeTheme
 import com.rts.rys.ryy.wayfinding.game.themeForLevel
-import com.rts.rys.ryy.wayfinding.ui.theme.BallRed
-import com.rts.rys.ryy.wayfinding.ui.theme.BallRedDeep
 import com.rts.rys.ryy.wayfinding.ui.theme.FloorTile
 import com.rts.rys.ryy.wayfinding.ui.theme.FloorTileAlt
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
@@ -52,6 +52,7 @@ fun MazeCanvas(
     isHappy: Boolean = false,
     surpriseLevel: Float = 0f,
     theme: MazeTheme = themeForLevel(1),
+    ballSkin: BallSkin = BallSkins.DEFAULT,
     modifier: Modifier = Modifier
 ) {
     val infinite = rememberInfiniteTransition(label = "maze")
@@ -85,12 +86,12 @@ fun MazeCanvas(
     Canvas(modifier = modifier) {
         drawMaze(maze, theme)
         drawGoal(maze, goalPulse, rayRotation, sparkleTime)
-        if (trail.isNotEmpty() && ballScale > 0f) drawTrail(maze, trail)
-        if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale, headingRad, isHappy, surpriseLevel)
+        if (trail.isNotEmpty() && ballScale > 0f) drawTrail(maze, trail, ballSkin)
+        if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale, headingRad, isHappy, surpriseLevel, ballSkin)
     }
 }
 
-private fun DrawScope.drawTrail(maze: Maze, trail: List<androidx.compose.ui.geometry.Offset>) {
+private fun DrawScope.drawTrail(maze: Maze, trail: List<androidx.compose.ui.geometry.Offset>, skin: BallSkin) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
     val r = cs * 0.36f
@@ -100,7 +101,7 @@ private fun DrawScope.drawTrail(maze: Maze, trail: List<androidx.compose.ui.geom
         val alpha = (1f - frac) * 0.35f
         val rr = r * (1f - frac * 0.4f)
         drawCircle(
-            color = BallRed.copy(alpha = alpha),
+            color = skin.trailColor.copy(alpha = alpha),
             center = Offset(origin.x + pos.x * cs, origin.y + pos.y * cs),
             radius = rr
         )
@@ -432,7 +433,8 @@ private fun DrawScope.drawBall(
     ballScale: Float = 1f,
     headingRad: Float = 0f,
     isHappy: Boolean = false,
-    surpriseLevel: Float = 0f
+    surpriseLevel: Float = 0f,
+    skin: BallSkin = BallSkins.DEFAULT
 ) {
     val cs = cellSize(maze)
     val origin = originOffset(maze, cs)
@@ -459,7 +461,7 @@ private fun DrawScope.drawBall(
         // 본체 — 고정 광원(라디얼 그라데이션)
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(Color.White, BallRed, BallRedDeep),
+                colors = listOf(Color.White, skin.coreColor, skin.deepColor),
                 center = Offset(cx - r * 0.35f, cy - r * 0.4f),
                 radius = r * 1.5f
             ),
@@ -470,7 +472,7 @@ private fun DrawScope.drawBall(
         // 회전 표면 마커 — 굴러가는 느낌
         val rotDeg = rotation * 180f / Math.PI.toFloat()
         rotate(degrees = rotDeg, pivot = Offset(cx, cy)) {
-            val markerColor = BallRedDeep.copy(alpha = 0.55f)
+            val markerColor = skin.deepColor.copy(alpha = 0.55f)
             val markerR = r * 0.16f
             val orbit = r * 0.55f
             // 4개의 점을 십자로 배치 → 회전이 한눈에 보임
@@ -480,7 +482,7 @@ private fun DrawScope.drawBall(
             drawCircle(markerColor, markerR, Offset(cx, cy - orbit))
             // 한 점만 더 진하게 → 회전 추적을 더 쉽게
             drawCircle(
-                color = BallRedDeep.copy(alpha = 0.85f),
+                color = skin.deepColor.copy(alpha = 0.85f),
                 radius = markerR * 1.1f,
                 center = Offset(cx + orbit, cy)
             )
@@ -495,7 +497,7 @@ private fun DrawScope.drawBall(
 
         // 외곽선
         drawCircle(
-            color = BallRedDeep,
+            color = skin.deepColor,
             center = Offset(cx, cy),
             radius = r,
             style = Stroke(width = 2f)

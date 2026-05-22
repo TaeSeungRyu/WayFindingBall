@@ -21,11 +21,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -39,6 +48,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.data.AchievementsRepository
+import com.rts.rys.ryy.wayfinding.data.Badge
+import com.rts.rys.ryy.wayfinding.data.Badges
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
 import com.rts.rys.ryy.wayfinding.game.MazePar
@@ -83,6 +95,8 @@ fun ResultScreen(
         else -> previousBest == null || elapsedMs < previousBest
     }
 
+    var newBadges by remember { mutableStateOf<List<Badge>>(emptyList()) }
+
     LaunchedEffect(stageId, elapsedMs, caught) {
         if (caught && !isInfinite) return@LaunchedEffect
         val repo = RecordsRepository(context)
@@ -95,6 +109,24 @@ fun ResultScreen(
                 cleared = clears
             )
         )
+        // 새로 해제된 배지 평가
+        val updatedRecords = repo.load()
+        val customCount = Stages.customStages.value.size
+        val current = Badges.evaluate(updatedRecords, customCount)
+        val achRepo = AchievementsRepository(context)
+        val saved = achRepo.loadUnlockedBadges()
+        val freshly = current - saved
+        if (freshly.isNotEmpty()) {
+            achRepo.saveUnlockedBadges(saved + freshly)
+            newBadges = freshly.mapNotNull { Badges.byId(it) }
+        }
+    }
+
+    LaunchedEffect(newBadges) {
+        if (newBadges.isNotEmpty()) {
+            delay(3500)
+            newBadges = emptyList()
+        }
     }
 
     val infinite = rememberInfiniteTransition(label = "result")
@@ -114,6 +146,15 @@ fun ResultScreen(
             .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
             .padding(24.dp)
     ) {
+        AnimatedVisibility(
+            visible = newBadges.isNotEmpty(),
+            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            NewBadgeBanner(badges = newBadges)
+        }
+
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -215,6 +256,47 @@ private fun BigStarsRow(stars: Int) {
                 fontSize = 42.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = if (i <= stars) GoalGold else InkSoft.copy(alpha = 0.3f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun NewBadgeBanner(badges: List<Badge>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(8.dp, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.White)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val main = badges.first()
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color(main.colorArgb)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(main.emoji, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = if (badges.size == 1) "🎉 새 배지를 얻었어요!" else "🎉 새 배지 ${badges.size}개!",
+                color = InkSoft,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (badges.size == 1) main.title else badges.joinToString(", ") { it.title },
+                color = InkDark,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1
             )
         }
     }

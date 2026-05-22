@@ -43,7 +43,8 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
 fun HomeScreen(
     onStart: () -> Unit,
     onRecords: () -> Unit,
-    onCreate: () -> Unit
+    onCreate: () -> Unit,
+    onCollection: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -115,6 +116,13 @@ fun HomeScreen(
                 emoji = "＋",
                 bg = Lavender,
                 onClick = onCreate
+            )
+            Spacer(Modifier.height(20.dp))
+            BigButton(
+                label = "내 도감",
+                emoji = "🏅",
+                bg = SkyBlue,
+                onClick = onCollection
             )
 
             Spacer(Modifier.height(24.dp))
