@@ -66,9 +66,7 @@ fun ResultScreen(
 ) {
     val context = LocalContext.current
     val stage = remember(stageId) { Stages.byId(stageId) }
-    val isInfiniteClears = stage.level == 14
-    val isSurvival = stage.level == 15
-    val isInfinite = isInfiniteClears || isSurvival
+    val isInfinite = stage.level in 14..20
     val earnedStars = remember(stageId, elapsedMs, caught) {
         if (caught || isInfinite) 0 else MazePar.starsFor(stage, elapsedMs)
     }
