@@ -15,7 +15,12 @@
       "Bash(curl -fsSL -o app/src/main/res/font/jua.ttf \"https://github.com/google/fonts/raw/main/ofl/jua/Jua-Regular.ttf\")",
       "Bash(./gradlew.bat assembleDebug -q)",
       "Bash(./gradlew.bat :app:compileDebugKotlin --stacktrace)",
-      "Bash(./gradlew.bat :app:compileDebugKotlin)"
+      "Bash(./gradlew.bat :app:compileDebugKotlin)",
+      "PowerShell(./gradlew.bat assembleDebug --no-daemon)",
+      "PowerShell(java *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe\" -version 2>&1)",
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Java\\\\jdk-17.0.19\"; ./gradlew.bat assembleDebug --no-daemon)",
+      "Bash(git rm *)"
     ]
   }
 }

@@ -34,6 +34,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
 import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stages
@@ -42,6 +46,29 @@ import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
+
+private fun levelEmoji(level: Int): String = when (level) {
+    1 -> "🌱"
+    2 -> "🧊"
+    3 -> "🏜"
+    4 -> "🌙"
+    5 -> "✨"
+    6 -> "🌊"
+    7 -> "🌑"
+    8 -> "🔥"
+    9 -> "🌷"
+    10 -> "🌌"
+    11 -> "🪐"
+    12 -> "⚙"
+    13 -> "👑"
+    14 -> "♾"
+    15 -> "💀"
+    16 -> "❄"
+    17 -> "🌋"
+    18 -> "🎈"
+    19 -> "🗝"
+    else -> "👤"
+}
 
 @Composable
 fun LevelSelectScreen(
@@ -137,12 +164,23 @@ private fun LevelCard(
                 .background(Color.White.copy(alpha = 0.35f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "$level",
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Black,
-                color = Color.White
+            val composition by rememberLottieComposition(
+                LottieCompositionSpec.Asset("lottie/level_$level.lottie")
             )
+            if (composition != null) {
+                LottieAnimation(
+                    composition = composition,
+                    iterations = LottieConstants.IterateForever,
+                    modifier = Modifier.size(64.dp)
+                )
+            } else {
+                Text(
+                    text = levelEmoji(level),
+                    fontSize = 38.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White
+                )
+            }
         }
         Spacer(Modifier.size(18.dp))
         Column(modifier = Modifier.fillMaxWidth()) {
