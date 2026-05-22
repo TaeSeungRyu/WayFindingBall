@@ -2,6 +2,20 @@ package com.rts.rys.ryy.wayfinding.data
 
 import androidx.compose.ui.graphics.Color
 
+enum class BallShape { CIRCLE, POOP }
+
+enum class BallDecoration {
+    NONE,
+    SUN_RAYS,
+    WAVE_BELOW,
+    LEAF_TOP,
+    CROWN,
+    FLAME_TOP,
+    SHADOW_TWIN,
+    RAINBOW_RING,
+    POOP_STEAM,
+}
+
 data class BallSkin(
     val id: String,
     val name: String,
@@ -10,7 +24,9 @@ data class BallSkin(
     val deepColor: Color,
     val trailColor: Color,
     /** null이면 항상 해제. 아니면 그 배지 획득 시 해제 */
-    val unlockBadgeId: String?
+    val unlockBadgeId: String?,
+    val shape: BallShape = BallShape.CIRCLE,
+    val decoration: BallDecoration = BallDecoration.NONE
 )
 
 object BallSkins {
@@ -19,27 +35,30 @@ object BallSkins {
         unlockBadgeId = null)
     val SUNNY   = BallSkin("sunny",   "햇살 공",   "☀",
         coreColor = Color(0xFFFFD54F), deepColor = Color(0xFFF9A825), trailColor = Color(0xFFFFE082),
-        unlockBadgeId = "first_step")
+        unlockBadgeId = "first_step", decoration = BallDecoration.SUN_RAYS)
     val OCEAN   = BallSkin("ocean",   "바다 공",   "🌊",
         coreColor = Color(0xFF42A5F5), deepColor = Color(0xFF1565C0), trailColor = Color(0xFF90CAF9),
-        unlockBadgeId = "star_10")
+        unlockBadgeId = "star_10", decoration = BallDecoration.WAVE_BELOW)
     val FOREST  = BallSkin("forest",  "숲 공",     "🌿",
         coreColor = Color(0xFF66BB6A), deepColor = Color(0xFF2E7D32), trailColor = Color(0xFFA5D6A7),
-        unlockBadgeId = "star_20")
+        unlockBadgeId = "star_20", decoration = BallDecoration.LEAF_TOP)
     val ROYAL   = BallSkin("royal",   "로열 공",   "💜",
         coreColor = Color(0xFFAB47BC), deepColor = Color(0xFF6A1B9A), trailColor = Color(0xFFCE93D8),
-        unlockBadgeId = "star_30")
+        unlockBadgeId = "star_30", decoration = BallDecoration.CROWN)
     val EMBER   = BallSkin("ember",   "불꽃 공",   "🔥",
         coreColor = Color(0xFFFF7043), deepColor = Color(0xFFBF360C), trailColor = Color(0xFFFFAB91),
-        unlockBadgeId = "infinite_first")
+        unlockBadgeId = "infinite_first", decoration = BallDecoration.FLAME_TOP)
     val SHADOW  = BallSkin("shadow",  "그림자 공", "🌑",
         coreColor = Color(0xFF424242), deepColor = Color(0xFF0F0F0F), trailColor = Color(0xFF757575),
-        unlockBadgeId = "infinite_5")
+        unlockBadgeId = "infinite_5", decoration = BallDecoration.SHADOW_TWIN)
     val RAINBOW = BallSkin("rainbow", "무지개 공", "🌈",
         coreColor = Color(0xFFFF6F61), deepColor = Color(0xFF7B1FA2), trailColor = Color(0xFFE91E63),
-        unlockBadgeId = "perfect_score")
+        unlockBadgeId = "perfect_score", decoration = BallDecoration.RAINBOW_RING)
+    val POOP    = BallSkin("poop",    "응가 공",   "💩",
+        coreColor = Color(0xFF8D6E63), deepColor = Color(0xFF4E342E), trailColor = Color(0xFFA1887F),
+        unlockBadgeId = "veteran", shape = BallShape.POOP, decoration = BallDecoration.POOP_STEAM)
 
-    val ALL: List<BallSkin> = listOf(DEFAULT, SUNNY, OCEAN, FOREST, ROYAL, EMBER, SHADOW, RAINBOW)
+    val ALL: List<BallSkin> = listOf(DEFAULT, SUNNY, OCEAN, FOREST, ROYAL, EMBER, SHADOW, RAINBOW, POOP)
 
     fun byId(id: String): BallSkin = ALL.firstOrNull { it.id == id } ?: DEFAULT
 

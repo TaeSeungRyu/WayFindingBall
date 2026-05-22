@@ -1,5 +1,11 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -64,16 +70,22 @@ fun CollectionScreen(onBack: () -> Unit) {
     var currentSkinId by remember { mutableStateOf(BallSkins.DEFAULT.id) }
 
     LaunchedEffect(Unit) {
-        // 화면 진입 시 현재 데이터 기준으로 배지 평가하여 누락분 보정 저장
+        // 실제 데이터 기준으로 배지를 다시 평가하여 SharedPreferences를 덮어쓴다.
+        // (이전 임시 전체해제 흔적을 정리)
         val records = RecordsRepository(context).load()
         val customCount = Stages.customStages.value.size
         val current = Badges.evaluate(records, customCount)
         val repo = AchievementsRepository(context)
-        val saved = repo.loadUnlockedBadges()
-        val merged = saved + current
-        if (merged != saved) repo.saveUnlockedBadges(merged)
-        unlocked = merged
-        currentSkinId = repo.loadCurrentSkinId()
+        repo.saveUnlockedBadges(current)
+        unlocked = current
+        // 현재 선택된 스킨이 잠긴 상태로 되돌아오면 기본 공으로 복귀
+        val savedSkin = BallSkins.byId(repo.loadCurrentSkinId())
+        if (!BallSkins.isUnlocked(savedSkin, current)) {
+            repo.saveCurrentSkinId(BallSkins.DEFAULT.id)
+            currentSkinId = BallSkins.DEFAULT.id
+        } else {
+            currentSkinId = savedSkin.id
+        }
     }
 
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -299,26 +311,22 @@ private fun SkinCell(
 
 @Composable
 private fun BallPreview(skin: BallSkin) {
-    Canvas(modifier = Modifier.size(64.dp)) {
-        val r = size.minDimension * 0.45f
+    val infinite = rememberInfiniteTransition(label = "skinPreview")
+    val phase by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 12f,
+        animationSpec = infiniteRepeatable(
+            tween(durationMillis = 12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+    Canvas(modifier = Modifier.size(72.dp)) {
+        val r = size.minDimension * 0.28f
         val cx = size.width / 2f
         val cy = size.height / 2f
-        // 본체 그라데이션
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(Color.White, skin.coreColor, skin.deepColor),
-                center = Offset(cx - r * 0.35f, cy - r * 0.4f),
-                radius = r * 1.5f
-            ),
-            center = Offset(cx, cy),
-            radius = r
-        )
-        // 하이라이트
-        drawCircle(
-            color = Color.White.copy(alpha = 0.85f),
-            center = Offset(cx - r * 0.38f, cy - r * 0.38f),
-            radius = r * 0.20f
-        )
+        drawBallDecoration(skin, cx, cy, r, phase)
+        drawBallBody(skin, cx, cy, r)
     }
 }
 

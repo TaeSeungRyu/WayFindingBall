@@ -458,54 +458,34 @@ private fun DrawScope.drawBall(
     )
 
     scale(scaleX, scaleY, pivot = Offset(cx, cy)) {
-        // 본체 — 고정 광원(라디얼 그라데이션)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(Color.White, skin.coreColor, skin.deepColor),
-                center = Offset(cx - r * 0.35f, cy - r * 0.4f),
-                radius = r * 1.5f
-            ),
-            center = Offset(cx, cy),
-            radius = r
-        )
+        // 장식(본체 뒤에 그릴 것) — 무지개 링·잔상·왕관 등은 본체보다 뒤
+        drawBallDecoration(skin, cx, cy, r, phaseSec = (System.currentTimeMillis() % 100_000L) / 1000f)
 
-        // 회전 표면 마커 — 굴러가는 느낌
-        val rotDeg = rotation * 180f / Math.PI.toFloat()
-        rotate(degrees = rotDeg, pivot = Offset(cx, cy)) {
-            val markerColor = skin.deepColor.copy(alpha = 0.55f)
-            val markerR = r * 0.16f
-            val orbit = r * 0.55f
-            // 4개의 점을 십자로 배치 → 회전이 한눈에 보임
-            drawCircle(markerColor, markerR, Offset(cx + orbit, cy))
-            drawCircle(markerColor, markerR, Offset(cx - orbit, cy))
-            drawCircle(markerColor, markerR, Offset(cx, cy + orbit))
-            drawCircle(markerColor, markerR, Offset(cx, cy - orbit))
-            // 한 점만 더 진하게 → 회전 추적을 더 쉽게
-            drawCircle(
-                color = skin.deepColor.copy(alpha = 0.85f),
-                radius = markerR * 1.1f,
-                center = Offset(cx + orbit, cy)
-            )
+        // 본체 + 외곽선 (모양은 skin.shape에 따라 분기)
+        drawBallBody(skin, cx, cy, r)
+
+        // 회전 표면 마커 — 원형 공만 그림 (응가 같은 비정형 모양은 어색해서 생략)
+        if (shouldDrawRotationMarkers(skin)) {
+            val rotDeg = rotation * 180f / Math.PI.toFloat()
+            rotate(degrees = rotDeg, pivot = Offset(cx, cy)) {
+                val markerColor = skin.deepColor.copy(alpha = 0.55f)
+                val markerR = r * 0.16f
+                val orbit = r * 0.55f
+                drawCircle(markerColor, markerR, Offset(cx + orbit, cy))
+                drawCircle(markerColor, markerR, Offset(cx - orbit, cy))
+                drawCircle(markerColor, markerR, Offset(cx, cy + orbit))
+                drawCircle(markerColor, markerR, Offset(cx, cy - orbit))
+                drawCircle(
+                    color = skin.deepColor.copy(alpha = 0.85f),
+                    radius = markerR * 1.1f,
+                    center = Offset(cx + orbit, cy)
+                )
+            }
         }
-
-        // 광원 하이라이트 — 회전과 무관하게 고정
-        drawCircle(
-            color = Color.White.copy(alpha = 0.95f),
-            center = Offset(cx - r * 0.38f, cy - r * 0.38f),
-            radius = r * 0.22f
-        )
-
-        // 외곽선
-        drawCircle(
-            color = skin.deepColor,
-            center = Offset(cx, cy),
-            radius = r,
-            style = Stroke(width = 2f)
-        )
 
         // 눈
         val eyeSpacing = r * 0.34f
-        val eyeY = cy - r * 0.08f
+        val eyeY = cy + eyeOffsetY(skin, r)
         val surprise = surpriseLevel.coerceIn(0f, 1f)
         if (isHappy) {
             val eyeW = r * 0.28f
