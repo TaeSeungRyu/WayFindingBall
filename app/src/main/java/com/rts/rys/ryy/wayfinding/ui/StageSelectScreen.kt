@@ -94,7 +94,7 @@ fun StageSelectScreen(
                     modifier = Modifier.align(Alignment.CenterStart)
                 )
                 Text(
-                    text = "난이도 $level",
+                    text = "스테이지 $level",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = InkDark,
@@ -215,7 +215,7 @@ private fun SectionHeader(level: Int, difficulty: String) {
     val color = levelColor(level)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = "난이도 $level",
+            text = "스테이지 $level",
             fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold,
             color = InkDark

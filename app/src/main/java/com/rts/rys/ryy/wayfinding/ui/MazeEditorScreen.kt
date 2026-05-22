@@ -405,7 +405,7 @@ fun MazeEditorScreen(
             }
             Spacer(Modifier.height(12.dp))
 
-            SectionLabel("난이도 · ${difficultyLabel(level)}", color = levelColor(level))
+            SectionLabel("스테이지 · ${difficultyLabel(level)}", color = levelColor(level))
             Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -712,7 +712,7 @@ private fun DifficultyPill(level: Int, selected: Boolean, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Text(
-            text = "난이도$level",
+            text = "스테이지$level",
             color = textColor,
 
 

@@ -110,7 +110,7 @@ fun LevelSelectScreen(
                     modifier = Modifier.align(Alignment.CenterStart)
                 )
                 Text(
-                    text = "난이도 고르기",
+                    text = "스테이지 고르기",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = InkDark,
@@ -187,7 +187,7 @@ private fun LevelCard(
         Spacer(Modifier.size(18.dp))
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "난이도 $level",
+                text = "스테이지 $level",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,

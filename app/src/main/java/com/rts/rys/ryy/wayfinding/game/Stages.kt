@@ -1009,7 +1009,7 @@ object Stages {
                 id = i + 1,
                 level = spec.level,
                 indexInLevel = idx,
-                name = "난이도${spec.level}-${idx}",
+                name = "스테이지${spec.level}-${idx}",
                 difficulty = difficultyLabel(spec.level),
                 maze = Maze.fromAscii(spec.lines)
             )
