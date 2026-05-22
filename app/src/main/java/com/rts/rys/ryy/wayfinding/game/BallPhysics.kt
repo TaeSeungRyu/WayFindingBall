@@ -146,6 +146,25 @@ class BallPhysics(
         squashAmount = (squashAmount - dt / SQUASH_DURATION_S).coerceAtLeast(0f)
         if (squashAmount <= 0f) squashAxis = SquashAxis.NONE
 
+        // 부동소수점 누적/코너 끼임으로 벽에 박혀 모든 방향이 충돌 처리되는 상황 해제.
+        // 작은 맵에서 통로 폭이 ball 직경에 근접할 때 발생. 8방향 nudge로 안전 위치 탐색.
+        if (collides(x, y)) {
+            val n = 0.02f
+            val nudges = arrayOf(
+                -n to 0f, n to 0f, 0f to -n, 0f to n,
+                -n to -n, n to -n, -n to n, n to n
+            )
+            for ((dx, dy) in nudges) {
+                if (!collides(x + dx, y + dy)) {
+                    x += dx
+                    y += dy
+                    vx = 0f
+                    vy = 0f
+                    break
+                }
+            }
+        }
+
         // goal check (center inside goal cell)
         val cc = floor(x).toInt()
         val rr = floor(y).toInt()
