@@ -54,7 +54,7 @@ fun LevelSelectScreen(
         val records = RecordsRepository(context).load()
         val bestByStage = records.groupBy { it.stageId }
             .mapValues { (_, rs) -> rs.minOf { it.elapsedMs } }
-        (1..19).associateWith { level ->
+        (1..20).associateWith { level ->
             val stages = Stages.byLevel(level)
             val earned = stages.sumOf { stage ->
                 val best = bestByStage[stage.id] ?: return@sumOf 0
@@ -95,7 +95,7 @@ fun LevelSelectScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp + navBottom)
             ) {
-                items((1..19).toList(), key = { it }) { level ->
+                items((1..20).toList(), key = { it }) { level ->
                     val (earned, total) = starsByLevel[level] ?: (0 to 0)
                     LevelCard(
                         level = level,

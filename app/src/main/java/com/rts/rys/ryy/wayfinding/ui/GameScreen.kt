@@ -63,6 +63,7 @@ import com.rts.rys.ryy.wayfinding.game.ChaserController
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.generateRandomMaze
 import com.rts.rys.ryy.wayfinding.game.KeyDoorController
+import com.rts.rys.ryy.wayfinding.game.ShadowChaserController
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.MovingGoalController
 import com.rts.rys.ryy.wayfinding.game.RotatingMazeController
@@ -118,10 +119,11 @@ fun GameScreen(
     val isFire = stage.level == 17
     val isGrow = stage.level == 18
     val isKeyDoor = stage.level == 19
-    val isInfinite = isInfiniteClears || isSurvival || isIce || isFire || isGrow || isKeyDoor
+    val isShadow = stage.level == 20
+    val isInfinite = isInfiniteClears || isSurvival || isIce || isFire || isGrow || isKeyDoor || isShadow
     val growMultiplier = if (isGrow) (1f + infiniteRound * 0.15f).coerceAtMost(1.7f) else 1f
     val workingMaze = remember(stage.id, attemptId, infiniteRound) {
-        if (isInfiniteClears || isIce || isFire || isGrow || isKeyDoor) {
+        if (isInfiniteClears || isIce || isFire || isGrow || isKeyDoor || isShadow) {
             generateRandomMaze(13)
         } else if (isSurvival) {
             generateRandomMaze(21)
@@ -197,6 +199,13 @@ fun GameScreen(
     val keyDoorCtrl = remember(stage.id, attemptId, infiniteRound) {
         if (isKeyDoor) KeyDoorController(workingMaze, keyCount = (3 + infiniteRound).coerceAtMost(7)) else null
     }
+    val shadowCtrl = remember(stage.id, attemptId, infiniteRound) {
+        if (isShadow) ShadowChaserController(
+            initialBallX = workingMaze.startCol + 0.5f,
+            initialBallY = workingMaze.startRow + 0.5f,
+            delaySec = (3.0f - infiniteRound * 0.3f).coerceAtLeast(1.0f)
+        ) else null
+    }
     val isDarkLevel = stage.level == 7
     val tilt = remember { TiltSensor(context) }
     val theme = remember(stage.level) { themeForLevel(stage.level) }
@@ -237,7 +246,7 @@ fun GameScreen(
     val shakeAmplitudePx = with(density) { 3.dp.toPx() }
     val confettiColors = listOf(BallRed, SkyBlue, SunYellow, CoralPink, GoalGold, Lavender, WallGreen, Color.White)
 
-    val bombEnabled = stage.level in 6..19
+    val bombEnabled = stage.level in 6..20
     var bombState by remember(stage.id, attemptId) { mutableStateOf(BombState.IDLE) }
     var bombTimer by remember(stage.id, attemptId) { mutableFloatStateOf(0f) }
     var bombVersion by remember(stage.id, attemptId) { mutableIntStateOf(0) }
@@ -405,6 +414,16 @@ fun GameScreen(
                         SoundManager.playGoal()
                     }
                     if (!keyDoorCtrl.allCollected) reached = false
+                }
+                if (shadowCtrl != null) {
+                    shadowCtrl.tick(dt, physics.x, physics.y)
+                    if (shadowCtrl.hit(physics.x, physics.y, 0.32f * growMultiplier) && !reached && !finished) {
+                        finished = true
+                        shakeMs = 0.3f
+                        SoundManager.playBonk()
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onFinished(totalInfiniteMs, true, infiniteRound + 1)
+                    }
                 }
                 if (starsCtrl != null) {
                     val before = starsCtrl.collected
@@ -717,6 +736,7 @@ fun GameScreen(
                         isFire -> "타는 길 · 통과 $infiniteRound"
                         isGrow -> "공이 커져요 · 통과 $infiniteRound"
                         isKeyDoor -> "열쇠 ${keyDoorCtrl?.collected ?: 0}/${keyDoorCtrl?.totalKeys ?: 0} · 통과 $infiniteRound"
+                        isShadow -> "내 그림자 미로 · 통과 $infiniteRound"
                         else -> stage.name
                     },
                     color = InkDark,
@@ -792,7 +812,7 @@ fun GameScreen(
                     }
             ) {
                 val breath = 1f + 0.045f * idleStrength * sin(idleTime * (2f * Math.PI.toFloat() / 1.6f))
-                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + (rotatingMaze?.version ?: 0) + (keyDoorCtrl?.version ?: 0) + bombVersion + fireVersion
+                @Suppress("UNUSED_VARIABLE") val mazeVersion = (dynamicMaze?.version ?: 0) + (movingGoal?.version ?: 0) + (starsCtrl?.collectVersion ?: 0) + (rotatingMaze?.version ?: 0) + (keyDoorCtrl?.version ?: 0) + (shadowCtrl?.version ?: 0) + bombVersion + fireVersion
                 MazeCanvas(
                     maze = workingMaze,
                     ballX = ballX,
@@ -1063,6 +1083,39 @@ fun GameScreen(
                                 )
                             }
                         }
+                    }
+                }
+                if (shadowCtrl != null && shadowCtrl.active) {
+                    val sx = shadowCtrl.shadowX
+                    val sy = shadowCtrl.shadowY
+                    val trail = shadowCtrl.afterimages(4)
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val cs = minOf(size.width / workingMaze.cols, size.height / workingMaze.rows)
+                        val ox = (size.width - cs * workingMaze.cols) / 2f
+                        val oy = (size.height - cs * workingMaze.rows) / 2f
+                        val br = cs * 0.32f * growMultiplier
+                        // 잔상 — 옅게, 작게
+                        trail.forEachIndexed { i, (tx, ty) ->
+                            val a = 0.20f * (1f - i / trail.size.toFloat())
+                            drawCircle(
+                                color = Color(0xFF1A1424).copy(alpha = a),
+                                radius = br * (0.85f - i * 0.08f).coerceAtLeast(0.5f),
+                                center = Offset(ox + tx * cs, oy + ty * cs)
+                            )
+                        }
+                        // 본 그림자 — 다크 보라/검정 + 외곽 광채
+                        val center = Offset(ox + sx * cs, oy + sy * cs)
+                        drawCircle(
+                            color = Color(0xFFB8C0E0).copy(alpha = 0.35f),
+                            radius = br * 1.25f,
+                            center = center
+                        )
+                        drawCircle(color = Color(0xFF0A0620), radius = br * 1.05f, center = center)
+                        drawCircle(color = Color(0xFF241A40), radius = br * 0.85f, center = center)
+                        // 은빛 눈 두 개
+                        val eyeR = br * 0.16f
+                        drawCircle(color = Color(0xFFDDE3F8), radius = eyeR, center = Offset(center.x - br * 0.30f, center.y - br * 0.10f))
+                        drawCircle(color = Color(0xFFDDE3F8), radius = eyeR, center = Offset(center.x + br * 0.30f, center.y - br * 0.10f))
                     }
                 }
                 if (chasers.isNotEmpty()) {

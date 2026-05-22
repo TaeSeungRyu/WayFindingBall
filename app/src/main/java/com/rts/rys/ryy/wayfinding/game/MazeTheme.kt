@@ -283,7 +283,8 @@ fun themeForLevel(level: Int): MazeTheme = when (level) {
     16 -> FrostTheme
     17 -> LavaTheme
     18 -> CandyTheme
-    else -> DungeonTheme
+    19 -> DungeonTheme
+    else -> EclipseTheme
 }
 
 private val DungeonTheme = MazeTheme(
@@ -339,6 +340,25 @@ private val LavaTheme = MazeTheme(
     flowerColors = listOf(Color(0xFFFFD24A), Color(0xFFFF6A2C), Color(0xFFFFE7A0)),
     flowerCenter = Color(0xFFFFE066),
     cloudOpacity = 0.3f,
+    isDark = true
+)
+
+private val EclipseTheme = MazeTheme(
+    wallTop = Color(0xFF2E3340),
+    wallMid = Color(0xFF161A26),
+    wallDeep = Color(0xFF02030A),
+    wallAccent = Color(0xFF505870),
+    floorTile = Color(0xFF101220),
+    floorTileAlt = Color(0xFF080A14),
+    floorDetailDot = Color(0xFF3A4258),
+    floorDetailSplotch = Color(0xFF1A1E2C),
+    skyTop = Color(0xFF0A0E1C),
+    skyBottom = Color(0xFF02030A),
+    rockTop = Color(0xFF353B4C),
+    rockBottom = Color(0xFF14182A),
+    flowerColors = listOf(Color(0xFFB8C0E0), Color(0xFFDDE3F8), Color(0xFF606878)),
+    flowerCenter = Color(0xFFE0E5F4),
+    cloudOpacity = 0f,
     isDark = true
 )
 

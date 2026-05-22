@@ -514,7 +514,7 @@ fun MazeEditorScreen(
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            text = "14~19단계는 자동으로 만들어지는\n무한모드예요. 직접 만들 수 없어요!",
+                            text = "14~20단계는 자동으로 만들어지는\n무한모드예요. 직접 만들 수 없어요!",
                             color = InkSoft,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -741,7 +741,7 @@ private fun InfiniteLockedPill(onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Text(
-            text = "🔒 14~19",
+            text = "🔒 14~20",
             color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.ExtraBold
