@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -40,12 +41,20 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 @Composable
 fun DPad(
     onInput: (dx: Float, dy: Float) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val up = remember { mutableStateOf(false) }
     val down = remember { mutableStateOf(false) }
     val left = remember { mutableStateOf(false) }
     val right = remember { mutableStateOf(false) }
+
+    // disabled로 전환되면 잔류 입력 해제
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            up.value = false; down.value = false; left.value = false; right.value = false
+        }
+    }
 
     LaunchedEffect(up.value, down.value, left.value, right.value) {
         val dx = (if (right.value) 1f else 0f) - (if (left.value) 1f else 0f)
@@ -53,24 +62,24 @@ fun DPad(
         onInput(dx, dy)
     }
 
-    Box(modifier = modifier) {
+    Box(modifier = modifier.alpha(if (enabled) 1f else 0.35f)) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DirButton(arrowAngleDeg = -90f, pressed = up)
+            DirButton(arrowAngleDeg = -90f, pressed = up, enabled = enabled)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DirButton(arrowAngleDeg = 180f, pressed = left)
+                DirButton(arrowAngleDeg = 180f, pressed = left, enabled = enabled)
                 Spacer(Modifier.size(64.dp))
-                DirButton(arrowAngleDeg = 0f, pressed = right)
+                DirButton(arrowAngleDeg = 0f, pressed = right, enabled = enabled)
             }
-            DirButton(arrowAngleDeg = 90f, pressed = down)
+            DirButton(arrowAngleDeg = 90f, pressed = down, enabled = enabled)
         }
     }
 }
 
 @Composable
-private fun DirButton(arrowAngleDeg: Float, pressed: MutableState<Boolean>) {
+private fun DirButton(arrowAngleDeg: Float, pressed: MutableState<Boolean>, enabled: Boolean = true) {
     val pressScale by animateFloatAsState(
         targetValue = if (pressed.value) 0.90f else 1f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = 900f),
@@ -87,7 +96,8 @@ private fun DirButton(arrowAngleDeg: Float, pressed: MutableState<Boolean>) {
             }
             .shadow(shadowDp, CircleShape)
             .clip(CircleShape)
-            .pointerInput(Unit) {
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
                 detectTapGestures(
                     onPress = {
                         pressed.value = true

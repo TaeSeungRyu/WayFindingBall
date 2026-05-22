@@ -1,15 +1,20 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,8 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,33 +43,58 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
+import com.rts.rys.ryy.wayfinding.data.ShareUtils
+import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stages
+import com.rts.rys.ryy.wayfinding.game.difficultyLabel
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
-import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private data class LevelBest(
+    val level: Int,
+    val isInfinite: Boolean,
+    val best: GameRecord?,  // null = 기록 없음. 일반(1~13)은 최근 기록, 무한(14~20)은 best cleared
+    val starsEarned: Int = 0,
+    val starsTotal: Int = 0
+)
+
 @Composable
 fun RecordsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var records by remember { mutableStateOf<List<GameRecord>>(emptyList()) }
-    var selectedLevel by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(Unit) {
         records = RecordsRepository(context).load()
     }
-    val recordsWithLevel = remember(records) {
-        records.map { r ->
-            r to runCatching { Stages.byId(r.stageId).level }.getOrNull()
+    val levelBests = remember(records) {
+        val byLevel: Map<Int, List<GameRecord>> = records.mapNotNull { r ->
+            val lv = runCatching { Stages.byId(r.stageId).level }.getOrNull() ?: return@mapNotNull null
+            lv to r
+        }.groupBy({ it.first }, { it.second })
+
+        (1..20).map { lv ->
+            val isInf = lv in 14..20
+            val list = byLevel[lv].orEmpty()
+            if (isInf) {
+                LevelBest(lv, true, list.maxByOrNull { it.cleared })
+            } else {
+                val stages = Stages.byLevel(lv)
+                val recordsByStage = list.groupBy { it.stageId }
+                val earned = stages.sumOf { stage ->
+                    val sb = recordsByStage[stage.id]?.minByOrNull { it.elapsedMs }
+                    if (sb != null) MazePar.starsFor(stage, sb.elapsedMs) else 0
+                }
+                val total = stages.size * 3
+                val lastRec = list.maxByOrNull { it.timestamp }
+                LevelBest(lv, false, lastRec, earned, total)
+            }
         }
     }
-    val filtered = remember(recordsWithLevel, selectedLevel) {
-        if (selectedLevel == null) recordsWithLevel
-        else recordsWithLevel.filter { it.second == selectedLevel }
-    }
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Box(
         modifier = Modifier
@@ -90,174 +122,155 @@ fun RecordsScreen(onBack: () -> Unit) {
             }
             Spacer(Modifier.height(14.dp))
 
-            if (records.isNotEmpty()) {
-                LevelFilterRow(
-                    selected = selectedLevel,
-                    onSelect = { selectedLevel = it }
-                )
-                Spacer(Modifier.height(14.dp))
-            }
-
-            when {
-                records.isEmpty() -> EmptyState(
-                    modifier = Modifier.weight(1f),
-                    text = "아직 기록이 없어요\n게임을 한 번 해봐요!"
-                )
-                filtered.isEmpty() -> EmptyState(
-                    modifier = Modifier.weight(1f),
-                    text = "이 난이도의 기록이 없어요"
-                )
-                else -> LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(filtered) { (record, _) ->
-                        RecordRow(record)
-                    }
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp + navBottom)
+            ) {
+                items(levelBests, key = { it.level }) { entry ->
+                    LevelBestCard(
+                        entry = entry,
+                        onShare = { shareEntry(context, entry) }
+                    )
                 }
             }
-
-            if (records.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = "500개가 넘어가는 경우 자동으로 이전 기록이 제거됩니다 (최고점수 제외)",
-                    color = InkSoft,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
         }
     }
 }
 
+private fun shareEntry(context: android.content.Context, entry: LevelBest) {
+    val rec = entry.best ?: return
+    val bgColor = levelColor(entry.level).toArgb()
+    val valueLabel = if (entry.isInfinite) "가장 멀리 도달한 단계" else "획득한 별"
+    val valueText = if (entry.isInfinite) "${rec.cleared}단계"
+                    else "★ ${entry.starsEarned} / ${entry.starsTotal}"
+    val dateText = SimpleDateFormat("yyyy.MM.dd", Locale.getDefault())
+        .format(Date(rec.timestamp))
+    val bmp = ShareUtils.renderRecordCard(
+        bgColor = bgColor,
+        levelText = "${entry.level}",
+        titleText = difficultyLabel(entry.level),
+        valueLabel = valueLabel,
+        valueText = valueText,
+        dateText = dateText
+    )
+    ShareUtils.shareBitmap(context, bmp)
+}
+
 @Composable
-private fun EmptyState(text: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = InkSoft,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center
-        )
+private fun ShareIcon() {
+    Canvas(modifier = Modifier.size(20.dp)) {
+        val s = size.minDimension
+        val r = s * 0.13f
+        val left = Offset(s * 0.22f, s * 0.50f)
+        val topRight = Offset(s * 0.78f, s * 0.22f)
+        val bottomRight = Offset(s * 0.78f, s * 0.78f)
+        val strokeW = s * 0.08f
+        drawLine(Color.White, left, topRight, strokeWidth = strokeW)
+        drawLine(Color.White, left, bottomRight, strokeWidth = strokeW)
+        drawCircle(Color.White, r, left)
+        drawCircle(Color.White, r, topRight)
+        drawCircle(Color.White, r, bottomRight)
     }
 }
 
 @Composable
-private fun LevelFilterRow(selected: Int?, onSelect: (Int?) -> Unit) {
+private fun LevelBestCard(entry: LevelBest, onShare: () -> Unit) {
+    val hasRecord = entry.best != null
+    val color = if (hasRecord) levelColor(entry.level) else Color(0xFFBDB7B0)
+    val date = remember(entry.best?.timestamp) {
+        entry.best?.let {
+            SimpleDateFormat("yyyy.MM.dd", Locale.getDefault()).format(Date(it.timestamp))
+        }
+    }
+    val valueText = when {
+        !hasRecord -> "기록 없음"
+        entry.isInfinite -> "${entry.best!!.cleared}단계"
+        else -> "★ ${entry.starsEarned}/${entry.starsTotal}"
+    }
+    val valueLabel = when {
+        !hasRecord -> ""
+        entry.isInfinite -> "최고 도달"
+        else -> "획득한 별"
+    }
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        FilterChip(
-            label = "전체",
-            selected = selected == null,
-            selectedColor = SkyBlue,
-            modifier = Modifier.weight(1.2f),
-            onClick = { onSelect(null) }
-        )
-        for (lv in 1..4) {
-            FilterChip(
-                label = "$lv",
-                selected = selected == lv,
-                selectedColor = levelColor(lv),
-                modifier = Modifier.weight(1f),
-                onClick = { onSelect(lv) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun FilterChip(
-    label: String,
-    selected: Boolean,
-    selectedColor: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val bg = if (selected) selectedColor else Color.White
-    val textColor = if (selected) Color.White else InkSoft
-    Box(
-        modifier = modifier
-            .shadow(if (selected) 4.dp else 2.dp, RoundedCornerShape(18.dp))
-            .clip(RoundedCornerShape(18.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            color = textColor,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
-    }
-}
-
-@Composable
-private fun RecordRow(record: GameRecord) {
-    val accent = stageColor(record.stageId)
-    val date = remember(record.timestamp) {
-        SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.getDefault()).format(Date(record.timestamp))
-    }
-    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(20.dp))
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color.White)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .height(82.dp)
+            .shadow(6.dp, RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(color)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(accent),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "${record.stageId}",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-                Spacer(Modifier.size(12.dp))
-                Column {
-                    Text(
-                        text = record.stageName,
-                        color = InkDark,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 18.sp
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = date,
-                        color = InkSoft,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
             Text(
-                text = formatElapsed(record.elapsedMs),
-                color = accent,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.ExtraBold
+                text = "${entry.level}",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White
             )
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = difficultyLabel(entry.level),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                maxLines = 1
+            )
+            Spacer(Modifier.height(2.dp))
+            if (hasRecord) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = valueLabel,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = date ?: "",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.75f)
+                    )
+                }
+            } else {
+                Text(
+                    text = "아직 도전해 보세요",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.75f)
+                )
+            }
+        }
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = valueText,
+            color = Color.White,
+            fontSize = if (hasRecord) 20.sp else 13.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        if (hasRecord) {
+            Spacer(Modifier.size(10.dp))
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.25f))
+                    .clickable(onClick = onShare),
+                contentAlignment = Alignment.Center
+            ) {
+                ShareIcon()
+            }
         }
     }
 }
