@@ -168,10 +168,12 @@ private fun LevelCard(
                 LottieCompositionSpec.Asset("lottie/level_$level.lottie")
             )
             if (composition != null) {
+                // 흰색 배경/일러스트 위주인 자산은 원 가장자리에 닿아 잘려 보여 더 크게 표시
+                val lottieSize = if (level == 7 || level == 9 || level == 1 || level == 20) 72.dp else 64.dp
                 LottieAnimation(
                     composition = composition,
                     iterations = LottieConstants.IterateForever,
-                    modifier = Modifier.size(64.dp)
+                    modifier = Modifier.size(lottieSize)
                 )
             } else {
                 Text(
