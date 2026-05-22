@@ -205,7 +205,7 @@ fun GameScreen(
         if (isShadow) ShadowChaserController(
             initialBallX = workingMaze.startCol + 0.5f,
             initialBallY = workingMaze.startRow + 0.5f,
-            delaySec = (3.0f - infiniteRound * 0.3f).coerceAtLeast(1.0f)
+            delaySec = (6.0f - infiniteRound * 0.25f).coerceAtLeast(3.0f)
         ) else null
     }
     val isDarkLevel = stage.level == 7
