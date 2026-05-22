@@ -73,7 +73,7 @@ object ShareUtils {
         val baseline = badgeY + (badgeText.descent() - badgeText.ascent()) / 2 - badgeText.descent()
         canvas.drawText(levelText, W / 2f, baseline, badgeText)
 
-        // 타이틀 (난이도 이름)
+        // 타이틀 (스테이지 이름)
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#2D2D2D")
             textSize = 56f
