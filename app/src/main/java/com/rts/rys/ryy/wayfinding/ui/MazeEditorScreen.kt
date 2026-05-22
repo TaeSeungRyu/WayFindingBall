@@ -6,7 +6,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -61,6 +64,7 @@ import com.rts.rys.ryy.wayfinding.game.MazeValidator
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
+import com.rts.rys.ryy.wayfinding.game.difficultyLabel
 import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.delay
 import kotlin.math.sqrt
@@ -267,6 +271,7 @@ fun MazeEditorScreen(
     }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var previewMaze by remember { mutableStateOf<Maze?>(null) }
+    var showInfiniteInfo by remember { mutableStateOf(false) }
 
     fun tryPreview() {
         val lines = board.map { String(it) }
@@ -348,6 +353,12 @@ fun MazeEditorScreen(
         errorMessage = null
     }
 
+    fun clearBoard() {
+        board = initialBoard(level)
+        previewMaze = null
+        errorMessage = null
+    }
+
     fun trySave() {
         val lines = board.map { String(it) }
         when (val result = MazeValidator.validate(lines)) {
@@ -394,7 +405,7 @@ fun MazeEditorScreen(
             }
             Spacer(Modifier.height(12.dp))
 
-            SectionLabel("난이도")
+            SectionLabel("난이도 · ${difficultyLabel(level)}", color = levelColor(level))
             Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -403,6 +414,7 @@ fun MazeEditorScreen(
                 for (lv in 1..13) {
                     DifficultyPill(level = lv, selected = lv == level, onClick = { level = lv })
                 }
+                InfiniteLockedPill(onClick = { showInfiniteInfo = true })
             }
             Spacer(Modifier.height(10.dp))
 
@@ -433,7 +445,11 @@ fun MazeEditorScreen(
                     .clip(RoundedCornerShape(20.dp))
                     .background(CreamBg)
             ) {
-                EditorGrid(board = board, onCellTap = ::applyTool)
+                EditorGrid(
+                    board = board,
+                    allowDrag = tool == Tool.WALL || tool == Tool.EMPTY,
+                    onCellPaint = ::applyTool
+                )
             }
 
             Spacer(Modifier.height(12.dp))
@@ -447,6 +463,12 @@ fun MazeEditorScreen(
                     bg = Lavender,
                     modifier = Modifier.weight(1f),
                     onClick = ::randomize
+                )
+                ActionButton(
+                    label = "전부 비우기",
+                    bg = Color(0xFFB8AFA3),
+                    modifier = Modifier.weight(1f),
+                    onClick = ::clearBoard
                 )
                 ActionButton(
                     label = "미리보기",
@@ -473,6 +495,41 @@ fun MazeEditorScreen(
                 level = level,
                 onExit = { previewMaze = null }
             )
+        }
+
+        if (showInfiniteInfo) {
+            Dialog(onDismissRequest = { showInfiniteInfo = false }) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.White)
+                        .padding(24.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "🔒 무한모드",
+                            color = InkDark,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "14~19단계는 자동으로 만들어지는\n무한모드예요. 직접 만들 수 없어요!",
+                            color = InkSoft,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        ActionButton(
+                            label = "알겠어요",
+                            bg = SkyBlue,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { showInfiniteInfo = false }
+                        )
+                    }
+                }
+            }
         }
 
         errorMessage?.let { msg ->
@@ -504,29 +561,46 @@ fun MazeEditorScreen(
 }
 
 @Composable
-private fun SectionLabel(text: String) {
-    Text(text, color = InkDark, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+private fun SectionLabel(text: String, color: Color = InkDark) {
+    Text(text, color = color, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
 }
 
 @Composable
 private fun EditorGrid(
     board: Array<CharArray>,
-    onCellTap: (Int, Int) -> Unit
+    allowDrag: Boolean,
+    onCellPaint: (Int, Int) -> Unit
 ) {
     val n = board.size
-    val latestTap = rememberUpdatedState(onCellTap)
+    val latestPaint = rememberUpdatedState(onCellPaint)
     val latestN = rememberUpdatedState(n)
+    val latestAllowDrag = rememberUpdatedState(allowDrag)
     Canvas(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTapGestures { offset ->
+                awaitEachGesture {
+                    val down = awaitFirstDown()
                     val nn = latestN.value
-                    if (nn <= 0) return@detectTapGestures
-                    val cs = size.width / nn
-                    val c = (offset.x / cs).toInt()
-                    val r = (offset.y / cs).toInt()
-                    if (c in 0 until nn && r in 0 until nn) latestTap.value(c, r)
+                    if (nn <= 0) return@awaitEachGesture
+                    val cs = size.width.toFloat() / nn
+                    val c0 = (down.position.x / cs).toInt()
+                    val r0 = (down.position.y / cs).toInt()
+                    if (c0 !in 0 until nn || r0 !in 0 until nn) return@awaitEachGesture
+                    latestPaint.value(c0, r0)
+                    if (!latestAllowDrag.value) return@awaitEachGesture
+                    var lastC = c0
+                    var lastR = r0
+                    drag(down.id) { change ->
+                        val c = (change.position.x / cs).toInt()
+                        val r = (change.position.y / cs).toInt()
+                        if (c in 0 until nn && r in 0 until nn && (c != lastC || r != lastR)) {
+                            latestPaint.value(c, r)
+                            lastC = c
+                            lastR = r
+                        }
+                        change.consume()
+                    }
                 }
             }
     ) {
@@ -650,6 +724,25 @@ private fun DifficultyPill(level: Int, selected: Boolean, onClick: () -> Unit) {
 
 
 
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
+}
+
+@Composable
+private fun InfiniteLockedPill(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .shadow(2.dp, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFFCCC2B5))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "🔒 14~19",
+            color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.ExtraBold
         )
