@@ -9,6 +9,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -115,74 +121,98 @@ fun MazeApp() {
 
     val activity = LocalContext.current as? Activity
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
+    var forward by remember { mutableStateOf(true) }
 
     fun push(screen: Screen) {
+        forward = true
         backStack.add(screen)
     }
     fun pop() {
-        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-    }
-    fun popUntil(predicate: (Screen) -> Boolean) {
-        while (backStack.size > 1 && !predicate(backStack.last())) {
+        if (backStack.size > 1) {
+            forward = false
             backStack.removeAt(backStack.lastIndex)
         }
     }
+    fun popUntil(predicate: (Screen) -> Boolean) {
+        if (backStack.size > 1 && !predicate(backStack.last())) {
+            forward = false
+            while (backStack.size > 1 && !predicate(backStack.last())) {
+                backStack.removeAt(backStack.lastIndex)
+            }
+        }
+    }
     fun replaceTop(screen: Screen) {
+        forward = true
         backStack[backStack.lastIndex] = screen
     }
 
     BackHandler {
         if (backStack.size > 1) {
+            forward = false
             backStack.removeAt(backStack.lastIndex)
         } else {
             activity?.finish()
         }
     }
 
-    when (val screen = backStack.last()) {
-        Screen.Home -> HomeScreen(
-            onStart = { push(Screen.LevelSelect) },
-            onRecords = { push(Screen.Records) },
-            onCreate = { push(Screen.Editor(1)) },
-            onCollection = { push(Screen.Collection) }
-        )
-        Screen.LevelSelect -> LevelSelectScreen(
-            onBack = { pop() },
-            onSelect = { level -> push(Screen.StageSelect(level)) }
-        )
-        is Screen.StageSelect -> StageSelectScreen(
-            level = screen.level,
-            onBack = { pop() },
-            onSelect = { stageId -> push(Screen.Game(stageId)) }
-        )
-        is Screen.Game -> {
-            val stage = remember(screen.stageId) { Stages.byId(screen.stageId) }
-            GameScreen(
-                stage = stage,
-                onFinished = { elapsed, caught, clears ->
-                    replaceTop(Screen.Result(screen.stageId, elapsed, caught, clears))
+    AnimatedContent(
+        targetState = backStack.last(),
+        transitionSpec = {
+            if (forward) {
+                (slideInHorizontally(initialOffsetX = { it }) + fadeIn()) togetherWith
+                    (slideOutHorizontally(targetOffsetX = { -it / 4 }) + fadeOut())
+            } else {
+                (slideInHorizontally(initialOffsetX = { -it / 4 }) + fadeIn()) togetherWith
+                    (slideOutHorizontally(targetOffsetX = { it }) + fadeOut())
+            }
+        },
+        label = "screen-transition"
+    ) { screen ->
+        when (screen) {
+            Screen.Home -> HomeScreen(
+                onStart = { push(Screen.LevelSelect) },
+                onRecords = { push(Screen.Records) },
+                onCreate = { push(Screen.Editor(1)) },
+                onCollection = { push(Screen.Collection) }
+            )
+            Screen.LevelSelect -> LevelSelectScreen(
+                onBack = { pop() },
+                onSelect = { level -> push(Screen.StageSelect(level)) }
+            )
+            is Screen.StageSelect -> StageSelectScreen(
+                level = screen.level,
+                onBack = { pop() },
+                onSelect = { stageId -> push(Screen.Game(stageId)) }
+            )
+            is Screen.Game -> {
+                val stage = remember(screen.stageId) { Stages.byId(screen.stageId) }
+                GameScreen(
+                    stage = stage,
+                    onFinished = { elapsed, caught, clears ->
+                        replaceTop(Screen.Result(screen.stageId, elapsed, caught, clears))
+                    },
+                    onExit = { popUntil { it is Screen.StageSelect } }
+                )
+            }
+            is Screen.Result -> ResultScreen(
+                stageId = screen.stageId,
+                elapsedMs = screen.elapsedMs,
+                caught = screen.caught,
+                clears = screen.clears,
+                onRetry = {
+                    popUntil { it is Screen.StageSelect }
+                    push(Screen.Game(screen.stageId))
                 },
-                onExit = { popUntil { it is Screen.StageSelect } }
+                onHome = { popUntil { it is Screen.StageSelect } }
+            )
+            Screen.Records -> RecordsScreen(onBack = { pop() })
+            Screen.Collection -> CollectionScreen(onBack = { pop() })
+            is Screen.Editor -> MazeEditorScreen(
+                initialLevel = screen.level,
+                onSaved = { pop() },
+                onCancel = { pop() }
             )
         }
-        is Screen.Result -> ResultScreen(
-            stageId = screen.stageId,
-            elapsedMs = screen.elapsedMs,
-            caught = screen.caught,
-            clears = screen.clears,
-            onRetry = {
-                popUntil { it is Screen.StageSelect }
-                push(Screen.Game(screen.stageId))
-            },
-            onHome = { popUntil { it is Screen.StageSelect } }
-        )
-        Screen.Records -> RecordsScreen(onBack = { pop() })
-        Screen.Collection -> CollectionScreen(onBack = { pop() })
-        is Screen.Editor -> MazeEditorScreen(
-            initialLevel = screen.level,
-            onSaved = { pop() },
-            onCancel = { pop() }
-        )
     }
 }
 
