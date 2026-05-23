@@ -4,14 +4,20 @@ import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -32,6 +38,8 @@ import com.rts.rys.ryy.wayfinding.ui.Routes
 import com.rts.rys.ryy.wayfinding.ui.SplashScreen
 import com.rts.rys.ryy.wayfinding.ui.StageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.theme.ChildrenWayfindingTheme
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,7 +52,11 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             ChildrenWayfindingTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
+                ) {
                     MazeApp()
                 }
             }
@@ -67,17 +79,28 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private const val BACK_DEBOUNCE_MS = 350L
+
 @Composable
 fun MazeApp() {
+    var showSplash by remember { mutableStateOf(true) }
+    if (showSplash) {
+        SplashScreen(onFinished = { showSplash = false })
+        return
+    }
+
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = Routes.SPLASH) {
-        composable(Routes.SPLASH) {
-            SplashScreen(onFinished = {
-                navController.navigate(Routes.HOME) {
-                    popUpTo(Routes.SPLASH) { inclusive = true }
-                }
-            })
+    val lastBackRef = remember { longArrayOf(0L) }
+
+    fun debounced(action: () -> Unit) {
+        val now = System.currentTimeMillis()
+        if (now - lastBackRef[0] >= BACK_DEBOUNCE_MS) {
+            lastBackRef[0] = now
+            action()
         }
+    }
+
+    NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeScreen(
                 onStart = { navController.navigate(Routes.LEVEL_SELECT) },
@@ -87,6 +110,7 @@ fun MazeApp() {
             )
         }
         composable(Routes.LEVEL_SELECT) {
+            BackHandler { debounced { navController.popBackStack() } }
             LevelSelectScreen(
                 onBack = { navController.popBackStack() },
                 onSelect = { level ->
@@ -98,6 +122,7 @@ fun MazeApp() {
             route = Routes.STAGE_SELECT,
             arguments = listOf(navArgument("level") { type = NavType.IntType })
         ) { entry ->
+            BackHandler { debounced { navController.popBackStack() } }
             val level = entry.arguments?.getInt("level") ?: 1
             StageSelectScreen(
                 level = level,
@@ -134,6 +159,9 @@ fun MazeApp() {
                 navArgument("clears") { type = NavType.IntType }
             )
         ) { entry ->
+            BackHandler {
+                debounced { navController.popBackStack(Routes.STAGE_SELECT, inclusive = false) }
+            }
             val stageId = entry.arguments?.getInt("stageId") ?: 1
             val elapsed = entry.arguments?.getLong("elapsed") ?: 0L
             val caught = entry.arguments?.getBoolean("caught") ?: false
@@ -154,9 +182,11 @@ fun MazeApp() {
             )
         }
         composable(Routes.RECORDS) {
+            BackHandler { debounced { navController.popBackStack() } }
             RecordsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.COLLECTION) {
+            BackHandler { debounced { navController.popBackStack() } }
             CollectionScreen(onBack = { navController.popBackStack() })
         }
         composable(
