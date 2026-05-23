@@ -2,7 +2,7 @@
 <resources>
 
     <style name="Theme.ChildrenWayfinding" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/space_bg</item>
+        <item name="android:windowBackground">@drawable/sky_window_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
