@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -75,6 +76,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.FloorTile
 import com.rts.rys.ryy.wayfinding.ui.theme.FloorTileAlt
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGoldDeep
+import com.rts.rys.ryy.wayfinding.ui.theme.GrassGreen
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
 import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
@@ -272,6 +274,8 @@ fun MazeEditorScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var previewMaze by remember { mutableStateOf<Maze?>(null) }
     var showInfiniteInfo by remember { mutableStateOf(false) }
+    var showAutoAddConfirm by remember { mutableStateOf(false) }
+    var showSaveConfirm by remember { mutableStateOf(false) }
 
     fun tryPreview() {
         val lines = board.map { String(it) }
@@ -359,23 +363,38 @@ fun MazeEditorScreen(
         errorMessage = null
     }
 
+    fun saveLinesAndExit(lines: List<String>) {
+        val repo = CustomMazesRepository(context)
+        repo.add(level, lines)
+        val all = repo.load()
+        Stages.setCustomStages(
+            all.groupBy { it.level }.flatMap { (_, ms) ->
+                ms.sortedBy { it.createdAt }
+                    .mapIndexed { i, m -> m.toStage(i + 1) }
+            }
+        )
+        Toast.makeText(context, "스테이지가 추가되었어요!", Toast.LENGTH_SHORT).show()
+        onSaved()
+    }
+
     fun trySave() {
         val lines = board.map { String(it) }
         when (val result = MazeValidator.validate(lines)) {
-            is MazeValidationResult.Ok -> {
-                val repo = CustomMazesRepository(context)
-                repo.add(level, lines)
-                val all = repo.load()
-                Stages.setCustomStages(
-                    all.groupBy { it.level }.flatMap { (_, ms) ->
-                        ms.sortedBy { it.createdAt }
-                            .mapIndexed { i, m -> m.toStage(i + 1) }
-                    }
-                )
-                onSaved()
-            }
+            is MazeValidationResult.Ok -> showSaveConfirm = true
             is MazeValidationResult.Error -> errorMessage = result.message
         }
+    }
+
+    fun autoAdd() {
+        repeat(5) {
+            val candidate = randomBoard(level)
+            val lines = candidate.map { String(it) }
+            if (MazeValidator.validate(lines) is MazeValidationResult.Ok) {
+                saveLinesAndExit(lines)
+                return
+            }
+        }
+        errorMessage = "자동 생성에 실패했어요. 다시 눌러보세요."
     }
 
     Box(
@@ -480,6 +499,15 @@ fun MazeEditorScreen(
 
             Spacer(Modifier.height(8.dp))
 
+            ActionButton(
+                label = "알아서 추가",
+                bg = GrassGreen,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { showAutoAddConfirm = true }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -495,6 +523,104 @@ fun MazeEditorScreen(
                 level = level,
                 onExit = { previewMaze = null }
             )
+        }
+
+        if (showSaveConfirm) {
+            Dialog(onDismissRequest = { showSaveConfirm = false }) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.White)
+                        .padding(24.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "💾 저장하기",
+                            color = InkDark,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "스테이지 ${level}에\n이 게임을 저장할까요?",
+                            color = InkSoft,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            ActionButton(
+                                label = "취소",
+                                bg = CoralPink,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showSaveConfirm = false }
+                            )
+                            ActionButton(
+                                label = "저장",
+                                bg = SkyBlue,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    showSaveConfirm = false
+                                    saveLinesAndExit(board.map { String(it) })
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showAutoAddConfirm) {
+            Dialog(onDismissRequest = { showAutoAddConfirm = false }) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.White)
+                        .padding(24.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "✨ 알아서 추가",
+                            color = InkDark,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "스테이지 ${level}에 자동으로\n새 게임을 추가할까요?",
+                            color = InkSoft,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            ActionButton(
+                                label = "취소",
+                                bg = CoralPink,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showAutoAddConfirm = false }
+                            )
+                            ActionButton(
+                                label = "추가",
+                                bg = GrassGreen,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    showAutoAddConfirm = false
+                                    autoAdd()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         if (showInfiniteInfo) {
