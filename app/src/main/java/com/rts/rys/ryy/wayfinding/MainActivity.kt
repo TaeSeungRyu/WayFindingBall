@@ -1,5 +1,7 @@
 package com.rts.rys.ryy.wayfinding
 
+import android.app.Activity
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.WindowManager
@@ -10,19 +12,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import android.content.Context
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
@@ -34,10 +36,10 @@ import com.rts.rys.ryy.wayfinding.ui.LevelSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.MazeEditorScreen
 import com.rts.rys.ryy.wayfinding.ui.RecordsScreen
 import com.rts.rys.ryy.wayfinding.ui.ResultScreen
-import com.rts.rys.ryy.wayfinding.ui.Routes
 import com.rts.rys.ryy.wayfinding.ui.SplashScreen
 import com.rts.rys.ryy.wayfinding.ui.StageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.theme.ChildrenWayfindingTheme
+import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 
@@ -55,8 +57,16 @@ class MainActivity : ComponentActivity() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
+                        .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom))),
+                    contentAlignment = Alignment.Center
                 ) {
+                    Text(
+                        text = "또르르 미로",
+                        fontSize = 56.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = InkDark,
+                        letterSpacing = 4.sp
+                    )
                     MazeApp()
                 }
             }
@@ -79,7 +89,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private const val BACK_DEBOUNCE_MS = 350L
+private sealed class Screen {
+    data object Home : Screen()
+    data object LevelSelect : Screen()
+    data class StageSelect(val level: Int) : Screen()
+    data class Game(val stageId: Int) : Screen()
+    data class Result(
+        val stageId: Int,
+        val elapsedMs: Long,
+        val caught: Boolean,
+        val clears: Int
+    ) : Screen()
+    data object Records : Screen()
+    data object Collection : Screen()
+    data class Editor(val level: Int) : Screen()
+}
 
 @Composable
 fun MazeApp() {
@@ -89,117 +113,76 @@ fun MazeApp() {
         return
     }
 
-    val navController = rememberNavController()
-    val lastBackRef = remember { longArrayOf(0L) }
+    val activity = LocalContext.current as? Activity
+    val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
 
-    fun debounced(action: () -> Unit) {
-        val now = System.currentTimeMillis()
-        if (now - lastBackRef[0] >= BACK_DEBOUNCE_MS) {
-            lastBackRef[0] = now
-            action()
+    fun push(screen: Screen) {
+        backStack.add(screen)
+    }
+    fun pop() {
+        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+    }
+    fun popUntil(predicate: (Screen) -> Boolean) {
+        while (backStack.size > 1 && !predicate(backStack.last())) {
+            backStack.removeAt(backStack.lastIndex)
+        }
+    }
+    fun replaceTop(screen: Screen) {
+        backStack[backStack.lastIndex] = screen
+    }
+
+    BackHandler {
+        if (backStack.size > 1) {
+            backStack.removeAt(backStack.lastIndex)
+        } else {
+            activity?.finish()
         }
     }
 
-    NavHost(navController = navController, startDestination = Routes.HOME) {
-        composable(Routes.HOME) {
-            HomeScreen(
-                onStart = { navController.navigate(Routes.LEVEL_SELECT) },
-                onRecords = { navController.navigate(Routes.RECORDS) },
-                onCreate = { navController.navigate(Routes.editor(1)) },
-                onCollection = { navController.navigate(Routes.COLLECTION) }
-            )
-        }
-        composable(Routes.LEVEL_SELECT) {
-            BackHandler { debounced { navController.popBackStack() } }
-            LevelSelectScreen(
-                onBack = { navController.popBackStack() },
-                onSelect = { level ->
-                    navController.navigate(Routes.stages(level))
-                }
-            )
-        }
-        composable(
-            route = Routes.STAGE_SELECT,
-            arguments = listOf(navArgument("level") { type = NavType.IntType })
-        ) { entry ->
-            BackHandler { debounced { navController.popBackStack() } }
-            val level = entry.arguments?.getInt("level") ?: 1
-            StageSelectScreen(
-                level = level,
-                onBack = { navController.popBackStack() },
-                onSelect = { stageId ->
-                    navController.navigate(Routes.game(stageId))
-                }
-            )
-        }
-        composable(
-            route = Routes.GAME,
-            arguments = listOf(navArgument("stageId") { type = NavType.IntType })
-        ) { entry ->
-            val stageId = entry.arguments?.getInt("stageId") ?: 1
-            val stage = remember(stageId) { Stages.byId(stageId) }
+    when (val screen = backStack.last()) {
+        Screen.Home -> HomeScreen(
+            onStart = { push(Screen.LevelSelect) },
+            onRecords = { push(Screen.Records) },
+            onCreate = { push(Screen.Editor(1)) },
+            onCollection = { push(Screen.Collection) }
+        )
+        Screen.LevelSelect -> LevelSelectScreen(
+            onBack = { pop() },
+            onSelect = { level -> push(Screen.StageSelect(level)) }
+        )
+        is Screen.StageSelect -> StageSelectScreen(
+            level = screen.level,
+            onBack = { pop() },
+            onSelect = { stageId -> push(Screen.Game(stageId)) }
+        )
+        is Screen.Game -> {
+            val stage = remember(screen.stageId) { Stages.byId(screen.stageId) }
             GameScreen(
                 stage = stage,
                 onFinished = { elapsed, caught, clears ->
-                    navController.navigate(Routes.result(stageId, elapsed, caught, clears)) {
-                        popUpTo(Routes.GAME) { inclusive = true }
-                    }
+                    replaceTop(Screen.Result(screen.stageId, elapsed, caught, clears))
                 },
-                onExit = {
-                    navController.popBackStack(Routes.STAGE_SELECT, inclusive = false)
-                }
+                onExit = { popUntil { it is Screen.StageSelect } }
             )
         }
-        composable(
-            route = Routes.RESULT,
-            arguments = listOf(
-                navArgument("stageId") { type = NavType.IntType },
-                navArgument("elapsed") { type = NavType.LongType },
-                navArgument("caught") { type = NavType.BoolType },
-                navArgument("clears") { type = NavType.IntType }
-            )
-        ) { entry ->
-            BackHandler {
-                debounced { navController.popBackStack(Routes.STAGE_SELECT, inclusive = false) }
-            }
-            val stageId = entry.arguments?.getInt("stageId") ?: 1
-            val elapsed = entry.arguments?.getLong("elapsed") ?: 0L
-            val caught = entry.arguments?.getBoolean("caught") ?: false
-            val clears = entry.arguments?.getInt("clears") ?: 0
-            ResultScreen(
-                stageId = stageId,
-                elapsedMs = elapsed,
-                caught = caught,
-                clears = clears,
-                onRetry = {
-                    navController.navigate(Routes.game(stageId)) {
-                        popUpTo(Routes.STAGE_SELECT) { inclusive = false }
-                    }
-                },
-                onHome = {
-                    navController.popBackStack(Routes.STAGE_SELECT, inclusive = false)
-                }
-            )
-        }
-        composable(Routes.RECORDS) {
-            BackHandler { debounced { navController.popBackStack() } }
-            RecordsScreen(onBack = { navController.popBackStack() })
-        }
-        composable(Routes.COLLECTION) {
-            BackHandler { debounced { navController.popBackStack() } }
-            CollectionScreen(onBack = { navController.popBackStack() })
-        }
-        composable(
-            route = Routes.EDITOR,
-            arguments = listOf(navArgument("level") { type = NavType.IntType })
-        ) { entry ->
-            val initialLevel = entry.arguments?.getInt("level") ?: 1
-            MazeEditorScreen(
-                initialLevel = initialLevel,
-                onSaved = { navController.popBackStack() },
-                onCancel = { navController.popBackStack() }
-            )
-        }
+        is Screen.Result -> ResultScreen(
+            stageId = screen.stageId,
+            elapsedMs = screen.elapsedMs,
+            caught = screen.caught,
+            clears = screen.clears,
+            onRetry = {
+                popUntil { it is Screen.StageSelect }
+                push(Screen.Game(screen.stageId))
+            },
+            onHome = { popUntil { it is Screen.StageSelect } }
+        )
+        Screen.Records -> RecordsScreen(onBack = { pop() })
+        Screen.Collection -> CollectionScreen(onBack = { pop() })
+        is Screen.Editor -> MazeEditorScreen(
+            initialLevel = screen.level,
+            onSaved = { pop() },
+            onCancel = { pop() }
+        )
     }
 }
 
