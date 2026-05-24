@@ -97,8 +97,8 @@ private enum class BombState { IDLE, ARMED, COOLDOWN }
 
 private class FireTrail(val col: Int, val row: Int, var age: Float)
 
-private const val BOMB_FUSE_S = 3f
-private const val BOMB_COOLDOWN_S = 10f
+private const val BOMB_FUSE_S = 2f
+private const val BOMB_COOLDOWN_S = 5f
 
 private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
@@ -675,7 +675,7 @@ fun GameScreen(
                         if (bombTimer <= 0f) {
                             explodeBomb()
                             bombState = BombState.COOLDOWN
-                            bombTimer = if (isFire) 5f else BOMB_COOLDOWN_S
+                            bombTimer = BOMB_COOLDOWN_S
                         }
                     }
                     BombState.COOLDOWN -> {
