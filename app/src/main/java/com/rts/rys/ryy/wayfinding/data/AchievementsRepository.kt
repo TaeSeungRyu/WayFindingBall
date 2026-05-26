@@ -20,9 +20,18 @@ class AchievementsRepository(context: Context) {
         prefs.edit().putString(KEY_SKIN, id).apply()
     }
 
+    fun loadPurchasedSkins(): Set<String> =
+        prefs.getStringSet(KEY_PURCHASED, emptySet())?.toSet() ?: emptySet()
+
+    fun markSkinPurchased(id: String) {
+        val updated = loadPurchasedSkins() + id
+        prefs.edit().putStringSet(KEY_PURCHASED, updated).apply()
+    }
+
     companion object {
         private const val PREFS = "achievements"
         private const val KEY_BADGES = "unlocked_badges"
         private const val KEY_SKIN = "current_skin"
+        private const val KEY_PURCHASED = "purchased_skins"
     }
 }

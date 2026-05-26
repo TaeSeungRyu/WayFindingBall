@@ -42,7 +42,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,7 +55,10 @@ import com.rts.rys.ryy.wayfinding.data.Badges
 import com.rts.rys.ryy.wayfinding.data.BallSkin
 import com.rts.rys.ryy.wayfinding.data.BallSkins
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
+import com.rts.rys.ryy.wayfinding.data.StarWallet
 import com.rts.rys.ryy.wayfinding.game.Stages
+import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
+import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
@@ -67,7 +72,10 @@ fun CollectionScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(CollectionTab.BADGES) }
     var unlocked by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var purchased by remember { mutableStateOf<Set<String>>(emptySet()) }
     var currentSkinId by remember { mutableStateOf(BallSkins.DEFAULT.id) }
+    var balance by remember { mutableStateOf(0) }
+    var pendingPurchase by remember { mutableStateOf<BallSkin?>(null) }
 
     LaunchedEffect(Unit) {
         // 실제 데이터 기준으로 배지를 다시 평가하여 SharedPreferences를 덮어쓴다.
@@ -78,9 +86,13 @@ fun CollectionScreen(onBack: () -> Unit) {
         val repo = AchievementsRepository(context)
         repo.saveUnlockedBadges(current)
         unlocked = current
+        purchased = repo.loadPurchasedSkins()
+        val wallet = StarWallet(context)
+        wallet.migrateOnce(records)
+        balance = wallet.balance()
         // 현재 선택된 스킨이 잠긴 상태로 되돌아오면 기본 공으로 복귀
         val savedSkin = BallSkins.byId(repo.loadCurrentSkinId())
-        if (!BallSkins.isUnlocked(savedSkin, current)) {
+        if (!BallSkins.isUnlocked(savedSkin, current, purchased)) {
             repo.saveCurrentSkinId(BallSkins.DEFAULT.id)
             currentSkinId = BallSkins.DEFAULT.id
         } else {
@@ -137,18 +149,60 @@ fun CollectionScreen(onBack: () -> Unit) {
 
             when (tab) {
                 CollectionTab.BADGES -> BadgesGrid(unlocked, navBottom)
-                CollectionTab.SKINS -> SkinsGrid(
-                    unlockedBadges = unlocked,
-                    currentSkinId = currentSkinId,
-                    navBottom = navBottom,
-                    onSelect = { skin ->
-                        if (BallSkins.isUnlocked(skin, unlocked)) {
-                            currentSkinId = skin.id
-                            AchievementsRepository(context).saveCurrentSkinId(skin.id)
-                        }
-                    }
-                )
+                CollectionTab.SKINS -> {
+                    StarBalanceBar(balance = balance)
+                    Spacer(Modifier.height(10.dp))
+                    SkinsGrid(
+                        unlockedBadges = unlocked,
+                        purchasedSkins = purchased,
+                        currentSkinId = currentSkinId,
+                        navBottom = navBottom,
+                        onSelect = { skin ->
+                            if (BallSkins.isUnlocked(skin, unlocked, purchased)) {
+                                currentSkinId = skin.id
+                                AchievementsRepository(context).saveCurrentSkinId(skin.id)
+                            }
+                        },
+                        onPurchase = { skin -> pendingPurchase = skin }
+                    )
+                }
             }
+        }
+
+        pendingPurchase?.let { skin ->
+            PurchaseConfirmDialog(
+                skin = skin,
+                balance = balance,
+                onCancel = { pendingPurchase = null },
+                onConfirm = {
+                    val price = skin.priceStars
+                    if (price == null) {
+                        pendingPurchase = null
+                        return@PurchaseConfirmDialog
+                    }
+                    val wallet = StarWallet(context)
+                    if (wallet.spend(price)) {
+                        val repo = AchievementsRepository(context)
+                        repo.markSkinPurchased(skin.id)
+                        repo.saveCurrentSkinId(skin.id)
+                        purchased = purchased + skin.id
+                        currentSkinId = skin.id
+                        balance = wallet.balance()
+                        Toast.makeText(
+                            context,
+                            "${skin.name}을 샀어요!",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "별이 부족해요 (보유 ${wallet.balance()} / 필요 $price)",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    pendingPurchase = null
+                }
+            )
         }
     }
 }
@@ -217,9 +271,11 @@ private fun BadgeCell(badge: Badge, unlocked: Boolean) {
 @Composable
 private fun SkinsGrid(
     unlockedBadges: Set<String>,
+    purchasedSkins: Set<String>,
     currentSkinId: String,
     navBottom: androidx.compose.ui.unit.Dp,
-    onSelect: (BallSkin) -> Unit
+    onSelect: (BallSkin) -> Unit,
+    onPurchase: (BallSkin) -> Unit,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -228,23 +284,68 @@ private fun SkinsGrid(
         contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp + navBottom)
     ) {
         items(BallSkins.ALL, key = { it.id }) { skin ->
-            val unlocked = BallSkins.isUnlocked(skin, unlockedBadges)
+            val unlocked = BallSkins.isUnlocked(skin, unlockedBadges, purchasedSkins)
             val selected = skin.id == currentSkinId
             SkinCell(
                 skin = skin,
                 unlocked = unlocked,
                 selected = selected,
                 unlockHint = unlockHintFor(skin),
-                onClick = { onSelect(skin) }
+                onClick = { onSelect(skin) },
+                onPurchase = { onPurchase(skin) },
             )
         }
     }
 }
 
 private fun unlockHintFor(skin: BallSkin): String {
-    val badgeId = skin.unlockBadgeId ?: return ""
-    val badge = Badges.byId(badgeId) ?: return ""
-    return "${badge.title} 배지 획득"
+    skin.unlockBadgeId?.let { id ->
+        val badge = Badges.byId(id) ?: return ""
+        return "${badge.title} 배지 획득"
+    }
+    skin.priceStars?.let { return "별 ${it}개로 구매" }
+    return ""
+}
+
+@Composable
+private fun StarBalanceBar(balance: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(2.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "★",
+            color = GoalGold,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = "내 별",
+            color = InkSoft,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = "$balance",
+            color = InkDark,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Black,
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = "별을 모아 새 공을 사요",
+            color = InkSoft,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
 }
 
 @Composable
@@ -253,9 +354,11 @@ private fun SkinCell(
     unlocked: Boolean,
     selected: Boolean,
     unlockHint: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onPurchase: () -> Unit,
 ) {
     val borderColor = if (selected) skin.deepColor else Color.Transparent
+    val showBuyButton = !unlocked && skin.priceStars != null
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -297,6 +400,26 @@ private fun SkinCell(
             textAlign = TextAlign.Center,
             maxLines = 2
         )
+        if (showBuyButton) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(CoralPink)
+                    .clickable(onClick = onPurchase)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("★", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.size(4.dp))
+                Text(
+                    "${skin.priceStars} 구매",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+            }
+        }
         if (borderColor != Color.Transparent) {
             Spacer(Modifier.height(4.dp))
             Box(
@@ -305,6 +428,91 @@ private fun SkinCell(
                     .clip(RoundedCornerShape(2.dp))
                     .background(borderColor)
             )
+        }
+    }
+}
+
+@Composable
+private fun PurchaseConfirmDialog(
+    skin: BallSkin,
+    balance: Int,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val price = skin.priceStars ?: 0
+    val canAfford = balance >= price
+    Dialog(onDismissRequest = onCancel) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color.White)
+                .padding(24.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF6F2EC)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    BallPreview(skin)
+                }
+                Text(
+                    text = skin.name,
+                    color = InkDark,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("★", color = GoalGold, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        text = "$price 별",
+                        color = InkDark,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+                Text(
+                    text = if (canAfford) "별 ${price}개로 살까요?" else "별이 부족해요 (보유 $balance)",
+                    color = if (canAfford) InkSoft else CoralPink,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SkyBlue)
+                            .clickable(onClick = onCancel),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("취소", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                    }
+                    val buyBg = if (canAfford) CoralPink else Color(0xFFBDBDBD)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(buyBg)
+                            .clickable(enabled = canAfford, onClick = onConfirm),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("살래요", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+            }
         }
     }
 }

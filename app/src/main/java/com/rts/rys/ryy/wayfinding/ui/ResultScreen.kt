@@ -54,6 +54,7 @@ import com.rts.rys.ryy.wayfinding.data.Badges
 import com.rts.rys.ryy.wayfinding.data.DailyRepository
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
+import com.rts.rys.ryy.wayfinding.data.StarWallet
 import com.rts.rys.ryy.wayfinding.game.DailyChallenge
 import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stages
@@ -116,6 +117,9 @@ fun ResultScreen(
         )
         if (isDaily) {
             DailyRepository(context).recordClear(today, elapsedMs)
+        }
+        if (!isInfinite && earnedStars > 0) {
+            StarWallet(context).add(earnedStars)
         }
         // 새로 해제된 배지 평가
         val updatedRecords = repo.load()

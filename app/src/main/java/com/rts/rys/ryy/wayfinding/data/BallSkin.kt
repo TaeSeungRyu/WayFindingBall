@@ -23,10 +23,12 @@ data class BallSkin(
     val coreColor: Color,
     val deepColor: Color,
     val trailColor: Color,
-    /** null이면 항상 해제. 아니면 그 배지 획득 시 해제 */
+    /** null이면 배지 조건 없음. 아니면 그 배지 획득 시 해제 */
     val unlockBadgeId: String?,
     val shape: BallShape = BallShape.CIRCLE,
-    val decoration: BallDecoration = BallDecoration.NONE
+    val decoration: BallDecoration = BallDecoration.NONE,
+    /** null이면 구매 불가(배지/기본). 아니면 별 N개로 구매해 해제 */
+    val priceStars: Int? = null,
 )
 
 object BallSkins {
@@ -58,10 +60,38 @@ object BallSkins {
         coreColor = Color(0xFF8D6E63), deepColor = Color(0xFF4E342E), trailColor = Color(0xFFA1887F),
         unlockBadgeId = "veteran", shape = BallShape.POOP, decoration = BallDecoration.POOP_STEAM)
 
-    val ALL: List<BallSkin> = listOf(DEFAULT, SUNNY, OCEAN, FOREST, ROYAL, EMBER, SHADOW, RAINBOW, POOP)
+    // 별로 구매하는 프리미엄 스킨
+    val STARLIGHT = BallSkin("starlight", "별빛 공", "✨",
+        coreColor = Color(0xFF3949AB), deepColor = Color(0xFF1A237E), trailColor = Color(0xFF9FA8DA),
+        unlockBadgeId = null, decoration = BallDecoration.SHADOW_TWIN, priceStars = 50)
+    val CANDY     = BallSkin("candy",     "사탕 공", "🍬",
+        coreColor = Color(0xFFFF80AB), deepColor = Color(0xFFC2185B), trailColor = Color(0xFFFFC1E3),
+        unlockBadgeId = null, priceStars = 80)
+    val ICE       = BallSkin("ice",       "얼음 공", "🧊",
+        coreColor = Color(0xFF80DEEA), deepColor = Color(0xFF00838F), trailColor = Color(0xFFB2EBF2),
+        unlockBadgeId = null, decoration = BallDecoration.LEAF_TOP, priceStars = 120)
+    val GOLD      = BallSkin("gold",      "황금 공", "🏆",
+        coreColor = Color(0xFFFFD700), deepColor = Color(0xFFB8860B), trailColor = Color(0xFFFFF59D),
+        unlockBadgeId = null, decoration = BallDecoration.CROWN, priceStars = 200)
+    val PRISM     = BallSkin("prism",     "무지개왕", "👑",
+        coreColor = Color(0xFFEA80FC), deepColor = Color(0xFFAA00FF), trailColor = Color(0xFFE1BEE7),
+        unlockBadgeId = null, decoration = BallDecoration.RAINBOW_RING, priceStars = 350)
+
+    val ALL: List<BallSkin> = listOf(
+        DEFAULT, SUNNY, OCEAN, FOREST, ROYAL, EMBER, SHADOW, RAINBOW, POOP,
+        STARLIGHT, CANDY, ICE, GOLD, PRISM,
+    )
 
     fun byId(id: String): BallSkin = ALL.firstOrNull { it.id == id } ?: DEFAULT
 
-    fun isUnlocked(skin: BallSkin, unlockedBadges: Set<String>): Boolean =
-        skin.unlockBadgeId == null || skin.unlockBadgeId in unlockedBadges
+    fun isUnlocked(
+        skin: BallSkin,
+        unlockedBadges: Set<String>,
+        purchasedSkinIds: Set<String> = emptySet(),
+    ): Boolean {
+        if (skin.unlockBadgeId == null && skin.priceStars == null) return true
+        if (skin.unlockBadgeId != null && skin.unlockBadgeId in unlockedBadges) return true
+        if (skin.priceStars != null && skin.id in purchasedSkinIds) return true
+        return false
+    }
 }
