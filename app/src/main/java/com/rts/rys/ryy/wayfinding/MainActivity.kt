@@ -41,6 +41,7 @@ import com.rts.rys.ryy.wayfinding.ui.RecordsScreen
 import com.rts.rys.ryy.wayfinding.ui.ResultScreen
 import com.rts.rys.ryy.wayfinding.ui.SplashScreen
 import com.rts.rys.ryy.wayfinding.ui.StageSelectScreen
+import com.rts.rys.ryy.wayfinding.ui.TutorialScreen
 import com.rts.rys.ryy.wayfinding.ui.theme.ChildrenWayfindingTheme
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
@@ -102,8 +103,16 @@ private sealed class Screen {
 @Composable
 fun MazeApp() {
     var showSplash by remember { mutableStateOf(true) }
+    var showTutorial by remember { mutableStateOf(!AppSettings.tutorialSeen.value) }
     if (showSplash) {
         SplashScreen(onFinished = { showSplash = false })
+        return
+    }
+    if (showTutorial) {
+        TutorialScreen(onFinished = {
+            AppSettings.setTutorialSeen(true)
+            showTutorial = false
+        })
         return
     }
 
@@ -166,7 +175,8 @@ fun MazeApp() {
                 },
                 onRecords = { push(Screen.Records) },
                 onCreate = { push(Screen.Editor(1)) },
-                onCollection = { push(Screen.Collection) }
+                onCollection = { push(Screen.Collection) },
+                onTutorial = { showTutorial = true }
             )
             Screen.LevelSelect -> LevelSelectScreen(
                 onBack = { pop() },

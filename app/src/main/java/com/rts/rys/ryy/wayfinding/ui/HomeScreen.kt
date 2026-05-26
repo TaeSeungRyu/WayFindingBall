@@ -57,7 +57,8 @@ fun HomeScreen(
     onDaily: () -> Unit,
     onRecords: () -> Unit,
     onCreate: () -> Unit,
-    onCollection: () -> Unit
+    onCollection: () -> Unit,
+    onTutorial: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val today = remember { LocalDate.now() }

@@ -14,6 +14,7 @@ object AppSettings {
     private const val KEY_SENSOR_SENSITIVITY = "sensor_sensitivity"
     private const val KEY_SENSOR_OFFSET_X = "sensor_offset_x"
     private const val KEY_SENSOR_OFFSET_Y = "sensor_offset_y"
+    private const val KEY_TUTORIAL_SEEN = "tutorial_seen"
 
     private var prefs: SharedPreferences? = null
 
@@ -35,6 +36,9 @@ object AppSettings {
     private val _sensorOffsetY = mutableFloatStateOf(0f)
     val sensorOffsetY: MutableState<Float> get() = _sensorOffsetY
 
+    private val _tutorialSeen: MutableState<Boolean> = mutableStateOf(false)
+    val tutorialSeen: MutableState<Boolean> get() = _tutorialSeen
+
     fun init(context: Context) {
         if (prefs == null) {
             val p = context.applicationContext
@@ -46,7 +50,13 @@ object AppSettings {
             _sensorSensitivity.value = p.getFloat(KEY_SENSOR_SENSITIVITY, 1.0f)
             _sensorOffsetX.value = p.getFloat(KEY_SENSOR_OFFSET_X, 0f)
             _sensorOffsetY.value = p.getFloat(KEY_SENSOR_OFFSET_Y, 0f)
+            _tutorialSeen.value = p.getBoolean(KEY_TUTORIAL_SEEN, false)
         }
+    }
+
+    fun setTutorialSeen(value: Boolean) {
+        _tutorialSeen.value = value
+        prefs?.edit()?.putBoolean(KEY_TUTORIAL_SEEN, value)?.apply()
     }
 
     fun setSensorEnabled(value: Boolean) {
