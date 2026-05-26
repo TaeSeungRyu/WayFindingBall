@@ -18,22 +18,19 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
+import com.rts.rys.ryy.wayfinding.game.DailyChallenge
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.ui.CollectionScreen
 import com.rts.rys.ryy.wayfinding.ui.GameScreen
@@ -45,7 +42,6 @@ import com.rts.rys.ryy.wayfinding.ui.ResultScreen
 import com.rts.rys.ryy.wayfinding.ui.SplashScreen
 import com.rts.rys.ryy.wayfinding.ui.StageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.theme.ChildrenWayfindingTheme
-import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 
@@ -63,16 +59,8 @@ class MainActivity : ComponentActivity() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom))),
-                    contentAlignment = Alignment.Center
+                        .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
                 ) {
-                    Text(
-                        text = "또르르 미로",
-                        fontSize = 56.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = InkDark,
-                        letterSpacing = 4.sp
-                    )
                     MazeApp()
                 }
             }
@@ -171,6 +159,11 @@ fun MazeApp() {
         when (screen) {
             Screen.Home -> HomeScreen(
                 onStart = { push(Screen.LevelSelect) },
+                onDaily = {
+                    val stage = DailyChallenge.today()
+                    Stages.setDailyStage(stage)
+                    push(Screen.Game(stage.id))
+                },
                 onRecords = { push(Screen.Records) },
                 onCreate = { push(Screen.Editor(1)) },
                 onCollection = { push(Screen.Collection) }

@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,9 +34,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.rts.rys.ryy.wayfinding.data.AppSettings
+import com.rts.rys.ryy.wayfinding.data.DailyRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
+import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
 import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
@@ -43,14 +47,21 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import com.rts.rys.ryy.wayfinding.ui.theme.SunYellow
+import java.time.LocalDate
 
 @Composable
 fun HomeScreen(
     onStart: () -> Unit,
+    onDaily: () -> Unit,
     onRecords: () -> Unit,
     onCreate: () -> Unit,
     onCollection: () -> Unit
 ) {
+    val context = LocalContext.current
+    val today = remember { LocalDate.now() }
+    val dailyRepo = remember { DailyRepository(context) }
+    val dailyCleared = remember { dailyRepo.bestFor(today) != null }
+    val streak = remember { dailyRepo.streak(today) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -109,6 +120,12 @@ fun HomeScreen(
                 emoji = "▶",
                 bg = CoralPink,
                 onClick = onStart
+            )
+            Spacer(Modifier.height(20.dp))
+            DailyButton(
+                cleared = dailyCleared,
+                streak = streak,
+                onClick = onDaily
             )
             Spacer(Modifier.height(20.dp))
             BigButton(
@@ -252,6 +269,64 @@ private fun SensorSegment(
             fontSize = 16.sp,
             fontWeight = FontWeight.ExtraBold
         )
+    }
+}
+
+@Composable
+private fun DailyButton(
+    cleared: Boolean,
+    streak: Int,
+    onClick: () -> Unit
+) {
+    val bg = GoalGold
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(68.dp)
+            .shadow(8.dp, RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(28.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (cleared) "✓" else "☼",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Spacer(Modifier.size(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "오늘의 도전",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.sp
+            )
+            val sub = when {
+                cleared && streak > 1 -> "오늘 완료 · 🔥 ${streak}일 연속"
+                cleared -> "오늘 완료!"
+                streak > 0 -> "🔥 ${streak}일 연속 도전 중"
+                else -> "매일 새 미로가 나와요"
+            }
+            Text(
+                text = sub,
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
 

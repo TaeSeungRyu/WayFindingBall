@@ -51,10 +51,13 @@ import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.AchievementsRepository
 import com.rts.rys.ryy.wayfinding.data.Badge
 import com.rts.rys.ryy.wayfinding.data.Badges
+import com.rts.rys.ryy.wayfinding.data.DailyRepository
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
+import com.rts.rys.ryy.wayfinding.game.DailyChallenge
 import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stages
+import java.time.LocalDate
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGoldDeep
@@ -79,6 +82,8 @@ fun ResultScreen(
     val context = LocalContext.current
     val stage = remember(stageId) { Stages.byId(stageId) }
     val isInfinite = stage.level in 14..20
+    val today = remember { LocalDate.now() }
+    val isDaily = stageId == DailyChallenge.idFor(today)
     val earnedStars = remember(stageId, elapsedMs, caught) {
         if (caught || isInfinite) 0 else MazePar.starsFor(stage, elapsedMs)
     }
@@ -109,6 +114,9 @@ fun ResultScreen(
                 cleared = clears
             )
         )
+        if (isDaily) {
+            DailyRepository(context).recordClear(today, elapsedMs)
+        }
         // 새로 해제된 배지 평가
         val updatedRecords = repo.load()
         val customCount = Stages.customStages.value.size
@@ -240,7 +248,7 @@ fun ResultScreen(
             Spacer(Modifier.height(36.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                BigPillButton("단계 고르기", SkyBlue, onHome)
+                BigPillButton(if (isDaily) "홈으로" else "단계 고르기", SkyBlue, onHome)
                 BigPillButton("다시 해요", CoralPink, onRetry)
             }
         }

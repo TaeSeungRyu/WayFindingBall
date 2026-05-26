@@ -1,5 +1,7 @@
 package com.rts.rys.ryy.wayfinding.game
 
+import kotlin.random.Random
+
 /**
  * Generates a random maze of [size] x [size] (must be odd).
  *
@@ -9,8 +11,17 @@ package com.rts.rys.ryy.wayfinding.game
  *
  * Start is placed at (1,1); goal at the cell with the greatest BFS
  * distance from start (or (n-2, n-2) as a fallback).
+ *
+ * Pass a seeded [random] for deterministic generation (used by the daily
+ * challenge). [starCount] sprinkles collectible stars at random empty
+ * cells. [withPortals] places a P/Q pair at two random empty cells.
  */
-fun generateRandomMaze(size: Int): Maze {
+fun generateRandomMaze(
+    size: Int,
+    random: Random = Random.Default,
+    starCount: Int = 0,
+    withPortals: Boolean = false,
+): Maze {
     val n = if (size % 2 == 1) size else size - 1
     val board = Array(n) { CharArray(n) { '#' } }
     board[1][1] = ' '
@@ -20,7 +31,7 @@ fun generateRandomMaze(size: Int): Maze {
     while (stack.isNotEmpty()) {
         val (c, r) = stack.last()
         var moved = false
-        for ((dc, dr) in dirs.shuffled()) {
+        for ((dc, dr) in dirs.shuffled(random)) {
             val nc = c + dc
             val nr = r + dr
             if (nc in 1 until n - 1 && nr in 1 until n - 1 && board[nr][nc] == '#') {
@@ -36,6 +47,24 @@ fun generateRandomMaze(size: Int): Maze {
     val (gc, gr) = farthestEmpty(board, 1, 1)
     board[1][1] = 'S'
     board[gr][gc] = 'G'
+
+    val emptyCells = mutableListOf<Pair<Int, Int>>()
+    for (r in 0 until n) for (c in 0 until n) {
+        if (board[r][c] == ' ') emptyCells.add(c to r)
+    }
+    emptyCells.shuffle(random)
+
+    if (withPortals && emptyCells.size >= 2) {
+        val (pc, pr) = emptyCells.removeAt(emptyCells.lastIndex)
+        val (qc, qr) = emptyCells.removeAt(emptyCells.lastIndex)
+        board[pr][pc] = 'P'
+        board[qr][qc] = 'Q'
+    }
+    repeat(starCount.coerceAtMost(emptyCells.size)) {
+        val (sc, sr) = emptyCells.removeAt(emptyCells.lastIndex)
+        board[sr][sc] = '*'
+    }
+
     return Maze.fromAscii(board.map { String(it) })
 }
 

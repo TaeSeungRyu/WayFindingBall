@@ -44,6 +44,13 @@ object Stages {
         _customStages.value = stages
     }
 
+    private val _dailyStage = mutableStateOf<Stage?>(null)
+    val dailyStage: State<Stage?> = _dailyStage
+
+    fun setDailyStage(stage: Stage) {
+        _dailyStage.value = stage
+    }
+
     private data class StageSpec(val level: Int, val lines: List<String>)
 
     private fun stage(level: Int, lines: List<String>): StageSpec =
@@ -1035,7 +1042,9 @@ object Stages {
 
     fun byId(id: Int): Stage =
         all.firstOrNull { it.id == id }
-            ?: _customStages.value.first { it.id == id }
+            ?: _customStages.value.firstOrNull { it.id == id }
+            ?: _dailyStage.value?.takeIf { it.id == id }
+            ?: throw NoSuchElementException("No stage with id $id")
 
     fun byLevel(level: Int): List<Stage> =
         all.filter { it.level == level } + _customStages.value.filter { it.level == level }
