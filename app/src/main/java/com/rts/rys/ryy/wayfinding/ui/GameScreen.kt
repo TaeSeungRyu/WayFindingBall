@@ -179,7 +179,8 @@ fun GameScreen(
                 ChaserController(workingMaze, spawnIndex = i, randomMove = true, randomSpawnMinDistance = 6)
             }
             isGrow -> listOf(ChaserController(workingMaze, randomSpawnMinDistance = 6))
-            stage.level == 8 || stage.level == 10 -> listOf(ChaserController(workingMaze))
+            stage.level == 8 -> listOf(ChaserController(workingMaze, moveIntervalS = 1.0f))
+            stage.level == 10 -> listOf(ChaserController(workingMaze, moveIntervalS = 1.0f))
             else -> emptyList()
         }
         mutableStateListOf<ChaserController>().apply { addAll(initial) }
