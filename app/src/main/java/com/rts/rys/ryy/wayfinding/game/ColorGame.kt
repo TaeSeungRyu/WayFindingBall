@@ -38,6 +38,8 @@ data class ColorStage(
     val shuffleColors: Boolean = false,
     /** true면 술래(적)가 공을 쫓아온다. 잡히면 게임 오버. */
     val chaser: Boolean = false,
+    /** true면 시작 시 색 순서를 보여준 뒤, 안내 없이 그 순서대로 찾아가야 한다. */
+    val memorizeOrder: Boolean = false,
 )
 
 object ColorGame {
@@ -105,6 +107,7 @@ object ColorGame {
         ColorStage(4, "4단계", "작은 칸 + 움직이는 벽", zonesSmall, 5, dynamicWalls = true),
         ColorStage(5, "5단계", "깜깜해요", zones6, 5, dark = true, shuffleColors = true),
         ColorStage(6, "6단계", "술래 + 움직이는 벽", zones6, 5, chaser = true, dynamicWalls = true),
+        ColorStage(7, "7단계", "순서대로 기억해요", zones6, 4, memorizeOrder = true),
     )
 
     /** 색칸 위치는 그대로 두고 색만 무작위로 재배치한다. */

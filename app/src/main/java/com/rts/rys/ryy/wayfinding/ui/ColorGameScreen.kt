@@ -61,6 +61,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import kotlinx.coroutines.android.awaitFrame
+import kotlinx.coroutines.delay
 import kotlin.math.floor
 import kotlin.math.sin
 
@@ -118,6 +119,7 @@ fun ColorGameScreen(
     var pulse by remember(attemptId) { mutableFloatStateOf(0f) }
     var chaserX by remember(attemptId) { mutableFloatStateOf(0f) }
     var chaserY by remember(attemptId) { mutableFloatStateOf(0f) }
+    var showMemorize by remember(attemptId) { mutableStateOf(stage.memorizeOrder) }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
@@ -138,6 +140,7 @@ fun ColorGameScreen(
         var last = 0L
         while (!finished) {
             val now = awaitFrame()
+            if (showMemorize) { last = 0L; continue }  // 기억 단계 동안 정지
             if (last == 0L) { last = now; continue }
             val dt = ((now - last).coerceAtMost(33_000_000L)) / 1_000_000_000f
             elapsedMs += (now - last) / 1_000_000L
@@ -247,19 +250,28 @@ fun ColorGameScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(target.color)
-                )
-                Spacer(Modifier.size(10.dp))
-                Text(
-                    text = "${target.name}으로 가요!",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = InkDark,
-                )
+                if (stage.memorizeOrder) {
+                    Text(
+                        text = "기억한 순서대로 가요!",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = InkDark,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(target.color)
+                    )
+                    Spacer(Modifier.size(10.dp))
+                    Text(
+                        text = "${target.name}으로 가요!",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = InkDark,
+                    )
+                }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -284,6 +296,7 @@ fun ColorGameScreen(
                     dark = stage.dark,
                     chaserX = if (chaser != null) chaserX else null,
                     chaserY = if (chaser != null) chaserY else null,
+                    highlightTarget = !stage.memorizeOrder,
                 )
             }
 
@@ -293,9 +306,16 @@ fun ColorGameScreen(
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 DPad(
                     onInput = { dx, dy -> kx = dx; ky = dy },
-                    enabled = !finished
+                    enabled = !finished && !showMemorize
                 )
             }
+        }
+
+        if (showMemorize) {
+            MemorizeOverlay(
+                steps = targetSeq.map { zones[it] },
+                onDone = { showMemorize = false },
+            )
         }
 
         if (finished) {
@@ -306,6 +326,71 @@ fun ColorGameScreen(
                 caught = caught,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MemorizeOverlay(
+    steps: List<com.rts.rys.ryy.wayfinding.game.ColorZone>,
+    onDone: () -> Unit,
+) {
+    var highlight by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(Unit) {
+        delay(600)
+        for (i in steps.indices) {
+            highlight = i
+            delay(850)
+            highlight = -1
+            delay(200)
+        }
+        delay(300)
+        onDone()
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.86f)
+                .shadow(10.dp, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color.White)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("순서를 기억하세요!", color = InkDark, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.height(20.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                steps.forEachIndexed { i, zone ->
+                    val on = i == highlight
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(if (on) 56.dp else 40.dp)
+                                .clip(CircleShape)
+                                .background(zone.color.copy(alpha = if (on) 1f else 0.35f)),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "${i + 1}",
+                            color = if (on) InkDark else InkSoft,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "잘 보고 순서대로 굴려요",
+                color = InkSoft,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }
@@ -325,6 +410,7 @@ private fun ColorArenaCanvas(
     dark: Boolean = false,
     chaserX: Float? = null,
     chaserY: Float? = null,
+    highlightTarget: Boolean = true,
 ) {
     Canvas(
         modifier = Modifier
@@ -378,8 +464,8 @@ private fun ColorArenaCanvas(
                 size = Size(w, h),
                 cornerRadius = CornerRadius(cell * 0.4f, cell * 0.4f),
             )
-            // 목표 색칸은 깜빡이는 테두리로 강조
-            if (i == targetZoneIndex) {
+            // 목표 색칸은 깜빡이는 테두리로 강조 (기억 모드에선 끔)
+            if (i == targetZoneIndex && highlightTarget) {
                 val glow = (sin(pulse * 4f) * 0.5f + 0.5f)
                 drawRoundRect(
                     color = Color.White.copy(alpha = 0.5f + 0.5f * glow),
