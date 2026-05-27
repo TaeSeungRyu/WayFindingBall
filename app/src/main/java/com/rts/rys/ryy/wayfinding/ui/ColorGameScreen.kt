@@ -70,6 +70,7 @@ private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
 private const val SENSOR_MAX_SPEED = 22f
 private const val KEYPAD_MAX_SPEED = 14f
+private const val FLIP_DURATION_S = 0.45f
 
 @Composable
 fun ColorGameScreen(
@@ -139,6 +140,11 @@ fun ColorGameScreen(
     var chaserY by remember(attemptId) { mutableFloatStateOf(0f) }
     var showMemorize by remember(attemptId) { mutableStateOf(stage.memorizeOrder) }
     var reshuffleTimer by remember(attemptId) { mutableFloatStateOf(0f) }
+    // 카드 뒤집기 공개: 시작은 전부 숨김. 3초마다 전체가 뒤집히며 보임↔숨김 전환.
+    var floorVisible by remember(attemptId) { mutableStateOf(false) }
+    var flipping by remember(attemptId) { mutableStateOf(false) }
+    var flipProgress by remember(attemptId) { mutableFloatStateOf(0f) }
+    var holdTimer by remember(attemptId) { mutableFloatStateOf(0f) }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
@@ -203,6 +209,27 @@ fun ColorGameScreen(
             ballY = physics.y
             wrongFlash = (wrongFlash - dt).coerceAtLeast(0f)
 
+            // 카드 뒤집기 공개/숨김 (10단계)
+            if (stage.flipCycleS > 0f) {
+                if (flipping) {
+                    flipProgress += dt / FLIP_DURATION_S
+                    if (flipProgress >= 1f) {
+                        flipping = false
+                        flipProgress = 0f
+                        floorVisible = !floorVisible
+                        // 막 공개되면 현재 올라가 있는 칸도 다시 판정 대상이 되게 한다.
+                        if (floorVisible) lastCell = -1 to -1
+                    }
+                } else {
+                    holdTimer += dt
+                    if (holdTimer >= stage.flipCycleS) {
+                        holdTimer = 0f
+                        flipping = true
+                        flipProgress = 0f
+                    }
+                }
+            }
+
             // 일정 시간마다 색 재배치 (헌트/색 바닥)
             if (stage.reshuffleEveryS > 0f) {
                 reshuffleTimer += dt
@@ -217,10 +244,12 @@ fun ColorGameScreen(
             val br = floor(physics.y).toInt()
 
             // 색 바닥 모드: 정답 색 칸을 밟으면 수집
+            // 단, 카드가 뒤집힌(숨김) 상태에선 색이 안 보이므로 수집 불가.
             if (stage.floorMode && floorCtrl != null) {
+                val canCollect = stage.flipCycleS <= 0f || (floorVisible && !flipping)
                 val cell = bc to br
                 if (cell != lastCell) {
-                    if (!arena.isWall(bc, br) && floorCtrl.isTargetCell(bc, br)) {
+                    if (canCollect && !arena.isWall(bc, br) && floorCtrl.isTargetCell(bc, br)) {
                         score += 1
                         SoundManager.playGoal()
                         floorCtrl.consume(bc, br)
@@ -391,6 +420,15 @@ fun ColorGameScreen(
                     chaserY = if (chaser != null) chaserY else null,
                     highlightTarget = !stage.memorizeOrder && !stage.huntMode && !stage.floorMode,
                     floor = floorCtrl,
+                    flip = stage.flipCycleS > 0f,
+                    floorShowColor = when {
+                        !flipping -> floorVisible
+                        flipProgress < 0.5f -> floorVisible       // 전반: 기존 면
+                        else -> !floorVisible                     // 후반: 새 면
+                    },
+                    floorScaleX = if (!flipping) 1f
+                        else if (flipProgress < 0.5f) 1f - flipProgress * 2f
+                        else (flipProgress - 0.5f) * 2f,
                 )
             }
 
@@ -506,6 +544,9 @@ private fun ColorArenaCanvas(
     chaserY: Float? = null,
     highlightTarget: Boolean = true,
     floor: FloorColorController? = null,
+    flip: Boolean = false,
+    floorShowColor: Boolean = true,
+    floorScaleX: Float = 1f,
 ) {
     Canvas(
         modifier = Modifier
@@ -519,19 +560,35 @@ private fun ColorArenaCanvas(
         val wallColor = Color(0xFFCBB89B)
 
         // 색 바닥: 벽이 아닌 모든 내부 셀에 색을 칠한다.
+        // flip 모드면 전체가 카드 뒤집기(가로 스케일) 효과로 보임↔숨김 전환.
         if (floor != null) {
             floor.version  // 변경 시 재구성 트리거
             val inset = cell * 0.06f
+            val full = cell - inset * 2
             for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
                 if (arena.isWall(c, r)) continue
                 val idx = floor.colorAt(c, r)
-                if (idx < 0) continue
-                drawRoundRect(
-                    color = ColorGame.floorPalette[idx].first,
-                    topLeft = Offset(c * cell + inset, r * cell + inset),
-                    size = Size(cell - inset * 2, cell - inset * 2),
-                    cornerRadius = CornerRadius(cell * 0.18f, cell * 0.18f),
-                )
+                if (flip) {
+                    if (floorShowColor && idx < 0) continue  // 시작점 등 색 없음
+                    val faceColor = if (floorShowColor) ColorGame.floorPalette[idx].first
+                                    else Color(0xFF2A2A2A)
+                    val w = (full * floorScaleX).coerceAtLeast(0f)
+                    val cxp = c * cell + cell / 2f
+                    drawRoundRect(
+                        color = faceColor,
+                        topLeft = Offset(cxp - w / 2f, r * cell + inset),
+                        size = Size(w, full),
+                        cornerRadius = CornerRadius(cell * 0.18f, cell * 0.18f),
+                    )
+                } else {
+                    if (idx < 0) continue
+                    drawRoundRect(
+                        color = ColorGame.floorPalette[idx].first,
+                        topLeft = Offset(c * cell + inset, r * cell + inset),
+                        size = Size(full, full),
+                        cornerRadius = CornerRadius(cell * 0.18f, cell * 0.18f),
+                    )
+                }
             }
         }
 

@@ -48,6 +48,8 @@ data class ColorStage(
     val initialWalls: Int = 0,
     /** true면 색 바닥 모드: 모든 바닥 셀에 색이 있고 지정 색을 찾아 모은다. */
     val floorMode: Boolean = false,
+    /** 0보다 크면 이 초마다 전체가 카드 뒤집기 효과와 함께 보였다/숨겨진다(기억 도전). */
+    val flipCycleS: Float = 0f,
 )
 
 object ColorGame {
@@ -156,6 +158,10 @@ object ColorGame {
         ColorStage(
             9, "9단계", "색 바닥에서 찾기", emptyList(), 20,
             dynamicWalls = true, floorMode = true, reshuffleEveryS = 10f, initialWalls = 8,
+        ),
+        ColorStage(
+            10, "10단계", "보였다 안 보여요", emptyList(), 10,
+            floorMode = true, flipCycleS = 3f,
         ),
     )
 
