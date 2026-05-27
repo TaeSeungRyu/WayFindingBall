@@ -41,6 +41,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -148,15 +150,28 @@ fun HitGameScreen(
             ballY = physics.y
 
             // 표적 충돌 검사
-            val it = targets.iterator()
             var hitAny = false
-            while (it.hasNext()) {
-                val t = it.next()
-                val dx = physics.x - t.cx
-                val dy = physics.y - t.cy
-                if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
-                    it.remove()
-                    hitAny = true
+            if (stage.ordered) {
+                // 순서 모드: 가장 작은 번호 표적만 맞힐 수 있다.
+                val next = targets.minByOrNull { it.order }
+                if (next != null) {
+                    val dx = physics.x - next.cx
+                    val dy = physics.y - next.cy
+                    if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
+                        targets.remove(next)
+                        hitAny = true
+                    }
+                }
+            } else {
+                val it = targets.iterator()
+                while (it.hasNext()) {
+                    val t = it.next()
+                    val dx = physics.x - t.cx
+                    val dy = physics.y - t.cy
+                    if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
+                        it.remove()
+                        hitAny = true
+                    }
                 }
             }
             if (hitAny) {
@@ -211,7 +226,7 @@ fun HitGameScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "공을 굴려 표적을 모두 맞혀요!",
+                    text = if (stage.ordered) "1번부터 순서대로 맞혀요!" else "공을 굴려 표적을 모두 맞혀요!",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = InkDark,
@@ -232,6 +247,7 @@ fun HitGameScreen(
                     ballY = ballY,
                     skin = currentSkin,
                     pulse = pulse,
+                    ordered = stage.ordered,
                 )
             }
 
@@ -260,7 +276,16 @@ private fun HitArenaCanvas(
     ballY: Float,
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
     pulse: Float,
+    ordered: Boolean = false,
 ) {
+    val numberPaint = remember {
+        android.graphics.Paint().apply {
+            color = GoalGoldDeep.toArgb()
+            textAlign = android.graphics.Paint.Align.CENTER
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+    }
     Canvas(
         modifier = Modifier
             .fillMaxSize()
@@ -290,10 +315,20 @@ private fun HitArenaCanvas(
             val cx = t.cx * cell
             val cy = t.cy * cell
             val r = cell * 0.38f * pulseScale
-            drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
-            drawCircle(Color.White, radius = r * 0.66f, center = Offset(cx, cy))
-            drawCircle(GoalGold, radius = r * 0.36f, center = Offset(cx, cy))
-            drawCircle(GoalGoldDeep, radius = r, center = Offset(cx, cy), style = Stroke(width = cell * 0.05f))
+            if (ordered) {
+                // 순서 모드: 채워진 원 + 번호
+                drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
+                drawCircle(GoalGoldDeep, radius = r, center = Offset(cx, cy), style = Stroke(width = cell * 0.06f))
+                numberPaint.textSize = cell * 0.5f
+                drawContext.canvas.nativeCanvas.drawText(
+                    t.order.toString(), cx, cy + cell * 0.18f, numberPaint
+                )
+            } else {
+                drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
+                drawCircle(Color.White, radius = r * 0.66f, center = Offset(cx, cy))
+                drawCircle(GoalGold, radius = r * 0.36f, center = Offset(cx, cy))
+                drawCircle(GoalGoldDeep, radius = r, center = Offset(cx, cy), style = Stroke(width = cell * 0.05f))
+            }
         }
 
         // 공

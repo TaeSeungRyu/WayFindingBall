@@ -15,10 +15,12 @@ data class HitStage(
     val targetCount: Int,
     /** null이면 테두리만 있는 빈 광장. 아니면 이 ASCII 미로를 사용. */
     val arenaLines: List<String>? = null,
+    /** true면 표적에 번호가 붙고 작은 수부터 순서대로 맞혀야 한다. */
+    val ordered: Boolean = false,
 )
 
-/** 표적 한 개. (c, r) 셀 중심에 위치. */
-data class HitTarget(val c: Int, val r: Int) {
+/** 표적 한 개. (c, r) 셀 중심에 위치. [order]는 순서 모드의 번호(1부터). */
+data class HitTarget(val c: Int, val r: Int, val order: Int = 0) {
     val cx: Float get() = c + 0.5f
     val cy: Float get() = r + 0.5f
 }
@@ -43,10 +45,28 @@ object HitGame {
         "#############",
     )
 
+    // 4단계: 기둥 4개 사이로 순서대로 맞히기 (벽 반사 활용)
+    private val stage4Arena = listOf(
+        "#############",
+        "#           #",
+        "#  #     #  #",
+        "#  #     #  #",
+        "#  #     #  #",
+        "#           #",
+        "#     S     #",
+        "#           #",
+        "#  #     #  #",
+        "#  #     #  #",
+        "#  #     #  #",
+        "#           #",
+        "#############",
+    )
+
     val stages: List<HitStage> = listOf(
         HitStage(1, "1단계", "표적 5개", 5),
         HitStage(2, "2단계", "표적 8개", 8),
         HitStage(3, "3단계", "범퍼 + 표적 10개", 10, arenaLines = stage3Arena),
+        HitStage(4, "4단계", "순서대로 맞히기", 6, arenaLines = stage4Arena, ordered = true),
     )
 
     fun stageOf(level: Int): HitStage = stages.firstOrNull { it.level == level } ?: stages.first()
@@ -87,7 +107,7 @@ object HitGame {
         for ((c, r) in candidates) {
             if (picked.size >= stage.targetCount) break
             if (picked.any { kotlin.math.abs(it.c - c) + kotlin.math.abs(it.r - r) < 2 }) continue
-            picked.add(HitTarget(c, r))
+            picked.add(HitTarget(c, r, order = picked.size + 1))
         }
         return picked
     }
