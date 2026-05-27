@@ -1,0 +1,131 @@
+package com.rts.rys.ryy.wayfinding.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.game.ColorGame
+import com.rts.rys.ryy.wayfinding.game.ColorStage
+import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
+import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
+
+@Composable
+fun ColorStageSelectScreen(
+    onBack: () -> Unit,
+    onSelect: (Int) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(SkyTop, SkyBottom)))
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .padding(20.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                BackChip(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart))
+                Text(
+                    text = "색깔 찾기",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = InkDark,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+            Spacer(Modifier.height(24.dp))
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+            ) {
+                ColorGame.stages.forEach { stage ->
+                    ColorStageCard(
+                        stage = stage,
+                        bg = if (stage.level == 1) SkyBlue else CoralPink,
+                        onClick = { onSelect(stage.level) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorStageCard(
+    stage: ColorStage,
+    bg: Color,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(140.dp)
+            .shadow(8.dp, RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(28.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(24.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // 단계별 색칸 미리보기
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                stage.zones.take(6).forEach { zone ->
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(zone.color)
+                    )
+                }
+            }
+            Spacer(Modifier.size(20.dp))
+            Column {
+                Text(
+                    text = stage.name,
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.sp,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = stage.description,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}

@@ -33,10 +33,13 @@ import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.DailyChallenge
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.ui.CollectionScreen
+import com.rts.rys.ryy.wayfinding.ui.ColorGameScreen
+import com.rts.rys.ryy.wayfinding.ui.ColorStageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.GameScreen
 import com.rts.rys.ryy.wayfinding.ui.HomeScreen
 import com.rts.rys.ryy.wayfinding.ui.LevelSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.MazeEditorScreen
+import com.rts.rys.ryy.wayfinding.ui.ModeSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.RecordsScreen
 import com.rts.rys.ryy.wayfinding.ui.ResultScreen
 import com.rts.rys.ryy.wayfinding.ui.SplashScreen
@@ -86,6 +89,9 @@ class MainActivity : ComponentActivity() {
 
 private sealed class Screen {
     data object Home : Screen()
+    data object ModeSelect : Screen()
+    data object ColorStageSelect : Screen()
+    data class ColorGame(val level: Int) : Screen()
     data object LevelSelect : Screen()
     data class StageSelect(val level: Int) : Screen()
     data class Game(val stageId: Int) : Screen()
@@ -167,7 +173,7 @@ fun MazeApp() {
     ) { screen ->
         when (screen) {
             Screen.Home -> HomeScreen(
-                onStart = { push(Screen.LevelSelect) },
+                onStart = { push(Screen.ModeSelect) },
                 onDaily = {
                     val stage = DailyChallenge.today()
                     Stages.setDailyStage(stage)
@@ -177,6 +183,19 @@ fun MazeApp() {
                 onCreate = { push(Screen.Editor(1)) },
                 onCollection = { push(Screen.Collection) },
                 onTutorial = { showTutorial = true }
+            )
+            Screen.ModeSelect -> ModeSelectScreen(
+                onBack = { pop() },
+                onMaze = { push(Screen.LevelSelect) },
+                onColor = { push(Screen.ColorStageSelect) }
+            )
+            Screen.ColorStageSelect -> ColorStageSelectScreen(
+                onBack = { pop() },
+                onSelect = { level -> push(Screen.ColorGame(level)) }
+            )
+            is Screen.ColorGame -> ColorGameScreen(
+                level = screen.level,
+                onExit = { pop() }
             )
             Screen.LevelSelect -> LevelSelectScreen(
                 onBack = { pop() },
