@@ -32,6 +32,10 @@ data class ColorStage(
     val arenaLines: List<String>? = null,
     /** true면 벽이 주기적으로 생겼다 사라진다 (색칸은 보호). */
     val dynamicWalls: Boolean = false,
+    /** true면 공 주변만 보이고 나머지는 어둡다. */
+    val dark: Boolean = false,
+    /** true면 매판 색칸의 색을 위치에 무작위로 배치한다 (기억 도전). */
+    val shuffleColors: Boolean = false,
 )
 
 object ColorGame {
@@ -97,7 +101,16 @@ object ColorGame {
         ColorStage(2, "2단계", "색깔 6개", zones6, 5),
         ColorStage(3, "3단계", "벽이 있어요", zones6, 5, arenaLines = stage3Arena),
         ColorStage(4, "4단계", "작은 칸 + 움직이는 벽", zonesSmall, 5, dynamicWalls = true),
+        ColorStage(5, "5단계", "깜깜해요", zones6, 5, dark = true, shuffleColors = true),
     )
+
+    /** 색칸 위치는 그대로 두고 색만 무작위로 재배치한다. */
+    fun zonesWithShuffledColors(stage: ColorStage, random: Random = Random.Default): List<ColorZone> {
+        val palette = stage.zones.map { it.name to it.color }.shuffled(random)
+        return stage.zones.mapIndexed { i, z ->
+            z.copy(name = palette[i].first, color = palette[i].second)
+        }
+    }
 
     fun stageOf(level: Int): ColorStage = stages.firstOrNull { it.level == level } ?: stages.first()
 
@@ -136,6 +149,6 @@ object ColorGame {
     }
 
     /** (c, r) 셀이 어떤 색칸에 속하는지. 없으면 null. */
-    fun zoneAt(stage: ColorStage, c: Int, r: Int): Int? =
-        stage.zones.indexOfFirst { it.contains(c, r) }.takeIf { it >= 0 }
+    fun zoneAt(zones: List<ColorZone>, c: Int, r: Int): Int? =
+        zones.indexOfFirst { it.contains(c, r) }.takeIf { it >= 0 }
 }

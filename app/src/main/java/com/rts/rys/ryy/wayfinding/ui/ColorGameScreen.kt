@@ -80,13 +80,16 @@ fun ColorGameScreen(
     val arena = remember(attemptId) { ColorGame.buildArena(stage) }
     val physics = remember(attemptId) { BallPhysics(arena, radius = 0.32f, friction = 1.8f) }
     val targetSeq = remember(attemptId) { ColorGame.targetSequence(stage) }
+    val zones = remember(attemptId) {
+        if (stage.shuffleColors) ColorGame.zonesWithShuffledColors(stage) else stage.zones
+    }
     val dynamicWalls = remember(attemptId) {
         if (stage.dynamicWalls) {
             DynamicMazeController(
                 arena,
                 cyclePeriodS = 3.5f,
                 maxChanges = 6,
-                isProtected = { c, r -> stage.zones.any { it.contains(c, r) } },
+                isProtected = { c, r -> zones.any { it.contains(c, r) } },
             )
         } else null
     }
@@ -121,7 +124,7 @@ fun ColorGameScreen(
         elapsedMs = 0L
         finished = false
         wrongFlash = 0f
-        var lastZone: Int? = ColorGame.zoneAt(stage, floor(physics.x).toInt(), floor(physics.y).toInt())
+        var lastZone: Int? = ColorGame.zoneAt(zones, floor(physics.x).toInt(), floor(physics.y).toInt())
 
         var last = 0L
         while (!finished) {
@@ -158,7 +161,7 @@ fun ColorGameScreen(
 
             val bc = floor(physics.x).toInt()
             val br = floor(physics.y).toInt()
-            val zone = ColorGame.zoneAt(stage, bc, br)
+            val zone = ColorGame.zoneAt(zones, bc, br)
             if (zone != null && zone != lastZone) {
                 if (zone == targetSeq[targetIndex]) {
                     score += 1
@@ -177,7 +180,7 @@ fun ColorGameScreen(
         }
     }
 
-    val target = stage.zones[targetSeq.getOrElse(targetIndex) { targetSeq.last() }]
+    val target = zones[targetSeq.getOrElse(targetIndex) { targetSeq.last() }]
 
     Box(
         modifier = Modifier
@@ -249,7 +252,7 @@ fun ColorGameScreen(
             ) {
                 ColorArenaCanvas(
                     arena = arena,
-                    zones = stage.zones,
+                    zones = zones,
                     ballX = ballX,
                     ballY = ballY,
                     targetZoneIndex = targetSeq.getOrElse(targetIndex) { targetSeq.last() },
@@ -257,6 +260,7 @@ fun ColorGameScreen(
                     pulse = pulse,
                     wrongFlash = wrongFlash,
                     dynamic = dynamicWalls,
+                    dark = stage.dark,
                 )
             }
 
@@ -294,6 +298,7 @@ private fun ColorArenaCanvas(
     pulse: Float,
     wrongFlash: Float,
     dynamic: DynamicMazeController? = null,
+    dark: Boolean = false,
 ) {
     Canvas(
         modifier = Modifier
@@ -360,6 +365,23 @@ private fun ColorArenaCanvas(
             }
         }
 
+        // 어둠: 공 주변만 보이고 나머지는 가려짐 (색칸 위치를 기억해야 함)
+        if (dark) {
+            val ballPx = Offset(ballX * cell, ballY * cell)
+            drawRect(
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0f to Color.Black.copy(alpha = 0f),
+                        0.45f to Color.Black.copy(alpha = 0f),
+                        1f to Color.Black.copy(alpha = 0.94f),
+                    ),
+                    center = ballPx,
+                    radius = cell * 3.2f,
+                ),
+                size = size,
+            )
+        }
+
         // 오답 시 붉은 깜빡임
         if (wrongFlash > 0f) {
             drawRoundRect(
@@ -369,7 +391,7 @@ private fun ColorArenaCanvas(
             )
         }
 
-        // 공
+        // 공 (어둠 위에 그려 항상 보이게)
         val r = cell * 0.4f
         val cx = ballX * cell
         val cy = ballY * cell

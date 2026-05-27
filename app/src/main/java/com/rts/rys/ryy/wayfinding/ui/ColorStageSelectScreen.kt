@@ -2,8 +2,11 @@ package com.rts.rys.ryy.wayfinding.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -71,18 +75,25 @@ fun ColorStageSelectScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
-            Spacer(Modifier.height(24.dp))
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
-            ) {
-                ColorGame.stages.forEach { stage ->
-                    ColorStageCard(
-                        stage = stage,
-                        bg = if (stage.level % 2 == 1) SkyBlue else CoralPink,
-                        bestMs = bestTimes[stage.level],
-                        onClick = { onSelect(stage.level) }
-                    )
+            Spacer(Modifier.height(16.dp))
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val viewportHeight = maxHeight
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .heightIn(min = viewportHeight)
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+                ) {
+                    ColorGame.stages.forEach { stage ->
+                        ColorStageCard(
+                            stage = stage,
+                            bg = if (stage.level % 2 == 1) SkyBlue else CoralPink,
+                            bestMs = bestTimes[stage.level],
+                            onClick = { onSelect(stage.level) }
+                        )
+                    }
                 }
             }
         }
