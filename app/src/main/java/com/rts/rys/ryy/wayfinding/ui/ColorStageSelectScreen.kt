@@ -19,8 +19,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -28,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.data.ColorRecordsRepository
 import com.rts.rys.ryy.wayfinding.game.ColorGame
 import com.rts.rys.ryy.wayfinding.game.ColorStage
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
@@ -41,6 +44,11 @@ fun ColorStageSelectScreen(
     onBack: () -> Unit,
     onSelect: (Int) -> Unit,
 ) {
+    val context = LocalContext.current
+    val bestTimes = remember {
+        val repo = ColorRecordsRepository(context)
+        ColorGame.stages.associate { it.level to repo.bestFor(it.level) }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -71,7 +79,8 @@ fun ColorStageSelectScreen(
                 ColorGame.stages.forEach { stage ->
                     ColorStageCard(
                         stage = stage,
-                        bg = if (stage.level == 1) SkyBlue else CoralPink,
+                        bg = if (stage.level % 2 == 1) SkyBlue else CoralPink,
+                        bestMs = bestTimes[stage.level],
                         onClick = { onSelect(stage.level) }
                     )
                 }
@@ -84,6 +93,7 @@ fun ColorStageSelectScreen(
 private fun ColorStageCard(
     stage: ColorStage,
     bg: Color,
+    bestMs: Long?,
     onClick: () -> Unit,
 ) {
     Box(
@@ -124,6 +134,13 @@ private fun ColorStageCard(
                     color = Color.White.copy(alpha = 0.9f),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (bestMs != null) "최고 기록  ${formatElapsed(bestMs)}" else "아직 기록 없어요",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
                 )
             }
         }

@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.AchievementsRepository
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.BallSkins
+import com.rts.rys.ryy.wayfinding.data.ColorRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.ColorGame
@@ -102,6 +103,7 @@ fun ColorGameScreen(
     var score by remember(attemptId) { mutableIntStateOf(0) }
     var elapsedMs by remember(attemptId) { mutableLongStateOf(0L) }
     var finished by remember(attemptId) { mutableStateOf(false) }
+    var isNewBest by remember(attemptId) { mutableStateOf(false) }
     var wrongFlash by remember(attemptId) { mutableFloatStateOf(0f) }
     var pulse by remember(attemptId) { mutableFloatStateOf(0f) }
 
@@ -162,7 +164,10 @@ fun ColorGameScreen(
                     score += 1
                     SoundManager.playGoal()
                     targetIndex += 1
-                    if (targetIndex >= stage.targetCount) finished = true
+                    if (targetIndex >= stage.targetCount) {
+                        isNewBest = ColorRecordsRepository(context).record(level, elapsedMs)
+                        finished = true
+                    }
                 } else {
                     SoundManager.playBonk()
                     wrongFlash = 0.4f
@@ -270,6 +275,7 @@ fun ColorGameScreen(
             ColorResultOverlay(
                 score = score,
                 elapsedMs = elapsedMs,
+                isNewBest = isNewBest,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
             )
@@ -376,6 +382,7 @@ private fun ColorArenaCanvas(
 private fun ColorResultOverlay(
     score: Int,
     elapsedMs: Long,
+    isNewBest: Boolean,
     onRetry: () -> Unit,
     onHome: () -> Unit,
 ) {
@@ -416,6 +423,15 @@ private fun ColorResultOverlay(
                 fontSize = 40.sp,
                 fontWeight = FontWeight.Black,
             )
+            if (isNewBest) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "★ 최고 기록! ★",
+                    color = CoralPink,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+            }
             Spacer(Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ResultButton("나가기", SkyBlue, onHome, Modifier.weight(1f))
