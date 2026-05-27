@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.rts.rys.ryy.wayfinding.data.ColorRecordsRepository
 import com.rts.rys.ryy.wayfinding.game.ColorGame
 import com.rts.rys.ryy.wayfinding.game.ColorStage
@@ -86,11 +92,12 @@ fun ColorStageSelectScreen(
                         .padding(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
                 ) {
-                    ColorGame.stages.forEach { stage ->
+                    ColorGame.stages.forEachIndexed { index, stage ->
                         ColorStageCard(
                             stage = stage,
                             bg = if (stage.level % 2 == 1) SkyBlue else CoralPink,
                             bestMs = bestTimes[stage.level],
+                            lottiePhase = (index * 0.13f) % 1f,
                             onClick = { onSelect(stage.level) }
                         )
                     }
@@ -105,6 +112,7 @@ private fun ColorStageCard(
     stage: ColorStage,
     bg: Color,
     bestMs: Long?,
+    lottiePhase: Float,
     onClick: () -> Unit,
 ) {
     Box(
@@ -118,22 +126,29 @@ private fun ColorStageCard(
             .padding(24.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        // 헌트/색 바닥 모드는 색이 동적이라 팔레트 색으로 미리보기
-        val previewColors = when {
-            stage.huntMode -> ColorGame.palette12.take(6).map { it.first }
-            stage.floorMode -> ColorGame.floorPalette.take(6).map { it.first }
-            else -> stage.zones.take(6).map { it.color }
-        }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // 단계별 색칸 미리보기
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                previewColors.forEach { c ->
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(c)
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.35f)),
+                contentAlignment = Alignment.Center
+            ) {
+                val composition by rememberLottieComposition(
+                    LottieCompositionSpec.Asset("lottie/colors.lottie")
+                )
+                val progress by animateLottieCompositionAsState(
+                    composition,
+                    iterations = LottieConstants.IterateForever,
+                )
+                if (composition != null) {
+                    LottieAnimation(
+                        composition = composition,
+                        progress = { (progress + lottiePhase) % 1f },
+                        modifier = Modifier.size(64.dp)
                     )
+                } else {
+                    Text("🎨", fontSize = 32.sp)
                 }
             }
             Spacer(Modifier.size(20.dp))

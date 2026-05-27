@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.rts.rys.ryy.wayfinding.data.HitRecordsRepository
 import com.rts.rys.ryy.wayfinding.game.HitGame
 import com.rts.rys.ryy.wayfinding.game.HitStage
@@ -86,11 +92,12 @@ fun HitStageSelectScreen(
                         .padding(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
                 ) {
-                    HitGame.stages.forEach { stage ->
+                    HitGame.stages.forEachIndexed { index, stage ->
                         HitStageCard(
                             stage = stage,
                             bg = if (stage.level % 2 == 1) SkyBlue else CoralPink,
                             bestMs = bestTimes[stage.level],
+                            lottiePhase = (index * 0.13f) % 1f,
                             onClick = { onSelect(stage.level) }
                         )
                     }
@@ -105,6 +112,7 @@ private fun HitStageCard(
     stage: HitStage,
     bg: Color,
     bestMs: Long?,
+    lottiePhase: Float,
     onClick: () -> Unit,
 ) {
     Box(
@@ -126,7 +134,22 @@ private fun HitStageCard(
                     .background(Color.White.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("🎯", fontSize = 32.sp)
+                val composition by rememberLottieComposition(
+                    LottieCompositionSpec.Asset("lottie/billiard.lottie")
+                )
+                val progress by animateLottieCompositionAsState(
+                    composition,
+                    iterations = LottieConstants.IterateForever,
+                )
+                if (composition != null) {
+                    LottieAnimation(
+                        composition = composition,
+                        progress = { (progress + lottiePhase) % 1f },
+                        modifier = Modifier.size(64.dp)
+                    )
+                } else {
+                    Text("🎯", fontSize = 32.sp)
+                }
             }
             Spacer(Modifier.size(20.dp))
             Column {
