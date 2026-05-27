@@ -75,7 +75,7 @@ fun ColorGameScreen(
     val stage = remember(level) { ColorGame.stageOf(level) }
     var attemptId by remember(level) { mutableIntStateOf(0) }
 
-    val arena = remember(attemptId) { ColorGame.buildArena() }
+    val arena = remember(attemptId) { ColorGame.buildArena(stage) }
     val physics = remember(attemptId) { BallPhysics(arena, radius = 0.32f, friction = 1.8f) }
     val targetSeq = remember(attemptId) { ColorGame.targetSequence(stage) }
     val tilt = remember { TiltSensor(context) }
@@ -231,6 +231,7 @@ fun ColorGameScreen(
                 contentAlignment = Alignment.Center
             ) {
                 ColorArenaCanvas(
+                    arena = arena,
                     zones = stage.zones,
                     ballX = ballX,
                     ballY = ballY,
@@ -265,6 +266,7 @@ fun ColorGameScreen(
 
 @Composable
 private fun ColorArenaCanvas(
+    arena: com.rts.rys.ryy.wayfinding.game.Maze,
     zones: List<com.rts.rys.ryy.wayfinding.game.ColorZone>,
     ballX: Float,
     ballY: Float,
@@ -282,14 +284,21 @@ private fun ColorArenaCanvas(
     ) {
         val n = ColorGame.SIZE
         val cell = size.minDimension / n
+        val wallColor = Color(0xFFCBB89B)
 
-        // 테두리 벽
-        drawRoundRect(
-            color = Color(0xFFCBB89B),
-            size = Size(size.width, size.height),
-            cornerRadius = CornerRadius(24f, 24f),
-            style = Stroke(width = cell * 0.9f)
-        )
+        // 벽 셀(테두리 + 내부 벽 모두)
+        for (r in 0 until arena.rows) {
+            for (c in 0 until arena.cols) {
+                if (arena.isWall(c, r)) {
+                    drawRoundRect(
+                        color = wallColor,
+                        topLeft = Offset(c * cell, r * cell),
+                        size = Size(cell, cell),
+                        cornerRadius = CornerRadius(cell * 0.15f, cell * 0.15f),
+                    )
+                }
+            }
+        }
 
         // 색칸
         for ((i, zone) in zones.withIndex()) {

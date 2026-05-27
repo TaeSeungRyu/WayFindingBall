@@ -28,6 +28,8 @@ data class ColorStage(
     val description: String,
     val zones: List<ColorZone>,
     val targetCount: Int,
+    /** null이면 테두리만 있는 빈 광장. 아니면 이 ASCII 미로를 사용. */
+    val arenaLines: List<String>? = null,
 )
 
 object ColorGame {
@@ -59,15 +61,35 @@ object ColorGame {
         ColorZone("보라", PURPLE, MID0, MID1, HI - 2, HI),
     )
 
+    // 3단계 미로: 6색칸은 그대로 열어두고 가운데에 벽을 둬 길을 찾게 한다.
+    // 색칸(모서리·위아래 가운데 3x3)과 시작점(가운데)은 막지 않는다.
+    private val stage3Arena = listOf(
+        "#############",
+        "#   #   #   #",
+        "#   #   #   #",
+        "#   #   #   #",
+        "#           #",
+        "# #   #   # #",
+        "#     S     #",
+        "# #   #   # #",
+        "#           #",
+        "#   #   #   #",
+        "#   #   #   #",
+        "#   #   #   #",
+        "#############",
+    )
+
     val stages: List<ColorStage> = listOf(
         ColorStage(1, "1단계", "색깔 4개", zones4, 10),
         ColorStage(2, "2단계", "색깔 6개", zones6, 12),
+        ColorStage(3, "3단계", "벽이 있어요", zones6, 12, arenaLines = stage3Arena),
     )
 
     fun stageOf(level: Int): ColorStage = stages.firstOrNull { it.level == level } ?: stages.first()
 
-    /** 가운데 출발점, 테두리 벽, 내부는 모두 빈 광장. */
-    fun buildArena(): Maze {
+    /** 단계의 미로. 지정된 레이아웃이 있으면 그것을, 없으면 빈 광장을 만든다. */
+    fun buildArena(stage: ColorStage): Maze {
+        stage.arenaLines?.let { return Maze.fromAscii(it) }
         val n = SIZE
         val center = n / 2
         val lines = (0 until n).map { r ->
