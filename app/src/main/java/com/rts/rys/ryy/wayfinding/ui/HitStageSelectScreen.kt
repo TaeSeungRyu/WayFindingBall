@@ -23,30 +23,36 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.data.HitRecordsRepository
+import com.rts.rys.ryy.wayfinding.game.HitGame
+import com.rts.rys.ryy.wayfinding.game.HitStage
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
-import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 
 @Composable
-fun ModeSelectScreen(
+fun HitStageSelectScreen(
     onBack: () -> Unit,
-    onMaze: () -> Unit,
-    onColor: () -> Unit,
-    onHit: () -> Unit,
+    onSelect: (Int) -> Unit,
 ) {
+    val context = LocalContext.current
+    val bestTimes = remember {
+        val repo = HitRecordsRepository(context)
+        HitGame.stages.associate { it.level to repo.bestFor(it.level) }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -60,12 +66,9 @@ fun ModeSelectScreen(
                     .fillMaxWidth()
                     .height(48.dp)
             ) {
-                BackChip(
-                    onClick = onBack,
-                    modifier = Modifier.align(Alignment.CenterStart)
-                )
+                BackChip(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart))
                 Text(
-                    text = "무엇을 할까요?",
+                    text = "굴려서 맞히기",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = InkDark,
@@ -81,29 +84,16 @@ fun ModeSelectScreen(
                         .verticalScroll(rememberScrollState())
                         .heightIn(min = viewportHeight)
                         .padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
                 ) {
-                    ModeCard(
-                        emoji = "🧩",
-                        title = "미로 찾기",
-                        subtitle = "공을 굴려 길을 찾아요",
-                        bg = SkyBlue,
-                        onClick = onMaze,
-                    )
-                    ModeCard(
-                        emoji = "🎨",
-                        title = "색깔 찾기",
-                        subtitle = "지시한 색으로 공을 굴려요",
-                        bg = CoralPink,
-                        onClick = onColor,
-                    )
-                    ModeCard(
-                        emoji = "🎯",
-                        title = "굴려서 맞히기",
-                        subtitle = "공을 굴려 표적을 맞혀요",
-                        bg = WallGreen,
-                        onClick = onHit,
-                    )
+                    HitGame.stages.forEach { stage ->
+                        HitStageCard(
+                            stage = stage,
+                            bg = if (stage.level % 2 == 1) SkyBlue else CoralPink,
+                            bestMs = bestTimes[stage.level],
+                            onClick = { onSelect(stage.level) }
+                        )
+                    }
                 }
             }
         }
@@ -111,56 +101,57 @@ fun ModeSelectScreen(
 }
 
 @Composable
-private fun ModeCard(
-    emoji: String,
-    title: String,
-    subtitle: String,
+private fun HitStageCard(
+    stage: HitStage,
     bg: Color,
+    bestMs: Long?,
     onClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(160.dp)
+            .height(140.dp)
             .shadow(8.dp, RoundedCornerShape(28.dp))
             .clip(RoundedCornerShape(28.dp))
             .background(bg)
             .clickable(onClick = onClick)
             .padding(24.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // 좌측: 이모지 + 제목
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.35f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🎯", fontSize = 32.sp)
+            }
+            Spacer(Modifier.size(20.dp))
             Column {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.35f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(emoji, fontSize = 34.sp)
-                }
-                Spacer(Modifier.height(12.dp))
                 Text(
-                    text = title,
+                    text = stage.name,
                     color = Color.White,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 2.sp,
                 )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = stage.description,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (bestMs != null) "최고 기록  ${formatElapsed(bestMs)}" else "아직 기록 없어요",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
             }
-            Spacer(Modifier.weight(1f))
-            // 우측: 설명
-            Text(
-                text = subtitle,
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.End,
-            )
         }
     }
 }

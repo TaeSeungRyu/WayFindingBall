@@ -340,7 +340,7 @@ private fun StarBalanceBar(balance: Int) {
         )
         Spacer(Modifier.weight(1f))
         Text(
-            text = "별을 모아 새 공을 사요",
+            text = "\"미로 찾기\"에서 별을 모아 새 공을 사요",
             color = InkSoft,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,

@@ -36,6 +36,8 @@ import com.rts.rys.ryy.wayfinding.ui.CollectionScreen
 import com.rts.rys.ryy.wayfinding.ui.ColorGameScreen
 import com.rts.rys.ryy.wayfinding.ui.ColorStageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.GameScreen
+import com.rts.rys.ryy.wayfinding.ui.HitGameScreen
+import com.rts.rys.ryy.wayfinding.ui.HitStageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.HomeScreen
 import com.rts.rys.ryy.wayfinding.ui.LevelSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.MazeEditorScreen
@@ -92,6 +94,8 @@ private sealed class Screen {
     data object ModeSelect : Screen()
     data object ColorStageSelect : Screen()
     data class ColorGame(val level: Int) : Screen()
+    data object HitStageSelect : Screen()
+    data class HitGame(val level: Int) : Screen()
     data object LevelSelect : Screen()
     data class StageSelect(val level: Int) : Screen()
     data class Game(val stageId: Int) : Screen()
@@ -186,13 +190,22 @@ fun MazeApp() {
             Screen.ModeSelect -> ModeSelectScreen(
                 onBack = { pop() },
                 onMaze = { push(Screen.LevelSelect) },
-                onColor = { push(Screen.ColorStageSelect) }
+                onColor = { push(Screen.ColorStageSelect) },
+                onHit = { push(Screen.HitStageSelect) }
             )
             Screen.ColorStageSelect -> ColorStageSelectScreen(
                 onBack = { pop() },
                 onSelect = { level -> push(Screen.ColorGame(level)) }
             )
             is Screen.ColorGame -> ColorGameScreen(
+                level = screen.level,
+                onExit = { pop() }
+            )
+            Screen.HitStageSelect -> HitStageSelectScreen(
+                onBack = { pop() },
+                onSelect = { level -> push(Screen.HitGame(level)) }
+            )
+            is Screen.HitGame -> HitGameScreen(
                 level = screen.level,
                 onExit = { pop() }
             )

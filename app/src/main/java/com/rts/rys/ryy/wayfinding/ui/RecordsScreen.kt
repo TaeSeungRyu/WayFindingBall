@@ -43,10 +43,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.ColorRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.GameRecord
+import com.rts.rys.ryy.wayfinding.data.HitRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
 import com.rts.rys.ryy.wayfinding.data.ShareUtils
 import com.rts.rys.ryy.wayfinding.game.ColorGame
 import com.rts.rys.ryy.wayfinding.game.ColorStage
+import com.rts.rys.ryy.wayfinding.game.HitGame
 import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.game.difficultyLabel
@@ -56,6 +58,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
+import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -103,6 +106,10 @@ fun RecordsScreen(onBack: () -> Unit) {
         val repo = ColorRecordsRepository(context)
         ColorGame.stages.map { it to repo.bestFor(it.level) }
     }
+    val hitBests = remember {
+        val repo = HitRecordsRepository(context)
+        HitGame.stages.map { it.level to (it.name to repo.bestFor(it.level)) }
+    }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Box(
@@ -149,6 +156,14 @@ fun RecordsScreen(onBack: () -> Unit) {
                 }
                 items(colorBests, key = { "color_${it.first.level}" }) { (stage, bestMs) ->
                     ColorBestCard(stage = stage, bestMs = bestMs)
+                }
+                item(key = "h_hit") {
+                    Spacer(Modifier.height(6.dp))
+                    SectionLabel("굴려서 맞히기")
+                }
+                items(hitBests, key = { "hit_${it.first}" }) { (level, pair) ->
+                    val (name, bestMs) = pair
+                    TimeBestCard(level = level, title = name, bestMs = bestMs, baseColor = WallGreen, emoji = "🎯")
                 }
             }
         }
@@ -238,6 +253,56 @@ private fun ColorBestCard(stage: ColorStage, bestMs: Long?) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stage.name,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                maxLines = 1
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (hasRecord) "최고 기록" else "아직 도전해 보세요",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.85f)
+            )
+        }
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = if (hasRecord) formatElapsed(bestMs!!) else "기록 없음",
+            color = Color.White,
+            fontSize = if (hasRecord) 20.sp else 13.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
+}
+
+@Composable
+private fun TimeBestCard(level: Int, title: String, bestMs: Long?, baseColor: Color, emoji: String) {
+    val hasRecord = bestMs != null
+    val color = if (hasRecord) baseColor else Color(0xFFBDB7B0)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(82.dp)
+            .shadow(6.dp, RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(color)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = emoji, fontSize = 26.sp)
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,

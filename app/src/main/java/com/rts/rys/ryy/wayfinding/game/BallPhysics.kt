@@ -19,7 +19,9 @@ class BallPhysics(
     private val maze: Maze,
     private val radius: Float = 0.32f,
     var maxSpeed: Float = 14f,
-    private val friction: Float = 1.8f
+    private val friction: Float = 1.8f,
+    /** 0이면 벽에서 멈춤(기본). 0보다 크면 당구처럼 그 비율로 튕긴다. */
+    private val restitution: Float = 0f,
 ) {
     var x: Float = maze.startCol + 0.5f
         private set
@@ -107,20 +109,24 @@ class BallPhysics(
         var collidedY = false
         for (i in 0 until steps) {
             // X axis
-            val newX = x + sx
-            if (collides(newX, y)) {
-                collidedX = true
-                vx = 0f
-            } else {
-                x = newX
+            if (!collidedX) {
+                val newX = x + sx
+                if (collides(newX, y)) {
+                    collidedX = true
+                    vx = if (restitution > 0f) -vx * restitution else 0f
+                } else {
+                    x = newX
+                }
             }
             // Y axis
-            val newY = y + sy
-            if (collides(x, newY)) {
-                collidedY = true
-                vy = 0f
-            } else {
-                y = newY
+            if (!collidedY) {
+                val newY = y + sy
+                if (collides(x, newY)) {
+                    collidedY = true
+                    vy = if (restitution > 0f) -vy * restitution else 0f
+                } else {
+                    y = newY
+                }
             }
         }
 
