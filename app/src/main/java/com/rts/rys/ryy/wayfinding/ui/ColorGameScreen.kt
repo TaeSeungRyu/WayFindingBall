@@ -50,6 +50,7 @@ import com.rts.rys.ryy.wayfinding.data.BallSkins
 import com.rts.rys.ryy.wayfinding.data.ColorRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
+import com.rts.rys.ryy.wayfinding.game.ChaserController
 import com.rts.rys.ryy.wayfinding.game.ColorGame
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
@@ -93,6 +94,11 @@ fun ColorGameScreen(
             )
         } else null
     }
+    val chaser = remember(attemptId) {
+        if (stage.chaser) {
+            ChaserController(arena, moveIntervalS = 0.45f, randomSpawnMinDistance = 6)
+        } else null
+    }
     val tilt = remember { TiltSensor(context) }
     val currentSkin = remember { BallSkins.byId(AchievementsRepository(context).loadCurrentSkinId()) }
     val sensorEnabled by AppSettings.sensorEnabled
@@ -106,9 +112,12 @@ fun ColorGameScreen(
     var score by remember(attemptId) { mutableIntStateOf(0) }
     var elapsedMs by remember(attemptId) { mutableLongStateOf(0L) }
     var finished by remember(attemptId) { mutableStateOf(false) }
+    var caught by remember(attemptId) { mutableStateOf(false) }
     var isNewBest by remember(attemptId) { mutableStateOf(false) }
     var wrongFlash by remember(attemptId) { mutableFloatStateOf(0f) }
     var pulse by remember(attemptId) { mutableFloatStateOf(0f) }
+    var chaserX by remember(attemptId) { mutableFloatStateOf(0f) }
+    var chaserY by remember(attemptId) { mutableFloatStateOf(0f) }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
@@ -155,6 +164,18 @@ fun ColorGameScreen(
 
             physics.step(dt, ax, ay)
             dynamicWalls?.tick(dt, physics.x, physics.y)
+            chaser?.let { ch ->
+                ch.tick(dt, floor(physics.x).toInt(), floor(physics.y).toInt())
+                chaserX = ch.visualX
+                chaserY = ch.visualY
+                val dx = physics.x - ch.visualX
+                val dy = physics.y - ch.visualY
+                if (dx * dx + dy * dy < 0.55f * 0.55f) {
+                    caught = true
+                    finished = true
+                    SoundManager.playBonk()
+                }
+            }
             ballX = physics.x
             ballY = physics.y
             wrongFlash = (wrongFlash - dt).coerceAtLeast(0f)
@@ -261,6 +282,8 @@ fun ColorGameScreen(
                     wrongFlash = wrongFlash,
                     dynamic = dynamicWalls,
                     dark = stage.dark,
+                    chaserX = if (chaser != null) chaserX else null,
+                    chaserY = if (chaser != null) chaserY else null,
                 )
             }
 
@@ -280,6 +303,7 @@ fun ColorGameScreen(
                 score = score,
                 elapsedMs = elapsedMs,
                 isNewBest = isNewBest,
+                caught = caught,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
             )
@@ -299,6 +323,8 @@ private fun ColorArenaCanvas(
     wrongFlash: Float,
     dynamic: DynamicMazeController? = null,
     dark: Boolean = false,
+    chaserX: Float? = null,
+    chaserY: Float? = null,
 ) {
     Canvas(
         modifier = Modifier
@@ -391,6 +417,22 @@ private fun ColorArenaCanvas(
             )
         }
 
+        // 술래(적)
+        if (chaserX != null && chaserY != null) {
+            val er = cell * 0.4f
+            val ex = chaserX * cell
+            val ey = chaserY * cell
+            drawCircle(Color(0xFF6A1B9A), radius = er, center = Offset(ex, ey))
+            drawCircle(Color(0xFF4A148C), radius = er, center = Offset(ex, ey), style = Stroke(width = cell * 0.08f))
+            // 눈
+            val eyeDx = er * 0.32f
+            val eyeY = ey - er * 0.08f
+            drawCircle(Color.White, radius = er * 0.24f, center = Offset(ex - eyeDx, eyeY))
+            drawCircle(Color.White, radius = er * 0.24f, center = Offset(ex + eyeDx, eyeY))
+            drawCircle(Color.Black, radius = er * 0.11f, center = Offset(ex - eyeDx, eyeY))
+            drawCircle(Color.Black, radius = er * 0.11f, center = Offset(ex + eyeDx, eyeY))
+        }
+
         // 공 (어둠 위에 그려 항상 보이게)
         val r = cell * 0.4f
         val cx = ballX * cell
@@ -405,6 +447,7 @@ private fun ColorResultOverlay(
     score: Int,
     elapsedMs: Long,
     isNewBest: Boolean,
+    caught: Boolean,
     onRetry: () -> Unit,
     onHome: () -> Unit,
 ) {
@@ -423,36 +466,38 @@ private fun ColorResultOverlay(
                 .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("🎉", fontSize = 56.sp)
+            Text(if (caught) "😵" else "🎉", fontSize = 56.sp)
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "참 잘했어요!",
+                text = if (caught) "잡혔어요!" else "참 잘했어요!",
                 color = InkDark,
                 fontSize = 30.sp,
                 fontWeight = FontWeight.ExtraBold,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "색깔 ${score}개를 모두 찾았어요",
+                text = if (caught) "술래에게 잡혔어요" else "색깔 ${score}개를 모두 찾았어요",
                 color = InkSoft,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = formatElapsed(elapsedMs),
-                color = CoralPink,
-                fontSize = 40.sp,
-                fontWeight = FontWeight.Black,
-            )
-            if (isNewBest) {
-                Spacer(Modifier.height(4.dp))
+            if (!caught) {
+                Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "★ 최고 기록! ★",
+                    text = formatElapsed(elapsedMs),
                     color = CoralPink,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 40.sp,
+                    fontWeight = FontWeight.Black,
                 )
+                if (isNewBest) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "★ 최고 기록! ★",
+                        color = CoralPink,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
             }
             Spacer(Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

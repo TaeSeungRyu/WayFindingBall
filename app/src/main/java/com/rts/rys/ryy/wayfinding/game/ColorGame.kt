@@ -36,6 +36,8 @@ data class ColorStage(
     val dark: Boolean = false,
     /** true면 매판 색칸의 색을 위치에 무작위로 배치한다 (기억 도전). */
     val shuffleColors: Boolean = false,
+    /** true면 술래(적)가 공을 쫓아온다. 잡히면 게임 오버. */
+    val chaser: Boolean = false,
 )
 
 object ColorGame {
@@ -102,6 +104,7 @@ object ColorGame {
         ColorStage(3, "3단계", "벽이 있어요", zones6, 5, arenaLines = stage3Arena),
         ColorStage(4, "4단계", "작은 칸 + 움직이는 벽", zonesSmall, 5, dynamicWalls = true),
         ColorStage(5, "5단계", "깜깜해요", zones6, 5, dark = true, shuffleColors = true),
+        ColorStage(6, "6단계", "술래 + 움직이는 벽", zones6, 5, chaser = true, dynamicWalls = true),
     )
 
     /** 색칸 위치는 그대로 두고 색만 무작위로 재배치한다. */
