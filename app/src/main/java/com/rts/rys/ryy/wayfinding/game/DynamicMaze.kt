@@ -24,6 +24,8 @@ class DynamicMazeController(
     private val cyclePeriodS: Float = 3f,
     private val previewS: Float = 0.8f,
     private val maxChanges: Int = 10,
+    /** true를 반환하는 셀은 벽으로 바뀌지 않는다 (예: 색깔 모드의 색칸). */
+    private val isProtected: (c: Int, r: Int) -> Boolean = { _, _ -> false },
 ) {
     var version by mutableIntStateOf(0)
         private set
@@ -80,6 +82,7 @@ class DynamicMazeController(
             if (c == bc && r == br) continue
             if (c == maze.startCol && r == maze.startRow) continue
             if (c == maze.goalCol && r == maze.goalRow) continue
+            if (isProtected(c, r)) continue
             val curr = maze.grid[r][c]
             if (curr != Cell.WALL && curr != Cell.EMPTY) continue
             val toWall = curr == Cell.EMPTY

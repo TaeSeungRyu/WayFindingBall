@@ -30,6 +30,8 @@ data class ColorStage(
     val targetCount: Int,
     /** null이면 테두리만 있는 빈 광장. 아니면 이 ASCII 미로를 사용. */
     val arenaLines: List<String>? = null,
+    /** true면 벽이 주기적으로 생겼다 사라진다 (색칸은 보호). */
+    val dynamicWalls: Boolean = false,
 )
 
 object ColorGame {
@@ -61,6 +63,17 @@ object ColorGame {
         ColorZone("보라", PURPLE, MID0, MID1, HI - 2, HI),
     )
 
+    // 4단계: 6색을 작은 1x1 칸으로 (기존 3x3 칸의 중심 위치)
+    private val mid = SIZE / 2  // 6
+    private val zonesSmall = listOf(
+        ColorZone("빨강", RED, LO + 1, LO + 1, LO + 1, LO + 1),       // (2,2)
+        ColorZone("노랑", YELLOW, HI - 1, HI - 1, LO + 1, LO + 1),    // (10,2)
+        ColorZone("파랑", BLUE, LO + 1, LO + 1, HI - 1, HI - 1),      // (2,10)
+        ColorZone("초록", GREEN, HI - 1, HI - 1, HI - 1, HI - 1),     // (10,10)
+        ColorZone("주황", ORANGE, mid, mid, LO + 1, LO + 1),          // (6,2)
+        ColorZone("보라", PURPLE, mid, mid, HI - 1, HI - 1),          // (6,10)
+    )
+
     // 3단계 미로: 6색칸은 그대로 열어두고 가운데에 벽을 둬 길을 찾게 한다.
     // 색칸(모서리·위아래 가운데 3x3)과 시작점(가운데)은 막지 않는다.
     private val stage3Arena = listOf(
@@ -80,9 +93,10 @@ object ColorGame {
     )
 
     val stages: List<ColorStage> = listOf(
-        ColorStage(1, "1단계", "색깔 4개", zones4, 10),
-        ColorStage(2, "2단계", "색깔 6개", zones6, 12),
-        ColorStage(3, "3단계", "벽이 있어요", zones6, 12, arenaLines = stage3Arena),
+        ColorStage(1, "1단계", "색깔 4개", zones4, 5),
+        ColorStage(2, "2단계", "색깔 6개", zones6, 5),
+        ColorStage(3, "3단계", "벽이 있어요", zones6, 5, arenaLines = stage3Arena),
+        ColorStage(4, "4단계", "작은 칸 + 움직이는 벽", zonesSmall, 5, dynamicWalls = true),
     )
 
     fun stageOf(level: Int): ColorStage = stages.firstOrNull { it.level == level } ?: stages.first()

@@ -50,6 +50,7 @@ import com.rts.rys.ryy.wayfinding.data.BallSkins
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.ColorGame
+import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
@@ -78,6 +79,16 @@ fun ColorGameScreen(
     val arena = remember(attemptId) { ColorGame.buildArena(stage) }
     val physics = remember(attemptId) { BallPhysics(arena, radius = 0.32f, friction = 1.8f) }
     val targetSeq = remember(attemptId) { ColorGame.targetSequence(stage) }
+    val dynamicWalls = remember(attemptId) {
+        if (stage.dynamicWalls) {
+            DynamicMazeController(
+                arena,
+                cyclePeriodS = 3.5f,
+                maxChanges = 6,
+                isProtected = { c, r -> stage.zones.any { it.contains(c, r) } },
+            )
+        } else null
+    }
     val tilt = remember { TiltSensor(context) }
     val currentSkin = remember { BallSkins.byId(AchievementsRepository(context).loadCurrentSkinId()) }
     val sensorEnabled by AppSettings.sensorEnabled
@@ -138,6 +149,7 @@ fun ColorGameScreen(
             }
 
             physics.step(dt, ax, ay)
+            dynamicWalls?.tick(dt, physics.x, physics.y)
             ballX = physics.x
             ballY = physics.y
             wrongFlash = (wrongFlash - dt).coerceAtLeast(0f)
@@ -239,6 +251,7 @@ fun ColorGameScreen(
                     skin = currentSkin,
                     pulse = pulse,
                     wrongFlash = wrongFlash,
+                    dynamic = dynamicWalls,
                 )
             }
 
@@ -274,6 +287,7 @@ private fun ColorArenaCanvas(
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
     pulse: Float,
     wrongFlash: Float,
+    dynamic: DynamicMazeController? = null,
 ) {
     Canvas(
         modifier = Modifier
@@ -286,7 +300,8 @@ private fun ColorArenaCanvas(
         val cell = size.minDimension / n
         val wallColor = Color(0xFFCBB89B)
 
-        // 벽 셀(테두리 + 내부 벽 모두)
+        // 벽 셀(테두리 + 내부 벽 모두). dynamic.version 읽기로 변경 시 재구성 트리거.
+        dynamic?.version
         for (r in 0 until arena.rows) {
             for (c in 0 until arena.cols) {
                 if (arena.isWall(c, r)) {
@@ -297,6 +312,20 @@ private fun ColorArenaCanvas(
                         cornerRadius = CornerRadius(cell * 0.15f, cell * 0.15f),
                     )
                 }
+            }
+        }
+
+        // 곧 생길/사라질 벽 미리보기(페이드)
+        if (dynamic != null) {
+            val prog = dynamic.previewProgress
+            for (p in dynamic.pendingPreview) {
+                if (!p.toWall) continue
+                drawRoundRect(
+                    color = wallColor.copy(alpha = 0.55f * prog),
+                    topLeft = Offset(p.c * cell, p.r * cell),
+                    size = Size(cell, cell),
+                    cornerRadius = CornerRadius(cell * 0.15f, cell * 0.15f),
+                )
             }
         }
 
