@@ -17,6 +17,10 @@ data class HitStage(
     val arenaLines: List<String>? = null,
     /** true면 표적에 번호가 붙고 작은 수부터 순서대로 맞혀야 한다. */
     val ordered: Boolean = false,
+    /** true면 표적이 떠다니며 벽에서 튕긴다. */
+    val moving: Boolean = false,
+    /** true면 벽이 주기적으로 생겼다 사라진다 (공·표적은 보호). */
+    val dynamicWalls: Boolean = false,
 )
 
 /** 표적 한 개. (c, r) 셀 중심에 위치. [order]는 순서 모드의 번호(1부터). */
@@ -62,11 +66,29 @@ object HitGame {
         "#############",
     )
 
+    // 5단계: 고정 기둥 사이를 움직이는 표적이 떠다님
+    private val stage5Arena = listOf(
+        "#############",
+        "#S          #",
+        "#   #   #   #",
+        "#           #",
+        "#   #   #   #",
+        "#           #",
+        "#     #     #",
+        "#           #",
+        "#   #   #   #",
+        "#           #",
+        "#   #   #   #",
+        "#           #",
+        "#############",
+    )
+
     val stages: List<HitStage> = listOf(
         HitStage(1, "1단계", "표적 5개", 5),
         HitStage(2, "2단계", "표적 8개", 8),
         HitStage(3, "3단계", "범퍼 + 표적 10개", 10, arenaLines = stage3Arena),
         HitStage(4, "4단계", "순서대로 맞히기", 6, arenaLines = stage4Arena, ordered = true),
+        HitStage(5, "5단계", "움직이는 표적", 6, arenaLines = stage5Arena, moving = true),
     )
 
     fun stageOf(level: Int): HitStage = stages.firstOrNull { it.level == level } ?: stages.first()

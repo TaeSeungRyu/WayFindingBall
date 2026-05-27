@@ -53,6 +53,7 @@ import com.rts.rys.ryy.wayfinding.data.BallSkins
 import com.rts.rys.ryy.wayfinding.data.HitRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
+import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
 import com.rts.rys.ryy.wayfinding.game.HitGame
 import com.rts.rys.ryy.wayfinding.game.HitTarget
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
@@ -65,13 +66,26 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import kotlinx.coroutines.android.awaitFrame
+import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
+import kotlin.random.Random
 
 private const val SENSOR_ACCEL_GAIN = 30f
 private const val KEYPAD_ACCEL_GAIN = 16f
 private const val SENSOR_MAX_SPEED = 20f
 private const val KEYPAD_MAX_SPEED = 14f
 private const val HIT_RADIUS = 0.55f
+private const val TARGET_SPEED = 2.4f  // 움직이는 표적 속도 (칸/초)
+
+/** 런타임 표적: 부동 좌표 + 속도(정지 표적은 0). */
+private class LiveTarget(
+    var x: Float,
+    var y: Float,
+    var vx: Float,
+    var vy: Float,
+    val order: Int,
+)
 
 @Composable
 fun HitGameScreen(
@@ -87,9 +101,28 @@ fun HitGameScreen(
         BallPhysics(arena, radius = 0.3f, friction = 0.9f, restitution = 0.7f)
     }
     val targets = remember(attemptId) {
-        mutableStateListOf<HitTarget>().apply { addAll(HitGame.spawnTargets(stage, arena)) }
+        val spawned = HitGame.spawnTargets(stage, arena).map { t ->
+            if (stage.moving) {
+                val ang = Random.nextFloat() * (2f * Math.PI.toFloat())
+                LiveTarget(t.cx, t.cy, cos(ang) * TARGET_SPEED, sin(ang) * TARGET_SPEED, t.order)
+            } else {
+                LiveTarget(t.cx, t.cy, 0f, 0f, t.order)
+            }
+        }
+        mutableStateListOf<LiveTarget>().apply { addAll(spawned) }
     }
     val totalTargets = remember(attemptId) { targets.size }
+    val dynamicWalls = remember(attemptId) {
+        if (stage.dynamicWalls) {
+            DynamicMazeController(
+                arena,
+                cyclePeriodS = 3.5f,
+                maxChanges = 5,
+                // 현재 표적이 올라가 있는 칸에는 벽이 생기지 않게 보호
+                isProtected = { c, r -> targets.any { floor(it.x).toInt() == c && floor(it.y).toInt() == r } },
+            )
+        } else null
+    }
     val tilt = remember { TiltSensor(context) }
     val currentSkin = remember { BallSkins.byId(AchievementsRepository(context).loadCurrentSkinId()) }
     val sensorEnabled by AppSettings.sensorEnabled
@@ -146,8 +179,21 @@ fun HitGameScreen(
             }
 
             physics.step(dt, ax, ay)
+            dynamicWalls?.tick(dt, physics.x, physics.y)
             ballX = physics.x
             ballY = physics.y
+
+            // 움직이는 표적: 이동 + 벽에서 반사
+            if (stage.moving) {
+                for (t in targets) {
+                    val nx = t.x + t.vx * dt
+                    if (arena.isWall(floor(nx).toInt(), floor(t.y).toInt())) t.vx = -t.vx
+                    else t.x = nx
+                    val ny = t.y + t.vy * dt
+                    if (arena.isWall(floor(t.x).toInt(), floor(ny).toInt())) t.vy = -t.vy
+                    else t.y = ny
+                }
+            }
 
             // 표적 충돌 검사
             var hitAny = false
@@ -155,8 +201,8 @@ fun HitGameScreen(
                 // 순서 모드: 가장 작은 번호 표적만 맞힐 수 있다.
                 val next = targets.minByOrNull { it.order }
                 if (next != null) {
-                    val dx = physics.x - next.cx
-                    val dy = physics.y - next.cy
+                    val dx = physics.x - next.x
+                    val dy = physics.y - next.y
                     if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
                         targets.remove(next)
                         hitAny = true
@@ -166,8 +212,8 @@ fun HitGameScreen(
                 val it = targets.iterator()
                 while (it.hasNext()) {
                     val t = it.next()
-                    val dx = physics.x - t.cx
-                    val dy = physics.y - t.cy
+                    val dx = physics.x - t.x
+                    val dy = physics.y - t.y
                     if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
                         it.remove()
                         hitAny = true
@@ -271,7 +317,7 @@ fun HitGameScreen(
 @Composable
 private fun HitArenaCanvas(
     arena: com.rts.rys.ryy.wayfinding.game.Maze,
-    targets: List<HitTarget>,
+    targets: List<LiveTarget>,
     ballX: Float,
     ballY: Float,
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
@@ -312,8 +358,8 @@ private fun HitArenaCanvas(
         // 표적 (과녁)
         val pulseScale = 1f + 0.08f * sin(pulse * 4f)
         for (t in targets) {
-            val cx = t.cx * cell
-            val cy = t.cy * cell
+            val cx = t.x * cell
+            val cy = t.y * cell
             val r = cell * 0.38f * pulseScale
             if (ordered) {
                 // 순서 모드: 채워진 원 + 번호
