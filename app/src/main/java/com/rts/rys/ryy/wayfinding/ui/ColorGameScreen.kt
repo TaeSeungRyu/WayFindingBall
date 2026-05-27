@@ -53,6 +53,7 @@ import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.ChaserController
 import com.rts.rys.ryy.wayfinding.game.ColorGame
 import com.rts.rys.ryy.wayfinding.game.DynamicMazeController
+import com.rts.rys.ryy.wayfinding.game.FloorColorController
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
@@ -81,7 +82,9 @@ fun ColorGameScreen(
 
     val arena = remember(attemptId) { ColorGame.buildArena(stage) }
     val physics = remember(attemptId) { BallPhysics(arena, radius = 0.32f, friction = 1.8f) }
-    val targetSeq = remember(attemptId) { ColorGame.targetSequence(stage) }
+    val targetSeq = remember(attemptId) {
+        if (stage.zones.isEmpty()) emptyList() else ColorGame.targetSequence(stage)
+    }
     var zones by remember(attemptId) {
         mutableStateOf(
             when {
@@ -93,14 +96,21 @@ fun ColorGameScreen(
     }
     // 헌트 모드에서 모아야 할 고정 색 (팔레트 중 하나, 항상 12칸에 존재)
     val huntTarget = remember(attemptId) { ColorGame.palette12.random() }
+    // 색 바닥 모드 컨트롤러 + 정답 색
+    val floorCtrl = remember(attemptId) {
+        if (stage.floorMode) {
+            FloorColorController(arena, ColorGame.floorPalette.size, ColorGame.floorPalette.indices.random())
+        } else null
+    }
+    val floorTarget = remember(attemptId) { floorCtrl?.let { ColorGame.floorPalette[it.target] } }
     val dynamicWalls = remember(attemptId) {
         if (stage.dynamicWalls) {
-            DynamicMazeController(
-                arena,
-                cyclePeriodS = 3.5f,
-                maxChanges = 6,
-                isProtected = { c, r -> stage.zones.any { it.contains(c, r) } },
-            )
+            val protect: (Int, Int) -> Boolean = if (stage.floorMode) {
+                { c, r -> floorCtrl?.isTargetCell(c, r) == true }
+            } else {
+                { c, r -> stage.zones.any { it.contains(c, r) } }
+            }
+            DynamicMazeController(arena, cyclePeriodS = 3.5f, maxChanges = 6, isProtected = protect)
         } else null
     }
     val chaser = remember(attemptId) {
@@ -145,6 +155,7 @@ fun ColorGameScreen(
         finished = false
         wrongFlash = 0f
         var lastZone: Int? = ColorGame.zoneAt(zones, floor(physics.x).toInt(), floor(physics.y).toInt())
+        var lastCell: Pair<Int, Int> = floor(physics.x).toInt() to floor(physics.y).toInt()
 
         var last = 0L
         while (!finished) {
@@ -192,17 +203,37 @@ fun ColorGameScreen(
             ballY = physics.y
             wrongFlash = (wrongFlash - dt).coerceAtLeast(0f)
 
-            // 헌트 모드: 일정 시간마다 색 재배치
+            // 일정 시간마다 색 재배치 (헌트/색 바닥)
             if (stage.reshuffleEveryS > 0f) {
                 reshuffleTimer += dt
                 if (reshuffleTimer >= stage.reshuffleEveryS) {
-                    zones = ColorGame.huntAssign(stage)
+                    if (stage.floorMode) floorCtrl?.reshuffle()
+                    else zones = ColorGame.huntAssign(stage)
                     reshuffleTimer = 0f
                 }
             }
 
             val bc = floor(physics.x).toInt()
             val br = floor(physics.y).toInt()
+
+            // 색 바닥 모드: 정답 색 칸을 밟으면 수집
+            if (stage.floorMode && floorCtrl != null) {
+                val cell = bc to br
+                if (cell != lastCell) {
+                    if (!arena.isWall(bc, br) && floorCtrl.isTargetCell(bc, br)) {
+                        score += 1
+                        SoundManager.playGoal()
+                        floorCtrl.consume(bc, br)
+                        if (score >= stage.targetCount) {
+                            isNewBest = ColorRecordsRepository(context).record(level, elapsedMs)
+                            finished = true
+                        }
+                    }
+                    lastCell = cell
+                }
+                continue
+            }
+
             val zone = ColorGame.zoneAt(zones, bc, br)
             if (zone != null && zone != lastZone) {
                 if (stage.huntMode) {
@@ -236,7 +267,9 @@ fun ColorGameScreen(
         }
     }
 
-    val target = zones[targetSeq.getOrElse(targetIndex) { targetSeq.last() }]
+    val target = if (zones.isNotEmpty() && targetSeq.isNotEmpty())
+        zones[targetSeq.getOrElse(targetIndex) { targetSeq.lastOrNull() ?: 0 }]
+    else null
 
     Box(
         modifier = Modifier
@@ -296,6 +329,20 @@ fun ColorGameScreen(
                         fontWeight = FontWeight.ExtraBold,
                         color = InkDark,
                     )
+                } else if (stage.floorMode && floorTarget != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(floorTarget.first)
+                    )
+                    Spacer(Modifier.size(10.dp))
+                    Text(
+                        text = "${floorTarget.second}색을 찾아요!",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = InkDark,
+                    )
                 } else if (stage.memorizeOrder) {
                     Text(
                         text = "기억한 순서대로 가요!",
@@ -303,7 +350,7 @@ fun ColorGameScreen(
                         fontWeight = FontWeight.ExtraBold,
                         color = InkDark,
                     )
-                } else {
+                } else if (target != null) {
                     Box(
                         modifier = Modifier
                             .size(28.dp)
@@ -334,7 +381,7 @@ fun ColorGameScreen(
                     zones = zones,
                     ballX = ballX,
                     ballY = ballY,
-                    targetZoneIndex = targetSeq.getOrElse(targetIndex) { targetSeq.last() },
+                    targetZoneIndex = targetSeq.getOrElse(targetIndex) { targetSeq.lastOrNull() ?: -1 },
                     skin = currentSkin,
                     pulse = pulse,
                     wrongFlash = wrongFlash,
@@ -342,7 +389,8 @@ fun ColorGameScreen(
                     dark = stage.dark,
                     chaserX = if (chaser != null) chaserX else null,
                     chaserY = if (chaser != null) chaserY else null,
-                    highlightTarget = !stage.memorizeOrder && !stage.huntMode,
+                    highlightTarget = !stage.memorizeOrder && !stage.huntMode && !stage.floorMode,
+                    floor = floorCtrl,
                 )
             }
 
@@ -457,6 +505,7 @@ private fun ColorArenaCanvas(
     chaserX: Float? = null,
     chaserY: Float? = null,
     highlightTarget: Boolean = true,
+    floor: FloorColorController? = null,
 ) {
     Canvas(
         modifier = Modifier
@@ -468,6 +517,23 @@ private fun ColorArenaCanvas(
         val n = ColorGame.SIZE
         val cell = size.minDimension / n
         val wallColor = Color(0xFFCBB89B)
+
+        // 색 바닥: 벽이 아닌 모든 내부 셀에 색을 칠한다.
+        if (floor != null) {
+            floor.version  // 변경 시 재구성 트리거
+            val inset = cell * 0.06f
+            for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
+                if (arena.isWall(c, r)) continue
+                val idx = floor.colorAt(c, r)
+                if (idx < 0) continue
+                drawRoundRect(
+                    color = ColorGame.floorPalette[idx].first,
+                    topLeft = Offset(c * cell + inset, r * cell + inset),
+                    size = Size(cell - inset * 2, cell - inset * 2),
+                    cornerRadius = CornerRadius(cell * 0.18f, cell * 0.18f),
+                )
+            }
+        }
 
         // 벽 셀(테두리 + 내부 벽 모두). dynamic.version 읽기로 변경 시 재구성 트리거.
         dynamic?.version

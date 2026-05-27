@@ -46,6 +46,8 @@ data class ColorStage(
     val reshuffleEveryS: Float = 0f,
     /** 0보다 크면 시작 시 내부 벽을 이만큼 무작위로 깐다. */
     val initialWalls: Int = 0,
+    /** true면 색 바닥 모드: 모든 바닥 셀에 색이 있고 지정 색을 찾아 모은다. */
+    val floorMode: Boolean = false,
 )
 
 object ColorGame {
@@ -104,6 +106,16 @@ object ColorGame {
         Color(0xFF8D6E63) to "갈색",
     )
 
+    // 9단계 색 바닥용 팔레트 (또렷이 구분되는 6색)
+    val floorPalette: List<Pair<Color, String>> = listOf(
+        Color(0xFFE53935) to "빨강",
+        Color(0xFFFB8C00) to "주황",
+        Color(0xFFFDD835) to "노랑",
+        Color(0xFF43A047) to "초록",
+        Color(0xFF1E88E5) to "파랑",
+        Color(0xFF8E24AA) to "보라",
+    )
+
     // 8단계: 12개 작은 색칸 위치 (4열 x 3행). 색은 매번 무작위로 재배치된다.
     private val huntCols = listOf(2, 5, 8, 10)
     private val huntRows = listOf(2, 6, 10)
@@ -140,6 +152,10 @@ object ColorGame {
         ColorStage(
             8, "8단계", "12색 찾기", zones12, 5,
             dynamicWalls = true, huntMode = true, reshuffleEveryS = 5f, initialWalls = 10,
+        ),
+        ColorStage(
+            9, "9단계", "색 바닥에서 찾기", emptyList(), 20,
+            dynamicWalls = true, floorMode = true, reshuffleEveryS = 10f, initialWalls = 8,
         ),
     )
 
