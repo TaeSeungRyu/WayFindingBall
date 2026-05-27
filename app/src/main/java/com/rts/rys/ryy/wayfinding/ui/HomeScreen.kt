@@ -44,7 +44,6 @@ import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
-import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
@@ -56,7 +55,6 @@ fun HomeScreen(
     onStart: () -> Unit,
     onDaily: () -> Unit,
     onRecords: () -> Unit,
-    onCreate: () -> Unit,
     onCollection: () -> Unit,
     onTutorial: () -> Unit = {},
 ) {
@@ -142,13 +140,6 @@ fun HomeScreen(
                 emoji = "★",
                 bg = SunYellow,
                 onClick = onRecords
-            )
-            Spacer(Modifier.height(20.dp))
-            BigButton(
-                label = "나만의 게임 만들기",
-                emoji = "＋",
-                bg = Lavender,
-                onClick = onCreate
             )
             Spacer(Modifier.height(20.dp))
             BigButton(

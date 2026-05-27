@@ -180,7 +180,6 @@ fun MazeApp() {
                     push(Screen.Game(stage.id))
                 },
                 onRecords = { push(Screen.Records) },
-                onCreate = { push(Screen.Editor(1)) },
                 onCollection = { push(Screen.Collection) },
                 onTutorial = { showTutorial = true }
             )
@@ -199,7 +198,8 @@ fun MazeApp() {
             )
             Screen.LevelSelect -> LevelSelectScreen(
                 onBack = { pop() },
-                onSelect = { level -> push(Screen.StageSelect(level)) }
+                onSelect = { level -> push(Screen.StageSelect(level)) },
+                onCreate = { push(Screen.Editor(1)) }
             )
             is Screen.StageSelect -> StageSelectScreen(
                 level = screen.level,

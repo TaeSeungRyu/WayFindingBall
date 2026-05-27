@@ -44,6 +44,7 @@ import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.game.difficultyLabel
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
+import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 
@@ -73,7 +74,8 @@ private fun levelEmoji(level: Int): String = when (level) {
 @Composable
 fun LevelSelectScreen(
     onBack: () -> Unit,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
+    onCreate: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val customs by Stages.customStages
@@ -118,6 +120,8 @@ fun LevelSelectScreen(
                 )
             }
             Spacer(Modifier.height(16.dp))
+            CreateMazeButton(onClick = onCreate)
+            Spacer(Modifier.height(12.dp))
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp + navBottom)
@@ -134,6 +138,40 @@ fun LevelSelectScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CreateMazeButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(84.dp)
+            .shadow(6.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(Lavender)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("＋", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.size(14.dp))
+        Text(
+            text = "나만의 미로 만들기!",
+            color = Color.White,
+            fontSize = 21.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.sp,
+
+        )
     }
 }
 

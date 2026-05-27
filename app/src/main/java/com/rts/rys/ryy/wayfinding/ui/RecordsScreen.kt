@@ -41,14 +41,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.data.ColorRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
 import com.rts.rys.ryy.wayfinding.data.ShareUtils
+import com.rts.rys.ryy.wayfinding.game.ColorGame
+import com.rts.rys.ryy.wayfinding.game.ColorStage
 import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.game.difficultyLabel
+import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
+import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import java.text.SimpleDateFormat
@@ -94,6 +99,10 @@ fun RecordsScreen(onBack: () -> Unit) {
             }
         }
     }
+    val colorBests = remember {
+        val repo = ColorRecordsRepository(context)
+        ColorGame.stages.map { it to repo.bestFor(it.level) }
+    }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Box(
@@ -127,11 +136,19 @@ fun RecordsScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp + navBottom)
             ) {
-                items(levelBests, key = { it.level }) { entry ->
+                item(key = "h_maze") { SectionLabel("미로 찾기") }
+                items(levelBests, key = { "maze_${it.level}" }) { entry ->
                     LevelBestCard(
                         entry = entry,
                         onShare = { shareEntry(context, entry) }
                     )
+                }
+                item(key = "h_color") {
+                    Spacer(Modifier.height(6.dp))
+                    SectionLabel("색깔 찾기")
+                }
+                items(colorBests, key = { "color_${it.first.level}" }) { (stage, bestMs) ->
+                    ColorBestCard(stage = stage, bestMs = bestMs)
                 }
             }
         }
@@ -171,6 +188,76 @@ private fun ShareIcon() {
         drawCircle(Color.White, r, left)
         drawCircle(Color.White, r, topRight)
         drawCircle(Color.White, r, bottomRight)
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.ExtraBold,
+        color = InkDark,
+        modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)
+    )
+}
+
+@Composable
+private fun ColorBestCard(stage: ColorStage, bestMs: Long?) {
+    val hasRecord = bestMs != null
+    val color = when {
+        !hasRecord -> Color(0xFFBDB7B0)
+        stage.level % 2 == 1 -> SkyBlue
+        else -> CoralPink
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(82.dp)
+            .shadow(6.dp, RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(color)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "${stage.level}",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stage.name,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                maxLines = 1
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (hasRecord) "최고 기록" else "아직 도전해 보세요",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.85f)
+            )
+        }
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = if (hasRecord) formatElapsed(bestMs!!) else "기록 없음",
+            color = Color.White,
+            fontSize = if (hasRecord) 20.sp else 13.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
     }
 }
 
