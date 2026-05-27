@@ -82,16 +82,24 @@ fun ColorGameScreen(
     val arena = remember(attemptId) { ColorGame.buildArena(stage) }
     val physics = remember(attemptId) { BallPhysics(arena, radius = 0.32f, friction = 1.8f) }
     val targetSeq = remember(attemptId) { ColorGame.targetSequence(stage) }
-    val zones = remember(attemptId) {
-        if (stage.shuffleColors) ColorGame.zonesWithShuffledColors(stage) else stage.zones
+    var zones by remember(attemptId) {
+        mutableStateOf(
+            when {
+                stage.huntMode -> ColorGame.huntAssign(stage)
+                stage.shuffleColors -> ColorGame.zonesWithShuffledColors(stage)
+                else -> stage.zones
+            }
+        )
     }
+    // 헌트 모드에서 모아야 할 고정 색 (팔레트 중 하나, 항상 12칸에 존재)
+    val huntTarget = remember(attemptId) { ColorGame.palette12.random() }
     val dynamicWalls = remember(attemptId) {
         if (stage.dynamicWalls) {
             DynamicMazeController(
                 arena,
                 cyclePeriodS = 3.5f,
                 maxChanges = 6,
-                isProtected = { c, r -> zones.any { it.contains(c, r) } },
+                isProtected = { c, r -> stage.zones.any { it.contains(c, r) } },
             )
         } else null
     }
@@ -120,6 +128,7 @@ fun ColorGameScreen(
     var chaserX by remember(attemptId) { mutableFloatStateOf(0f) }
     var chaserY by remember(attemptId) { mutableFloatStateOf(0f) }
     var showMemorize by remember(attemptId) { mutableStateOf(stage.memorizeOrder) }
+    var reshuffleTimer by remember(attemptId) { mutableFloatStateOf(0f) }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
@@ -183,11 +192,34 @@ fun ColorGameScreen(
             ballY = physics.y
             wrongFlash = (wrongFlash - dt).coerceAtLeast(0f)
 
+            // 헌트 모드: 일정 시간마다 색 재배치
+            if (stage.reshuffleEveryS > 0f) {
+                reshuffleTimer += dt
+                if (reshuffleTimer >= stage.reshuffleEveryS) {
+                    zones = ColorGame.huntAssign(stage)
+                    reshuffleTimer = 0f
+                }
+            }
+
             val bc = floor(physics.x).toInt()
             val br = floor(physics.y).toInt()
             val zone = ColorGame.zoneAt(zones, bc, br)
             if (zone != null && zone != lastZone) {
-                if (zone == targetSeq[targetIndex]) {
+                if (stage.huntMode) {
+                    if (zones[zone].name == huntTarget.second) {
+                        score += 1
+                        SoundManager.playGoal()
+                        zones = ColorGame.huntAssign(stage)  // 모으면 즉시 재배치
+                        reshuffleTimer = 0f
+                        if (score >= stage.targetCount) {
+                            isNewBest = ColorRecordsRepository(context).record(level, elapsedMs)
+                            finished = true
+                        }
+                    } else {
+                        SoundManager.playBonk()
+                        wrongFlash = 0.4f
+                    }
+                } else if (zone == targetSeq[targetIndex]) {
                     score += 1
                     SoundManager.playGoal()
                     targetIndex += 1
@@ -250,7 +282,21 @@ fun ColorGameScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                if (stage.memorizeOrder) {
+                if (stage.huntMode) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(huntTarget.first)
+                    )
+                    Spacer(Modifier.size(10.dp))
+                    Text(
+                        text = "${huntTarget.second}색을 모아요!",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = InkDark,
+                    )
+                } else if (stage.memorizeOrder) {
                     Text(
                         text = "기억한 순서대로 가요!",
                         fontSize = 22.sp,
@@ -296,7 +342,7 @@ fun ColorGameScreen(
                     dark = stage.dark,
                     chaserX = if (chaser != null) chaserX else null,
                     chaserY = if (chaser != null) chaserY else null,
-                    highlightTarget = !stage.memorizeOrder,
+                    highlightTarget = !stage.memorizeOrder && !stage.huntMode,
                 )
             }
 

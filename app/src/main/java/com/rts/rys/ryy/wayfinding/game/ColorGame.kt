@@ -40,6 +40,12 @@ data class ColorStage(
     val chaser: Boolean = false,
     /** true면 시작 시 색 순서를 보여준 뒤, 안내 없이 그 순서대로 찾아가야 한다. */
     val memorizeOrder: Boolean = false,
+    /** true면 12색 헌트 모드: 12칸 중 지정된 색을 찾아 모은다. */
+    val huntMode: Boolean = false,
+    /** 0보다 크면 그 초마다 색칸 색을 무작위로 재배치한다. */
+    val reshuffleEveryS: Float = 0f,
+    /** 0보다 크면 시작 시 내부 벽을 이만큼 무작위로 깐다. */
+    val initialWalls: Int = 0,
 )
 
 object ColorGame {
@@ -82,6 +88,29 @@ object ColorGame {
         ColorZone("보라", PURPLE, mid, mid, HI - 1, HI - 1),          // (6,10)
     )
 
+    // 8단계 헌트 모드용 12색 팔레트
+    val palette12: List<Pair<Color, String>> = listOf(
+        Color(0xFFE53935) to "빨강",
+        Color(0xFFFB8C00) to "주황",
+        Color(0xFFFDD835) to "노랑",
+        Color(0xFF9CCC65) to "연두",
+        Color(0xFF43A047) to "초록",
+        Color(0xFF26A69A) to "청록",
+        Color(0xFF4FC3F7) to "하늘",
+        Color(0xFF1E88E5) to "파랑",
+        Color(0xFF3949AB) to "남색",
+        Color(0xFF8E24AA) to "보라",
+        Color(0xFFEC407A) to "분홍",
+        Color(0xFF8D6E63) to "갈색",
+    )
+
+    // 8단계: 12개 작은 색칸 위치 (4열 x 3행). 색은 매번 무작위로 재배치된다.
+    private val huntCols = listOf(2, 5, 8, 10)
+    private val huntRows = listOf(2, 6, 10)
+    private val zones12: List<ColorZone> = huntRows.flatMap { r ->
+        huntCols.map { c -> ColorZone("", Color.Transparent, c, c, r, r) }
+    }
+
     // 3단계 미로: 6색칸은 그대로 열어두고 가운데에 벽을 둬 길을 찾게 한다.
     // 색칸(모서리·위아래 가운데 3x3)과 시작점(가운데)은 막지 않는다.
     private val stage3Arena = listOf(
@@ -108,7 +137,37 @@ object ColorGame {
         ColorStage(5, "5단계", "깜깜해요", zones6, 5, dark = true, shuffleColors = true),
         ColorStage(6, "6단계", "술래 + 움직이는 벽", zones6, 5, chaser = true, dynamicWalls = true),
         ColorStage(7, "7단계", "순서대로 기억해요", zones6, 4, memorizeOrder = true),
+        ColorStage(
+            8, "8단계", "12색 찾기", zones12, 5,
+            dynamicWalls = true, huntMode = true, reshuffleEveryS = 5f, initialWalls = 10,
+        ),
     )
+
+    /** 헌트 모드: 12색 팔레트를 12개 위치에 무작위로 1:1 배치한다. */
+    fun huntAssign(stage: ColorStage, random: Random = Random.Default): List<ColorZone> {
+        val pal = palette12.shuffled(random)
+        return stage.zones.mapIndexed { i, z ->
+            val (col, name) = pal[i % pal.size]
+            z.copy(name = name, color = col)
+        }
+    }
+
+    /** 시작점·색칸을 피해 내부 빈 셀 [count]개를 벽으로 만든다. */
+    private fun seedRandomWalls(
+        maze: Maze,
+        count: Int,
+        protectedZones: List<ColorZone>,
+        random: Random,
+    ) {
+        val candidates = mutableListOf<Pair<Int, Int>>()
+        for (r in 1 until maze.rows - 1) for (c in 1 until maze.cols - 1) {
+            if (c == maze.startCol && r == maze.startRow) continue
+            if (protectedZones.any { it.contains(c, r) }) continue
+            if (maze.grid[r][c] == Cell.EMPTY) candidates.add(c to r)
+        }
+        candidates.shuffle(random)
+        for ((c, r) in candidates.take(count)) maze.grid[r][c] = Cell.WALL
+    }
 
     /** 색칸 위치는 그대로 두고 색만 무작위로 재배치한다. */
     fun zonesWithShuffledColors(stage: ColorStage, random: Random = Random.Default): List<ColorZone> {
@@ -138,7 +197,11 @@ object ColorGame {
                 }
             }
         }
-        return Maze.fromAscii(lines)
+        val maze = Maze.fromAscii(lines)
+        if (stage.initialWalls > 0) {
+            seedRandomWalls(maze, stage.initialWalls, stage.zones, Random.Default)
+        }
+        return maze
     }
 
     /** 연속 중복이 없는 목표 색 인덱스 시퀀스. */

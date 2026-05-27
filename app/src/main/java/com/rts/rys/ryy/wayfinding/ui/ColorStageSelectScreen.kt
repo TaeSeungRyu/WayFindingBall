@@ -118,15 +118,21 @@ private fun ColorStageCard(
             .padding(24.dp),
         contentAlignment = Alignment.CenterStart
     ) {
+        // 헌트 모드는 색이 동적이라 팔레트 색으로 미리보기
+        val previewColors = if (stage.huntMode) {
+            ColorGame.palette12.take(6).map { it.first }
+        } else {
+            stage.zones.take(6).map { it.color }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             // 단계별 색칸 미리보기
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                stage.zones.take(6).forEach { zone ->
+                previewColors.forEach { c ->
                     Box(
                         modifier = Modifier
                             .size(20.dp)
                             .clip(CircleShape)
-                            .background(zone.color)
+                            .background(c)
                     )
                 }
             }
