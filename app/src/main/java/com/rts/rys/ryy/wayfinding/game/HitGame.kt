@@ -23,6 +23,9 @@ data class HitStage(
     val dynamicWalls: Boolean = false,
     /** true면 4모서리에 포켓이 있고, 큐볼과 목적공이 탄성 충돌해 포켓에 넣어야 사라진다(포켓볼). */
     val pockets: Boolean = false,
+    /** true면 각 포켓이 색을 가지고, 같은 색(=같은 번호) 공만 그 포켓에 입수된다.
+     *  포켓 인덱스 0~3 ↔ 표적 order 1~4가 1대1 대응 (POOL_BALL_COLORS와 같은 순서). */
+    val colorMatch: Boolean = false,
 )
 
 /** 표적 한 개. (c, r) 셀 중심에 위치. [order]는 순서 모드의 번호(1부터). */
@@ -95,6 +98,7 @@ object HitGame {
         HitStage(7, "7단계", "순서대로 움직이는 표적", 6, ordered = true, moving = true),
         HitStage(8, "8단계", "포켓에 공을 넣어요", 5, pockets = true),
         HitStage(9, "9단계", "순서대로 포켓", 5, ordered = true, pockets = true),
+        HitStage(10, "10단계", "색깔 매칭 포켓", 10, pockets = true, colorMatch = true),
     )
 
 

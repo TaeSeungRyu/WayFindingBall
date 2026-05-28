@@ -305,8 +305,22 @@ fun HitGameScreen(
             // 표적 제거 판정
             var hitAny = false
             if (stage.pockets) {
-                if (stage.ordered) {
-                    // 순서대로 포켓(9단계+): 가장 작은 번호 표적만 포켓 입수 가능.
+                if (stage.colorMatch) {
+                    // 색깔 매칭 포켓(10단계): 표적의 order-1과 포켓 인덱스가 같을 때만 입수.
+                    // 다른 색 포켓 위는 그냥 통과.
+                    val iter = targets.iterator()
+                    while (iter.hasNext()) {
+                        val t = iter.next()
+                        val tc = floor(t.x).toInt()
+                        val tr = floor(t.y).toInt()
+                        val pIdx = pockets.indexOfFirst { p -> p.first == tc && p.second == tr }
+                        if (pIdx >= 0 && pIdx == t.order - 1) {
+                            iter.remove()
+                            hitAny = true
+                        }
+                    }
+                } else if (stage.ordered) {
+                    // 순서대로 포켓(9단계): 가장 작은 번호 표적만 포켓 입수 가능.
                     // 다른 번호가 포켓 위를 지나가도 그냥 통과(입수 무효).
                     val next = targets.minByOrNull { it.order }
                     if (next != null) {
@@ -412,6 +426,7 @@ fun HitGameScreen(
             ) {
                 Text(
                     text = when {
+                        stage.pockets && stage.colorMatch -> "같은 색 포켓에 넣어요!"
                         stage.pockets && stage.ordered -> "1번부터 순서대로 포켓에 넣어요!"
                         stage.pockets -> "포켓에 공을 넣어요!"
                         stage.ordered -> "1번부터 순서대로 맞혀요!"
@@ -446,6 +461,7 @@ fun HitGameScreen(
                         ordered = stage.ordered,
                         dynamic = dynamicWalls,
                         pockets = pockets,
+                        colorMatch = stage.colorMatch,
                     )
                 }
             }
@@ -486,6 +502,7 @@ private fun HitArenaCanvas(
     ordered: Boolean = false,
     dynamic: com.rts.rys.ryy.wayfinding.game.DynamicMazeController? = null,
     pockets: List<Pair<Int, Int>> = emptyList(),
+    colorMatch: Boolean = false,
 ) {
     val numberPaint = remember {
         android.graphics.Paint().apply {
@@ -534,12 +551,29 @@ private fun HitArenaCanvas(
         }
 
         // 포켓(검은 구멍) — 공이 그 위로 굴러올라가도록 표적/공보다 아래에 그린다.
-        for ((pc, pr) in pockets) {
+        // colorMatch면 포켓 외환을 매칭 색으로 그려 어느 공을 받는지 표시.
+        for ((idx, pocket) in pockets.withIndex()) {
+            val (pc, pr) = pocket
             val pcx = pc * cell + cell / 2f
             val pcy = pr * cell + cell / 2f
-            drawCircle(Color(0x33000000), radius = cell * 0.5f, center = Offset(pcx, pcy))   // 가장자리 그림자
-            drawCircle(Color(0xFF1A1A1A), radius = cell * 0.42f, center = Offset(pcx, pcy))
-            drawCircle(Color(0xFF000000), radius = cell * 0.32f, center = Offset(pcx, pcy))
+            if (colorMatch) {
+                val matchColor = POOL_BALL_COLORS[idx.mod(POOL_BALL_COLORS.size)]
+                // 매칭 색 링
+                drawCircle(matchColor, radius = cell * 0.48f, center = Offset(pcx, pcy))
+                drawCircle(
+                    Color.Black.copy(alpha = 0.4f),
+                    radius = cell * 0.48f,
+                    center = Offset(pcx, pcy),
+                    style = Stroke(width = cell * 0.04f),
+                )
+                // 안쪽 어두운 구멍(공이 들어가는 자리)
+                drawCircle(Color(0xFF1A1A1A), radius = cell * 0.32f, center = Offset(pcx, pcy))
+                drawCircle(Color(0xFF000000), radius = cell * 0.24f, center = Offset(pcx, pcy))
+            } else {
+                drawCircle(Color(0x33000000), radius = cell * 0.5f, center = Offset(pcx, pcy))   // 가장자리 그림자
+                drawCircle(Color(0xFF1A1A1A), radius = cell * 0.42f, center = Offset(pcx, pcy))
+                drawCircle(Color(0xFF000000), radius = cell * 0.32f, center = Offset(pcx, pcy))
+            }
         }
 
         // 표적 (과녁)
