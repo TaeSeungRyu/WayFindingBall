@@ -90,6 +90,7 @@ object HitGame {
         HitStage(4, "4단계", "순서대로 맞히기", 6, arenaLines = stage4Arena, ordered = true),
         HitStage(5, "5단계", "움직이는 표적", 6, arenaLines = stage5Arena, moving = true),
         HitStage(6, "6단계", "사라지는 벽", 10, dynamicWalls = true),
+        HitStage(7, "7단계", "순서대로 움직이는 표적", 6, ordered = true, moving = true),
     )
 
     fun stageOf(level: Int): HitStage = stages.firstOrNull { it.level == level } ?: stages.first()
