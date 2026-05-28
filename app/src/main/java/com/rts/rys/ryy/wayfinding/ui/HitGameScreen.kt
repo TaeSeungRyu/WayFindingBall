@@ -87,6 +87,17 @@ private const val TARGET_RADIUS = 0.3f       // 목적공 반지름
 private const val TARGET_FRICTION = 0.9f     // 목적공 감속 (cell/s 매초)
 private const val TARGET_MAX_SPEED = 14f
 private const val TARGET_RESTITUTION = 0.85f // 목적공 벽 반사 (큐볼 0.7보다 살짝 통통)
+// 포켓볼 모드 번호별 공 색 — 1번부터. 표적 수가 색 수보다 많으면 순환.
+private val POOL_BALL_COLORS = listOf(
+    Color(0xFFFFD24A), // 1: 노랑
+    Color(0xFF4DA6FF), // 2: 파랑
+    Color(0xFFE03B3B), // 3: 빨강
+    Color(0xFFB060E0), // 4: 보라
+    Color(0xFFFF8E3C), // 5: 주황
+    Color(0xFF2DBE5B), // 6: 초록
+    Color(0xFF8E3A1F), // 7: 갈색
+    Color(0xFF1A1A1A), // 8: 검정
+)
 
 /** 런타임 표적: 부동 좌표 + 속도(정지 표적은 0). */
 private class LiveTarget(
@@ -258,6 +269,34 @@ fun HitGameScreen(
                     t.x += nx * overlap * 0.5f
                     t.y += ny * overlap * 0.5f
                     SoundManager.playBonk()
+                }
+                // 목적공끼리 등질량 탄성 충돌 (모든 쌍). 표적 5개면 10쌍이라 비용 무시 가능.
+                val tSumR = TARGET_RADIUS + TARGET_RADIUS
+                for (i in 0 until targets.size) {
+                    for (j in i + 1 until targets.size) {
+                        val a = targets[i]
+                        val b = targets[j]
+                        val dxn = b.x - a.x
+                        val dyn = b.y - a.y
+                        val d2 = dxn * dxn + dyn * dyn
+                        if (d2 >= tSumR * tSumR) continue
+                        val d = sqrt(d2).coerceAtLeast(0.0001f)
+                        val nx = dxn / d
+                        val ny = dyn / d
+                        val vn = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny
+                        if (vn <= 0f) continue  // 이미 멀어지는 중
+                        a.vx -= vn * nx
+                        a.vy -= vn * ny
+                        b.vx += vn * nx
+                        b.vy += vn * ny
+                        val overlap = tSumR - d
+                        a.x -= nx * overlap * 0.5f
+                        a.y -= ny * overlap * 0.5f
+                        b.x += nx * overlap * 0.5f
+                        b.y += ny * overlap * 0.5f
+                        // 가벼운 비빔 충돌은 무음, 의미 있는 임팩트만 소리.
+                        if (vn > 1.0f) SoundManager.playBonk()
+                    }
                 }
                 ballX = physics.x
                 ballY = physics.y
@@ -496,13 +535,32 @@ private fun HitArenaCanvas(
             val cy = t.y * cell
             val r = cell * 0.38f * pulseScale
             if (ordered) {
-                // 순서 모드: 채워진 원 + 번호
-                drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
-                drawCircle(GoalGoldDeep, radius = r, center = Offset(cx, cy), style = Stroke(width = cell * 0.06f))
-                numberPaint.textSize = cell * 0.5f
-                drawContext.canvas.nativeCanvas.drawText(
-                    t.order.toString(), cx, cy + cell * 0.18f, numberPaint
-                )
+                if (pockets.isNotEmpty()) {
+                    // 포켓볼: 번호별 색 공 + 가운데 흰 번호판
+                    val ballColor = POOL_BALL_COLORS[(t.order - 1).mod(POOL_BALL_COLORS.size)]
+                    drawCircle(ballColor, radius = r, center = Offset(cx, cy))
+                    drawCircle(
+                        Color.Black.copy(alpha = 0.45f),
+                        radius = r,
+                        center = Offset(cx, cy),
+                        style = Stroke(width = cell * 0.05f),
+                    )
+                    drawCircle(Color.White, radius = r * 0.55f, center = Offset(cx, cy))
+                    numberPaint.color = InkDark.toArgb()
+                    numberPaint.textSize = cell * 0.36f
+                    drawContext.canvas.nativeCanvas.drawText(
+                        t.order.toString(), cx, cy + cell * 0.13f, numberPaint
+                    )
+                } else {
+                    // 일반 순서 모드: 금색 채운 원 + 번호
+                    drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
+                    drawCircle(GoalGoldDeep, radius = r, center = Offset(cx, cy), style = Stroke(width = cell * 0.06f))
+                    numberPaint.color = GoalGoldDeep.toArgb()
+                    numberPaint.textSize = cell * 0.5f
+                    drawContext.canvas.nativeCanvas.drawText(
+                        t.order.toString(), cx, cy + cell * 0.18f, numberPaint
+                    )
+                }
             } else {
                 drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
                 drawCircle(Color.White, radius = r * 0.66f, center = Offset(cx, cy))
