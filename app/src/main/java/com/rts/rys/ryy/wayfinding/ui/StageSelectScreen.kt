@@ -34,8 +34,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -434,11 +437,20 @@ private fun DeleteConfirmDialog(
 private fun StarsRow(stars: Int, size: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         for (i in 1..3) {
+            val filled = i <= stars
             Text(
                 text = "★",
                 fontSize = size.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = if (i <= stars) GoalGold else Color.White.copy(alpha = 0.3f)
+                // 채운 별은 금색이라 노란 카드(스테이지2 등) 위에서 묻힌다. 어두운 외곽 그림자로 대비를 준다.
+                color = if (filled) GoalGold else Color.White.copy(alpha = 0.5f),
+                style = TextStyle(
+                    shadow = Shadow(
+                        color = if (filled) InkDark.copy(alpha = 0.6f) else Color.Transparent,
+                        offset = Offset(0f, 1.5f),
+                        blurRadius = 2.5f
+                    )
+                )
             )
         }
     }

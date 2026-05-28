@@ -3,6 +3,8 @@ package com.rts.rys.ryy.wayfinding.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,8 +12,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -35,8 +40,12 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
+import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 
 @Composable
 fun DPad(
@@ -161,5 +170,34 @@ private fun DirButton(arrowAngleDeg: Float, pressed: MutableState<Boolean>, enab
                 )
             }
         }
+    }
+}
+
+@Composable
+fun SensorToggleChip(sensorOn: Boolean, onToggle: () -> Unit) {
+    val bg = if (sensorOn) WallGreen else Color.White
+    val fg = if (sensorOn) Color.White else InkSoft
+    Row(
+        modifier = Modifier
+            .shadow(3.dp, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(if (sensorOn) Color.White else InkSoft.copy(alpha = 0.5f))
+        )
+        Spacer(Modifier.size(6.dp))
+        Text(
+            text = if (sensorOn) "센서 ON" else "센서 OFF",
+            color = fg,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
     }
 }

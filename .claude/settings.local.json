@@ -21,7 +21,12 @@
       "PowerShell(& \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe\" -version 2>&1)",
       "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Java\\\\jdk-17.0.19\"; ./gradlew.bat assembleDebug --no-daemon)",
       "Bash(git rm *)",
-      "PowerShell(.\\\\gradlew.bat compileDebugKotlin --no-daemon -q 2>&1 | Select-Object -Last 50)"
+      "PowerShell(.\\\\gradlew.bat compileDebugKotlin --no-daemon -q 2>&1 | Select-Object -Last 50)",
+      "Bash(cd /d D:\\\\dev\\\\android\\\\ChildrenWayfinding)",
+      "Bash(findstr /s /i \"applicationId\" app\\\\build.gradle*)",
+      "Bash(adb devices *)",
+      "Bash(adb shell *)",
+      "PowerShell(adb shell *)"
     ]
   }
 }

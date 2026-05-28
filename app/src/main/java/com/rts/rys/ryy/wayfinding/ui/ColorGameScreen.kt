@@ -441,10 +441,18 @@ fun ColorGameScreen(
             Spacer(Modifier.height(16.dp))
 
             // 조작 패드
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                SensorToggleChip(
+                    sensorOn = sensorEnabled,
+                    onToggle = { AppSettings.setSensorEnabled(!sensorEnabled) }
+                )
+                Spacer(Modifier.height(8.dp))
                 DPad(
                     onInput = { dx, dy -> kx = dx; ky = dy },
-                    enabled = !finished && !showMemorize
+                    enabled = !finished && !showMemorize && !sensorEnabled
                 )
             }
         }

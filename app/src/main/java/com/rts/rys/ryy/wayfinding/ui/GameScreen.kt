@@ -1432,35 +1432,6 @@ private fun BombIcon(state: BombState, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SensorToggleChip(sensorOn: Boolean, onToggle: () -> Unit) {
-    val bg = if (sensorOn) WallGreen else Color.White
-    val fg = if (sensorOn) Color.White else InkSoft
-    Row(
-        modifier = Modifier
-            .shadow(3.dp, RoundedCornerShape(18.dp))
-            .clip(RoundedCornerShape(18.dp))
-            .background(bg)
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(if (sensorOn) Color.White else InkSoft.copy(alpha = 0.5f))
-        )
-        Spacer(Modifier.size(6.dp))
-        Text(
-            text = if (sensorOn) "센서 ON" else "센서 OFF",
-            color = fg,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
-    }
-}
-
-@Composable
 private fun PauseDialog(
     sensorEnabled: Boolean,
     soundEnabled: Boolean,

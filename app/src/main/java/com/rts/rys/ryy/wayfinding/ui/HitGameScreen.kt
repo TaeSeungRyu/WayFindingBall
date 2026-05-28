@@ -304,8 +304,16 @@ fun HitGameScreen(
             }
 
             Spacer(Modifier.height(16.dp))
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                DPad(onInput = { dx, dy -> kx = dx; ky = dy }, enabled = !finished)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                SensorToggleChip(
+                    sensorOn = sensorEnabled,
+                    onToggle = { AppSettings.setSensorEnabled(!sensorEnabled) }
+                )
+                Spacer(Modifier.height(8.dp))
+                DPad(onInput = { dx, dy -> kx = dx; ky = dy }, enabled = !finished && !sensorEnabled)
             }
         }
 
