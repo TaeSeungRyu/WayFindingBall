@@ -5,11 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -399,37 +399,43 @@ fun ColorGameScreen(
             Spacer(Modifier.height(16.dp))
 
             // 광장
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f),
+                    .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                ColorArenaCanvas(
-                    arena = arena,
-                    zones = zones,
-                    ballX = ballX,
-                    ballY = ballY,
-                    targetZoneIndex = targetSeq.getOrElse(targetIndex) { targetSeq.lastOrNull() ?: -1 },
-                    skin = currentSkin,
-                    pulse = pulse,
-                    wrongFlash = wrongFlash,
-                    dynamic = dynamicWalls,
-                    dark = stage.dark,
-                    chaserX = if (chaser != null) chaserX else null,
-                    chaserY = if (chaser != null) chaserY else null,
-                    highlightTarget = !stage.memorizeOrder && !stage.huntMode && !stage.floorMode,
-                    floor = floorCtrl,
-                    flip = stage.flipCycleS > 0f,
-                    floorShowColor = when {
-                        !flipping -> floorVisible
-                        flipProgress < 0.5f -> floorVisible       // 전반: 기존 면
-                        else -> !floorVisible                     // 후반: 새 면
-                    },
-                    floorScaleX = if (!flipping) 1f
-                        else if (flipProgress < 0.5f) 1f - flipProgress * 2f
-                        else (flipProgress - 0.5f) * 2f,
-                )
+                val side = minOf(maxWidth, maxHeight)
+                Box(
+                    modifier = Modifier.size(side),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ColorArenaCanvas(
+                        arena = arena,
+                        zones = zones,
+                        ballX = ballX,
+                        ballY = ballY,
+                        targetZoneIndex = targetSeq.getOrElse(targetIndex) { targetSeq.lastOrNull() ?: -1 },
+                        skin = currentSkin,
+                        pulse = pulse,
+                        wrongFlash = wrongFlash,
+                        dynamic = dynamicWalls,
+                        dark = stage.dark,
+                        chaserX = if (chaser != null) chaserX else null,
+                        chaserY = if (chaser != null) chaserY else null,
+                        highlightTarget = !stage.memorizeOrder && !stage.huntMode && !stage.floorMode,
+                        floor = floorCtrl,
+                        flip = stage.flipCycleS > 0f,
+                        floorShowColor = when {
+                            !flipping -> floorVisible
+                            flipProgress < 0.5f -> floorVisible       // 전반: 기존 면
+                            else -> !floorVisible                     // 후반: 새 면
+                        },
+                        floorScaleX = if (!flipping) 1f
+                            else if (flipProgress < 0.5f) 1f - flipProgress * 2f
+                            else (flipProgress - 0.5f) * 2f,
+                    )
+                }
             }
 
             Spacer(Modifier.height(16.dp))

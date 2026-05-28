@@ -5,11 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -280,21 +280,27 @@ fun HitGameScreen(
             }
 
             Spacer(Modifier.height(16.dp))
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f),
+                    .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                HitArenaCanvas(
-                    arena = arena,
-                    targets = targets,
-                    ballX = ballX,
-                    ballY = ballY,
-                    skin = currentSkin,
-                    pulse = pulse,
-                    ordered = stage.ordered,
-                )
+                val side = minOf(maxWidth, maxHeight)
+                Box(
+                    modifier = Modifier.size(side),
+                    contentAlignment = Alignment.Center
+                ) {
+                    HitArenaCanvas(
+                        arena = arena,
+                        targets = targets,
+                        ballX = ballX,
+                        ballY = ballY,
+                        skin = currentSkin,
+                        pulse = pulse,
+                        ordered = stage.ordered,
+                    )
+                }
             }
 
             Spacer(Modifier.height(16.dp))
