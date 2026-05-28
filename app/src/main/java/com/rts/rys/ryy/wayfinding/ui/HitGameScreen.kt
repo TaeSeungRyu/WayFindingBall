@@ -272,7 +272,11 @@ fun HitGameScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (stage.ordered) "1번부터 순서대로 맞혀요!" else "공을 굴려 표적을 모두 맞혀요!",
+                    text = when {
+                        stage.ordered -> "1번부터 순서대로 맞혀요!"
+                        stage.dynamicWalls -> "벽이 생겼다 사라져요!"
+                        else -> "공을 굴려 표적을 모두 맞혀요!"
+                    },
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = InkDark,
@@ -299,6 +303,7 @@ fun HitGameScreen(
                         skin = currentSkin,
                         pulse = pulse,
                         ordered = stage.ordered,
+                        dynamic = dynamicWalls,
                     )
                 }
             }
@@ -337,6 +342,7 @@ private fun HitArenaCanvas(
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
     pulse: Float,
     ordered: Boolean = false,
+    dynamic: com.rts.rys.ryy.wayfinding.game.DynamicMazeController? = null,
 ) {
     val numberPaint = remember {
         android.graphics.Paint().apply {
@@ -357,12 +363,27 @@ private fun HitArenaCanvas(
         val cell = size.minDimension / n
         val wallColor = Color(0xFF7CB342)
 
-        // 벽
+        // 벽 (dynamic.version 읽기로 벽 변경 시 재구성 트리거)
+        dynamic?.version
         for (r in 0 until arena.rows) for (c in 0 until arena.cols) {
             if (arena.isWall(c, r)) {
                 drawRoundRect(
                     color = wallColor,
                     topLeft = Offset(c * cell, r * cell),
+                    size = Size(cell, cell),
+                    cornerRadius = CornerRadius(cell * 0.15f, cell * 0.15f),
+                )
+            }
+        }
+
+        // 곧 생길 벽 미리보기(페이드인 경고) — 갑자기 막히지 않도록 미리 알려준다.
+        if (dynamic != null) {
+            val prog = dynamic.previewProgress
+            for (p in dynamic.pendingPreview) {
+                if (!p.toWall) continue
+                drawRoundRect(
+                    color = wallColor.copy(alpha = 0.55f * prog),
+                    topLeft = Offset(p.c * cell, p.r * cell),
                     size = Size(cell, cell),
                     cornerRadius = CornerRadius(cell * 0.15f, cell * 0.15f),
                 )
