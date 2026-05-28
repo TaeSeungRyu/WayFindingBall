@@ -93,8 +93,68 @@ object HitGame {
         HitStage(5, "5단계", "움직이는 표적", 6, arenaLines = stage5Arena, moving = true),
         HitStage(6, "6단계", "사라지는 벽", 10, dynamicWalls = true),
         HitStage(7, "7단계", "순서대로 움직이는 표적", 6, ordered = true, moving = true),
-        HitStage(8, "8단계", "포켓에 공을 넣어요", 5, ordered = true, pockets = true),
+        HitStage(8, "8단계", "포켓에 공을 넣어요", 5, pockets = true),
+        HitStage(9, "9단계", "순서대로 포켓", 5, ordered = true, pockets = true),
     )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     fun stageOf(level: Int): HitStage = stages.firstOrNull { it.level == level } ?: stages.first()
 

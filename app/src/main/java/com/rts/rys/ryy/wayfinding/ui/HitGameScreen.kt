@@ -305,14 +305,27 @@ fun HitGameScreen(
             // 표적 제거 판정
             var hitAny = false
             if (stage.pockets) {
-                // 포켓 입수: 공 중심이 포켓 셀로 들어오면 제거.
-                val it = targets.iterator()
-                while (it.hasNext()) {
-                    val t = it.next()
-                    val cell = floor(t.x).toInt() to floor(t.y).toInt()
-                    if (cell in pocketSet) {
-                        it.remove()
-                        hitAny = true
+                if (stage.ordered) {
+                    // 순서대로 포켓(9단계+): 가장 작은 번호 표적만 포켓 입수 가능.
+                    // 다른 번호가 포켓 위를 지나가도 그냥 통과(입수 무효).
+                    val next = targets.minByOrNull { it.order }
+                    if (next != null) {
+                        val cell = floor(next.x).toInt() to floor(next.y).toInt()
+                        if (cell in pocketSet) {
+                            targets.remove(next)
+                            hitAny = true
+                        }
+                    }
+                } else {
+                    // 자유 입수(8단계): 어느 공이든 포켓 셀에 들어오면 제거.
+                    val it = targets.iterator()
+                    while (it.hasNext()) {
+                        val t = it.next()
+                        val cell = floor(t.x).toInt() to floor(t.y).toInt()
+                        if (cell in pocketSet) {
+                            it.remove()
+                            hitAny = true
+                        }
                     }
                 }
                 // 큐볼이 포켓에 빠지면(스크래치) 시작점으로 리스폰. 점수 페널티는 없음(자녀용).
@@ -399,6 +412,7 @@ fun HitGameScreen(
             ) {
                 Text(
                     text = when {
+                        stage.pockets && stage.ordered -> "1번부터 순서대로 포켓에 넣어요!"
                         stage.pockets -> "포켓에 공을 넣어요!"
                         stage.ordered -> "1번부터 순서대로 맞혀요!"
                         stage.dynamicWalls -> "벽이 생겼다 사라져요!"
@@ -534,33 +548,31 @@ private fun HitArenaCanvas(
             val cx = t.x * cell
             val cy = t.y * cell
             val r = cell * 0.38f * pulseScale
-            if (ordered) {
-                if (pockets.isNotEmpty()) {
-                    // 포켓볼: 번호별 색 공 + 가운데 흰 번호판
-                    val ballColor = POOL_BALL_COLORS[(t.order - 1).mod(POOL_BALL_COLORS.size)]
-                    drawCircle(ballColor, radius = r, center = Offset(cx, cy))
-                    drawCircle(
-                        Color.Black.copy(alpha = 0.45f),
-                        radius = r,
-                        center = Offset(cx, cy),
-                        style = Stroke(width = cell * 0.05f),
-                    )
-                    drawCircle(Color.White, radius = r * 0.55f, center = Offset(cx, cy))
-                    numberPaint.color = InkDark.toArgb()
-                    numberPaint.textSize = cell * 0.36f
-                    drawContext.canvas.nativeCanvas.drawText(
-                        t.order.toString(), cx, cy + cell * 0.13f, numberPaint
-                    )
-                } else {
-                    // 일반 순서 모드: 금색 채운 원 + 번호
-                    drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
-                    drawCircle(GoalGoldDeep, radius = r, center = Offset(cx, cy), style = Stroke(width = cell * 0.06f))
-                    numberPaint.color = GoalGoldDeep.toArgb()
-                    numberPaint.textSize = cell * 0.5f
-                    drawContext.canvas.nativeCanvas.drawText(
-                        t.order.toString(), cx, cy + cell * 0.18f, numberPaint
-                    )
-                }
+            if (pockets.isNotEmpty()) {
+                // 포켓볼 모드: 번호별 색 공 + 가운데 흰 번호판 (ordered 여부와 무관하게 번호 표시)
+                val ballColor = POOL_BALL_COLORS[(t.order - 1).mod(POOL_BALL_COLORS.size)]
+                drawCircle(ballColor, radius = r, center = Offset(cx, cy))
+                drawCircle(
+                    Color.Black.copy(alpha = 0.45f),
+                    radius = r,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = cell * 0.05f),
+                )
+                drawCircle(Color.White, radius = r * 0.55f, center = Offset(cx, cy))
+                numberPaint.color = InkDark.toArgb()
+                numberPaint.textSize = cell * 0.36f
+                drawContext.canvas.nativeCanvas.drawText(
+                    t.order.toString(), cx, cy + cell * 0.13f, numberPaint
+                )
+            } else if (ordered) {
+                // 일반 순서 모드(4·7단계): 금색 채운 원 + 번호
+                drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
+                drawCircle(GoalGoldDeep, radius = r, center = Offset(cx, cy), style = Stroke(width = cell * 0.06f))
+                numberPaint.color = GoalGoldDeep.toArgb()
+                numberPaint.textSize = cell * 0.5f
+                drawContext.canvas.nativeCanvas.drawText(
+                    t.order.toString(), cx, cy + cell * 0.18f, numberPaint
+                )
             } else {
                 drawCircle(GoalGold, radius = r, center = Offset(cx, cy))
                 drawCircle(Color.White, radius = r * 0.66f, center = Offset(cx, cy))
