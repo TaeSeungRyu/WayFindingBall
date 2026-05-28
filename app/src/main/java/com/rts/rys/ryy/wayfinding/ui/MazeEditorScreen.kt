@@ -12,10 +12,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -456,19 +456,26 @@ fun MazeEditorScreen(
             }
             Spacer(Modifier.height(12.dp))
 
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .shadow(6.dp, RoundedCornerShape(20.dp))
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(CreamBg)
+                    .weight(1f),
+                contentAlignment = Alignment.Center
             ) {
-                EditorGrid(
-                    board = board,
-                    allowDrag = tool == Tool.WALL || tool == Tool.EMPTY,
-                    onCellPaint = ::applyTool
-                )
+                val side = minOf(maxWidth, maxHeight)
+                Box(
+                    modifier = Modifier
+                        .size(side)
+                        .shadow(6.dp, RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(CreamBg)
+                ) {
+                    EditorGrid(
+                        board = board,
+                        allowDrag = tool == Tool.WALL || tool == Tool.EMPTY,
+                        onCellPaint = ::applyTool
+                    )
+                }
             }
 
             Spacer(Modifier.height(12.dp))
