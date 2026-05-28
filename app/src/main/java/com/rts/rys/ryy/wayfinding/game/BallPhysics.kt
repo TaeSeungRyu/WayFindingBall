@@ -66,6 +66,18 @@ class BallPhysics(
         y = row + 0.5f
     }
 
+    /** 외부 충격을 속도에 더한다. 공-공 충돌(포켓볼 모드) 같은 즉발 임펄스 적용용. */
+    fun applyImpulse(dvx: Float, dvy: Float) {
+        vx += dvx
+        vy += dvy
+    }
+
+    /** 위치를 미세하게 이동(공-공 충돌 후 침투 분리용). 큰 점프는 [teleport]를 쓸 것. */
+    fun nudgePosition(dx: Float, dy: Float) {
+        x += dx
+        y += dy
+    }
+
     /** Move to [col, row] center and stop. Used by rotation gimmick. */
     fun setPositionAndStop(col: Int, row: Int) {
         x = col + 0.5f

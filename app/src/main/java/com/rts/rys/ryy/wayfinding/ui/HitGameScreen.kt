@@ -66,9 +66,13 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import kotlinx.coroutines.android.awaitFrame
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.sign
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 private const val SENSOR_ACCEL_GAIN = 30f
@@ -77,6 +81,12 @@ private const val SENSOR_MAX_SPEED = 20f
 private const val KEYPAD_MAX_SPEED = 14f
 private const val HIT_RADIUS = 0.55f
 private const val TARGET_SPEED = 2.4f  // 움직이는 표적 속도 (칸/초)
+// 포켓볼 모드 (stage.pockets=true) 전용 상수
+private const val CUE_RADIUS = 0.3f          // HitGame의 큐볼 BallPhysics radius와 일치
+private const val TARGET_RADIUS = 0.3f       // 목적공 반지름
+private const val TARGET_FRICTION = 0.9f     // 목적공 감속 (cell/s 매초)
+private const val TARGET_MAX_SPEED = 14f
+private const val TARGET_RESTITUTION = 0.85f // 목적공 벽 반사 (큐볼 0.7보다 살짝 통통)
 
 /** 런타임 표적: 부동 좌표 + 속도(정지 표적은 0). */
 private class LiveTarget(
@@ -96,6 +106,8 @@ fun HitGameScreen(
     val stage = remember(level) { HitGame.stageOf(level) }
     var attemptId by remember(level) { mutableIntStateOf(0) }
 
+    val pockets = remember(stage) { HitGame.pocketsFor(stage) }
+    val pocketSet = remember(pockets) { pockets.toSet() }
     val arena = remember(attemptId) { HitGame.buildArena(stage) }
     val physics = remember(attemptId) {
         BallPhysics(arena, radius = 0.3f, friction = 0.9f, restitution = 0.7f)
@@ -183,8 +195,8 @@ fun HitGameScreen(
             ballX = physics.x
             ballY = physics.y
 
-            // 움직이는 표적: 이동 + 벽에서 반사
-            if (stage.moving) {
+            // 움직이는 표적: 등속 이동 + 벽에서 반사 (포켓볼 모드 아닐 때만)
+            if (stage.moving && !stage.pockets) {
                 for (t in targets) {
                     val nx = t.x + t.vx * dt
                     if (arena.isWall(floor(nx).toInt(), floor(t.y).toInt())) t.vx = -t.vx
@@ -195,9 +207,84 @@ fun HitGameScreen(
                 }
             }
 
-            // 표적 충돌 검사
+            // 포켓볼 모드: 목적공도 굴러간다(마찰 + 벽 반사) → 큐볼과 등질량 탄성 충돌.
+            if (stage.pockets) {
+                val frDt = TARGET_FRICTION * dt
+                for (t in targets) {
+                    // 마찰로 감속
+                    t.vx = if (abs(t.vx) <= frDt) 0f else t.vx - frDt * sign(t.vx)
+                    t.vy = if (abs(t.vy) <= frDt) 0f else t.vy - frDt * sign(t.vy)
+                    t.vx = t.vx.coerceIn(-TARGET_MAX_SPEED, TARGET_MAX_SPEED)
+                    t.vy = t.vy.coerceIn(-TARGET_MAX_SPEED, TARGET_MAX_SPEED)
+                    // 빠른 속도에서 벽 통과 방지를 위해 sub-step.
+                    val moveX = t.vx * dt
+                    val moveY = t.vy * dt
+                    val steps = max(1, ((max(abs(moveX), abs(moveY)) / 0.1f) + 1).toInt())
+                    val ssx = moveX / steps
+                    val ssy = moveY / steps
+                    repeat(steps) {
+                        val nx2 = t.x + ssx
+                        if (arena.isWall(floor(nx2).toInt(), floor(t.y).toInt())) {
+                            t.vx = -t.vx * TARGET_RESTITUTION
+                        } else {
+                            t.x = nx2
+                        }
+                        val ny2 = t.y + ssy
+                        if (arena.isWall(floor(t.x).toInt(), floor(ny2).toInt())) {
+                            t.vy = -t.vy * TARGET_RESTITUTION
+                        } else {
+                            t.y = ny2
+                        }
+                    }
+                }
+                // 큐볼-목적공 등질량 탄성 충돌: 노멀 방향 속도 성분만 교환.
+                val sumR = CUE_RADIUS + TARGET_RADIUS
+                for (t in targets) {
+                    val dxn = t.x - physics.x
+                    val dyn = t.y - physics.y
+                    val d2 = dxn * dxn + dyn * dyn
+                    if (d2 >= sumR * sumR) continue
+                    val d = sqrt(d2).coerceAtLeast(0.0001f)
+                    val nx = dxn / d
+                    val ny = dyn / d
+                    val vn = (physics.vx - t.vx) * nx + (physics.vy - t.vy) * ny
+                    if (vn <= 0f) continue  // 이미 멀어지는 중
+                    physics.applyImpulse(-vn * nx, -vn * ny)
+                    t.vx += vn * nx
+                    t.vy += vn * ny
+                    // 침투 분리(절반씩 밀어내기)
+                    val overlap = sumR - d
+                    physics.nudgePosition(-nx * overlap * 0.5f, -ny * overlap * 0.5f)
+                    t.x += nx * overlap * 0.5f
+                    t.y += ny * overlap * 0.5f
+                    SoundManager.playBonk()
+                }
+                ballX = physics.x
+                ballY = physics.y
+            }
+
+            // 표적 제거 판정
             var hitAny = false
-            if (stage.ordered) {
+            if (stage.pockets) {
+                // 포켓 입수: 공 중심이 포켓 셀로 들어오면 제거.
+                val it = targets.iterator()
+                while (it.hasNext()) {
+                    val t = it.next()
+                    val cell = floor(t.x).toInt() to floor(t.y).toInt()
+                    if (cell in pocketSet) {
+                        it.remove()
+                        hitAny = true
+                    }
+                }
+                // 큐볼이 포켓에 빠지면(스크래치) 시작점으로 리스폰. 점수 페널티는 없음(자녀용).
+                val cueCell = floor(physics.x).toInt() to floor(physics.y).toInt()
+                if (cueCell in pocketSet) {
+                    physics.reset()
+                    ballX = physics.x
+                    ballY = physics.y
+                    SoundManager.playBonk()
+                }
+            } else if (stage.ordered) {
                 // 순서 모드: 가장 작은 번호 표적만 맞힐 수 있다.
                 val next = targets.minByOrNull { it.order }
                 if (next != null) {
@@ -273,6 +360,7 @@ fun HitGameScreen(
             ) {
                 Text(
                     text = when {
+                        stage.pockets -> "포켓에 공을 넣어요!"
                         stage.ordered -> "1번부터 순서대로 맞혀요!"
                         stage.dynamicWalls -> "벽이 생겼다 사라져요!"
                         else -> "공을 굴려 표적을 모두 맞혀요!"
@@ -304,6 +392,7 @@ fun HitGameScreen(
                         pulse = pulse,
                         ordered = stage.ordered,
                         dynamic = dynamicWalls,
+                        pockets = pockets,
                     )
                 }
             }
@@ -343,6 +432,7 @@ private fun HitArenaCanvas(
     pulse: Float,
     ordered: Boolean = false,
     dynamic: com.rts.rys.ryy.wayfinding.game.DynamicMazeController? = null,
+    pockets: List<Pair<Int, Int>> = emptyList(),
 ) {
     val numberPaint = remember {
         android.graphics.Paint().apply {
@@ -388,6 +478,15 @@ private fun HitArenaCanvas(
                     cornerRadius = CornerRadius(cell * 0.15f, cell * 0.15f),
                 )
             }
+        }
+
+        // 포켓(검은 구멍) — 공이 그 위로 굴러올라가도록 표적/공보다 아래에 그린다.
+        for ((pc, pr) in pockets) {
+            val pcx = pc * cell + cell / 2f
+            val pcy = pr * cell + cell / 2f
+            drawCircle(Color(0x33000000), radius = cell * 0.5f, center = Offset(pcx, pcy))   // 가장자리 그림자
+            drawCircle(Color(0xFF1A1A1A), radius = cell * 0.42f, center = Offset(pcx, pcy))
+            drawCircle(Color(0xFF000000), radius = cell * 0.32f, center = Offset(pcx, pcy))
         }
 
         // 표적 (과녁)

@@ -21,6 +21,8 @@ data class HitStage(
     val moving: Boolean = false,
     /** true면 벽이 주기적으로 생겼다 사라진다 (공·표적은 보호). */
     val dynamicWalls: Boolean = false,
+    /** true면 4모서리에 포켓이 있고, 큐볼과 목적공이 탄성 충돌해 포켓에 넣어야 사라진다(포켓볼). */
+    val pockets: Boolean = false,
 )
 
 /** 표적 한 개. (c, r) 셀 중심에 위치. [order]는 순서 모드의 번호(1부터). */
@@ -91,9 +93,22 @@ object HitGame {
         HitStage(5, "5단계", "움직이는 표적", 6, arenaLines = stage5Arena, moving = true),
         HitStage(6, "6단계", "사라지는 벽", 10, dynamicWalls = true),
         HitStage(7, "7단계", "순서대로 움직이는 표적", 6, ordered = true, moving = true),
+        HitStage(8, "8단계", "포켓에 공을 넣어요", 5, ordered = true, pockets = true),
     )
 
     fun stageOf(level: Int): HitStage = stages.firstOrNull { it.level == level } ?: stages.first()
+
+    /** 포켓 좌표: 아레나 안쪽 4모서리. 포켓 모드가 아니면 빈 리스트. */
+    fun pocketsFor(stage: HitStage): List<Pair<Int, Int>> {
+        if (!stage.pockets) return emptyList()
+        val edge = SIZE - 2
+        return listOf(
+            1 to 1,
+            edge to 1,
+            1 to edge,
+            edge to edge,
+        )
+    }
 
     /** 가운데 출발점, 테두리 벽, 내부는 빈 광장(또는 지정 레이아웃). */
     fun buildArena(stage: HitStage): Maze {
@@ -116,12 +131,14 @@ object HitGame {
         return Maze.fromAscii(lines)
     }
 
-    /** 시작점·벽을 피하고 서로 2칸 이상 떨어진 표적들을 무작위로 배치. */
+    /** 시작점·벽·포켓을 피하고 서로 2칸 이상 떨어진 표적들을 무작위로 배치. */
     fun spawnTargets(stage: HitStage, maze: Maze, random: Random = Random.Default): List<HitTarget> {
+        val pocketCells = pocketsFor(stage).toSet()
         val candidates = mutableListOf<Pair<Int, Int>>()
         for (r in 1 until maze.rows - 1) for (c in 1 until maze.cols - 1) {
             if (maze.grid[r][c] == Cell.WALL) continue
             if (c == maze.startCol && r == maze.startRow) continue
+            if ((c to r) in pocketCells) continue
             // 시작점과 너무 가깝지 않게
             if (kotlin.math.abs(c - maze.startCol) + kotlin.math.abs(r - maze.startRow) < 2) continue
             candidates.add(c to r)
