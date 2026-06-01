@@ -40,12 +40,16 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 
+// 별자리 모드용 — 밤하늘 톤 (테마를 기존 3모드와 시각적으로 분리).
+private val ConstellationCard = Color(0xFF3949AB)
+
 @Composable
 fun ModeSelectScreen(
     onBack: () -> Unit,
     onMaze: () -> Unit,
     onColor: () -> Unit,
     onHit: () -> Unit,
+    onConstellation: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -103,6 +107,13 @@ fun ModeSelectScreen(
                         subtitle = "공을 굴려 표적을 맞혀요",
                         bg = WallGreen,
                         onClick = onHit,
+                    )
+                    ModeCard(
+                        emoji = "✨",
+                        title = "별자리 잇기",
+                        subtitle = "별을 손가락으로 이어요",
+                        bg = ConstellationCard,
+                        onClick = onConstellation,
                     )
                 }
             }

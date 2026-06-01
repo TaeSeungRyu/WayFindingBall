@@ -98,7 +98,7 @@ object HitGame {
         HitStage(7, "7단계", "순서대로 움직이는 표적", 6, ordered = true, moving = true),
         HitStage(8, "8단계", "포켓에 공을 넣어요", 5, pockets = true),
         HitStage(9, "9단계", "순서대로 포켓", 5, ordered = true, pockets = true),
-        HitStage(10, "10단계", "색깔 매칭 포켓", 10, pockets = true, colorMatch = true),
+        HitStage(10, "10단계", "색깔 매칭 포켓", 8, pockets = true, colorMatch = true),
     )
 
 
