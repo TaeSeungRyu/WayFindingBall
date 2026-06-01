@@ -38,6 +38,7 @@ import com.rts.rys.ryy.wayfinding.game.Zodiac
 import com.rts.rys.ryy.wayfinding.ui.CollectionScreen
 import com.rts.rys.ryy.wayfinding.ui.ColorGameScreen
 import com.rts.rys.ryy.wayfinding.ui.ColorStageSelectScreen
+import com.rts.rys.ryy.wayfinding.ui.ConstellationDexScreen
 import com.rts.rys.ryy.wayfinding.ui.ConstellationGameScreen
 import com.rts.rys.ryy.wayfinding.ui.ConstellationStageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.GameScreen
@@ -103,6 +104,7 @@ private sealed class Screen {
     data class HitGame(val level: Int) : Screen()
     data object ConstellationStageSelect : Screen()
     data class ConstellationGame(val stageKey: String, val recordKey: String) : Screen()
+    data object ConstellationDex : Screen()
     data object LevelSelect : Screen()
     data class StageSelect(val level: Int) : Screen()
     data class Game(val stageId: Int) : Screen()
@@ -226,8 +228,10 @@ fun MazeApp() {
                 onBack = { pop() },
                 onSelect = { stageKey, recordKey ->
                     push(Screen.ConstellationGame(stageKey, recordKey))
-                }
+                },
+                onDex = { push(Screen.ConstellationDex) }
             )
+            Screen.ConstellationDex -> ConstellationDexScreen(onBack = { pop() })
             is Screen.ConstellationGame -> {
                 val stage = remember(screen.stageKey) {
                     when {

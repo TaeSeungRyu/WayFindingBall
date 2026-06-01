@@ -20,7 +20,25 @@ data class ConstellationStage(
     val stars: List<ConstellationStar>,
     /** true면 마지막 별과 첫 별을 자동으로 이어 닫힌 도형을 완성한다. */
     val closeOnComplete: Boolean = false,
+    /** 도감에 표시할 짧은 한 줄 이야기. */
+    val lore: String = "",
 )
+
+/** 3별 컷오프(이 시간 이하면 ★★★). */
+fun ConstellationStage.threeStarMs(): Long = stars.size * 1500L
+
+/** 2별 컷오프(이 시간 이하면 ★★, 초과 시 ★). */
+fun ConstellationStage.twoStarMs(): Long = stars.size * 2500L
+
+/** 완성 시간을 기준으로 획득한 별 개수. 미완성(null)은 0. */
+fun ConstellationStage.starsEarned(elapsedMs: Long): Int = when {
+    elapsedMs <= threeStarMs() -> 3
+    elapsedMs <= twoStarMs() -> 2
+    else -> 1
+}
+
+fun ConstellationStage.starsEarnedFor(bestMs: Long?): Int =
+    bestMs?.let { starsEarned(it) } ?: 0
 
 object Constellation {
     private fun mkStars(vararg pts: Pair<Float, Float>): List<ConstellationStar> =
@@ -39,6 +57,7 @@ object Constellation {
                 0.70f to 0.30f,
                 0.90f to 0.65f,
             ),
+            lore = "지그재그로 솟은 작은 산봉우리예요.",
         ),
         ConstellationStage(
             level = 2,
@@ -52,6 +71,7 @@ object Constellation {
                 0.68f to 0.65f,
                 0.88f to 0.30f,
             ),
+            lore = "왕비의 의자 모양인 W 별자리예요.",
         ),
         ConstellationStage(
             level = 3,
@@ -67,6 +87,7 @@ object Constellation {
                 0.80f to 0.65f,
                 0.80f to 0.40f,
             ),
+            lore = "일곱 형제 별이 국자처럼 모였어요.",
         ),
         ConstellationStage(
             level = 4,
@@ -83,6 +104,7 @@ object Constellation {
                 0.25f to 0.72f,
             ),
             closeOnComplete = true,
+            lore = "바닷속을 헤엄치는 물고기 모양이에요.",
         ),
         ConstellationStage(
             level = 5,
@@ -102,6 +124,7 @@ object Constellation {
                 0.40f to 0.36f,
             ),
             closeOnComplete = true,
+            lore = "다섯 갈래로 빛나는 큰 별 모양이에요.",
         ),
         ConstellationStage(
             level = 6,
@@ -122,6 +145,7 @@ object Constellation {
                 0.30f to 0.34f,
             ),
             closeOnComplete = true,
+            lore = "푸른 바다의 거대한 고래예요.",
         ),
     )
 

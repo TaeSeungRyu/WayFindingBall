@@ -30,6 +30,7 @@ object Zodiac {
         emoji: String,
         stars: List<ConstellationStar>,
         close: Boolean = false,
+        lore: String = "",
     ) = ConstellationStage(
         level = 100 + id,
         name = name,
@@ -37,6 +38,7 @@ object Zodiac {
         revealEmoji = emoji,
         stars = stars,
         closeOnComplete = close,
+        lore = lore,
     )
 
     /** 1번부터 12번까지. 표시 순서는 양자리 시작(3/21~). */
@@ -56,6 +58,7 @@ object Zodiac {
                     0.70f to 0.55f,
                     0.85f to 0.30f,
                 ),
+                lore = "용감한 양이 뿔을 흔들어요.",
             ),
         ),
         ZodiacEntry(
@@ -75,6 +78,7 @@ object Zodiac {
                     0.68f to 0.45f,
                     0.88f to 0.20f,
                 ),
+                lore = "튼튼한 황소가 V자 뿔을 가졌어요.",
             ),
         ),
         ZodiacEntry(
@@ -92,6 +96,7 @@ object Zodiac {
                     0.75f to 0.82f,
                     0.75f to 0.18f,
                 ),
+                lore = "사이좋은 쌍둥이 형제 별이에요.",
             ),
         ),
         ZodiacEntry(
@@ -111,6 +116,7 @@ object Zodiac {
                     0.50f to 0.80f,
                 ),
                 close = true,
+                lore = "옆으로 걷는 게가 별이 됐어요.",
             ),
         ),
         ZodiacEntry(
@@ -129,6 +135,7 @@ object Zodiac {
                     0.75f to 0.32f,
                     0.82f to 0.55f,
                 ),
+                lore = "용맹한 사자가 갈기를 휘날려요.",
             ),
         ),
         ZodiacEntry(
@@ -148,6 +155,7 @@ object Zodiac {
                     0.82f to 0.68f,
                     0.50f to 0.85f,
                 ),
+                lore = "곡식을 든 부드러운 처녀예요.",
             ),
         ),
         ZodiacEntry(
@@ -165,6 +173,7 @@ object Zodiac {
                     0.70f to 0.45f,
                     0.88f to 0.58f,
                 ),
+                lore = "공평한 저울 모양 별자리예요.",
             ),
         ),
         ZodiacEntry(
@@ -185,6 +194,7 @@ object Zodiac {
                     0.74f to 0.80f,
                     0.55f to 0.86f,
                 ),
+                lore = "꼬리가 굽은 전갈이 있어요.",
             ),
         ),
         ZodiacEntry(
@@ -203,6 +213,7 @@ object Zodiac {
                     0.66f to 0.50f,
                     0.86f to 0.50f,
                 ),
+                lore = "활을 쏘는 멋진 사수예요.",
             ),
         ),
         ZodiacEntry(
@@ -221,6 +232,7 @@ object Zodiac {
                     0.76f to 0.80f,
                     0.50f to 0.86f,
                 ),
+                lore = "산을 오르는 단단한 염소예요.",
             ),
         ),
         ZodiacEntry(
@@ -238,6 +250,7 @@ object Zodiac {
                     0.70f to 0.68f,
                     0.92f to 0.40f,
                 ),
+                lore = "맑은 물을 따르는 물병이에요.",
             ),
         ),
         ZodiacEntry(
@@ -255,6 +268,7 @@ object Zodiac {
                     0.68f to 0.50f,
                     0.90f to 0.22f,
                 ),
+                lore = "강물 따라 헤엄치는 두 물고기예요.",
             ),
         ),
     )

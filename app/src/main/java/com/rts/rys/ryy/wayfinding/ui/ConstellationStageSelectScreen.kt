@@ -47,6 +47,7 @@ import com.rts.rys.ryy.wayfinding.game.ConstellationStage
 import com.rts.rys.ryy.wayfinding.game.Zodiac
 import com.rts.rys.ryy.wayfinding.game.ZodiacEntry
 import com.rts.rys.ryy.wayfinding.game.dateRangeText
+import com.rts.rys.ryy.wayfinding.game.starsEarnedFor
 
 private val NightTop = Color(0xFF050B25)
 private val NightBottom = Color(0xFF1B2A66)
@@ -60,6 +61,7 @@ private val GoldRing = Color(0xFFFFD66B)
 fun ConstellationStageSelectScreen(
     onBack: () -> Unit,
     onSelect: (stageKey: String, recordKey: String) -> Unit,
+    onDex: () -> Unit,
 ) {
     val context = LocalContext.current
     val birthMonth by AppSettings.birthMonth
@@ -99,6 +101,7 @@ fun ConstellationStageSelectScreen(
                     color = NightInk,
                     modifier = Modifier.align(Alignment.Center)
                 )
+                DexChip(onClick = onDex, modifier = Modifier.align(Alignment.CenterEnd))
             }
             Spacer(Modifier.height(12.dp))
 
@@ -282,12 +285,18 @@ private fun MyZodiacCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = if (bestMs != null) "최고 기록  ${formatElapsed(bestMs)}" else "아직 기록 없어요",
-                    color = GoldRing,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StarsBadge(count = zodiac.stage.starsEarnedFor(bestMs), starSize = 16)
+                    Text(
+                        text = if (bestMs != null) formatElapsed(bestMs) else "아직 기록 없어요",
+                        color = GoldRing,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
             }
         }
     }
@@ -336,12 +345,18 @@ private fun BasicStageCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    text = if (bestMs != null) "최고 기록  ${formatElapsed(bestMs)}" else "아직 기록 없어요",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StarsBadge(count = stage.starsEarnedFor(bestMs), starSize = 14)
+                    Text(
+                        text = if (bestMs != null) formatElapsed(bestMs) else "아직 기록 없어요",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
             }
         }
     }
@@ -402,13 +417,64 @@ private fun ZodiacRowCard(
                     fontWeight = FontWeight.SemiBold,
                 )
             }
+            Column(horizontalAlignment = Alignment.End) {
+                StarsBadge(
+                    count = entry.stage.starsEarnedFor(bestMs),
+                    starSize = 13,
+                    goldColor = if (isMine) GoldRing else NightInk.copy(alpha = 0.85f),
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = bestMs?.let { formatElapsed(it) } ?: "─",
+                    color = if (isMine) GoldRing else NightInk.copy(alpha = 0.7f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StarsBadge(
+    count: Int,
+    starSize: Int = 14,
+    goldColor: Color = GoldRing,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+        repeat(3) { i ->
+            val filled = i < count
             Text(
-                text = bestMs?.let { formatElapsed(it) } ?: "─",
-                color = if (isMine) GoldRing else NightInk.copy(alpha = 0.7f),
-                fontSize = 13.sp,
+                text = "★",
+                color = if (filled) goldColor else Color.White.copy(alpha = 0.22f),
+                fontSize = starSize.sp,
                 fontWeight = FontWeight.ExtraBold,
             )
         }
+    }
+}
+
+@Composable
+private fun DexChip(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .height(40.dp)
+            .shadow(3.dp, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .background(GoldRing.copy(alpha = 0.20f))
+            .border(1.dp, GoldRing, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("📖", fontSize = 16.sp)
+        Spacer(Modifier.size(4.dp))
+        Text(
+            text = "도감",
+            color = NightInk,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+        )
     }
 }
 

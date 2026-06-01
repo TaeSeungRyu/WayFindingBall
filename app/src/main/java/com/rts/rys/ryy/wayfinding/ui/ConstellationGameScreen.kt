@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -52,7 +53,11 @@ import com.rts.rys.ryy.wayfinding.data.ConstellationRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.ConstellationStage
 import com.rts.rys.ryy.wayfinding.game.ConstellationStar
+import com.rts.rys.ryy.wayfinding.game.starsEarned
 import kotlinx.coroutines.android.awaitFrame
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -65,6 +70,36 @@ private val LineGold = Color(0xFFFFD66B)
 
 /** 별 명중 반경(캔버스 minDim 비율). 손가락 굵기 고려해 넉넉히. */
 private const val STAR_HIT_R = 0.08f
+/** 별똥별 탭 명중 반경. 빠르게 지나가는 점이라 별보다 더 넉넉히. */
+private const val SHOOTING_HIT_R = 0.12f
+/** 별똥별을 잡았을 때 깎이는 시간(ms). */
+private const val SHOOTING_BONUS_MS = 2000L
+
+/** 화면을 가로지르는 별똥별. 좌표는 정규화 0..1. */
+private class Shooting(
+    var x: Float,
+    var y: Float,
+    val vx: Float,
+    val vy: Float,
+    var life: Float,
+    val maxLife: Float,
+)
+
+/** 좌상단/우상단 근처에서 들어와 반대편 하단으로 흐르는 별똥별 한 개. */
+private fun spawnShooting(r: Random): Shooting {
+    val fromLeft = r.nextBoolean()
+    val sx = if (fromLeft) -0.05f - r.nextFloat() * 0.15f else 1.05f + r.nextFloat() * 0.15f
+    val sy = -0.05f - r.nextFloat() * 0.15f
+    val tx = if (fromLeft) 0.55f + r.nextFloat() * 0.40f else 0.05f + r.nextFloat() * 0.40f
+    val ty = 0.70f + r.nextFloat() * 0.35f
+    val duration = 1.6f
+    return Shooting(
+        x = sx, y = sy,
+        vx = (tx - sx) / duration,
+        vy = (ty - sy) / duration,
+        life = duration, maxLife = duration,
+    )
+}
 
 @Composable
 fun ConstellationGameScreen(
@@ -89,17 +124,47 @@ fun ConstellationGameScreen(
     var finished by remember(attemptId) { mutableStateOf(false) }
     var isNewBest by remember(attemptId) { mutableStateOf(false) }
     var pulse by remember(attemptId) { mutableFloatStateOf(0f) }
+    // 화면에 떠 있는 별똥별 목록. 매 프레임 위치 업데이트 + 만료된 건 제거.
+    val shootings = remember(attemptId) { mutableStateListOf<Shooting>() }
+    // 별똥별 잡힘 토스트 표시용 — 보너스 메시지가 0보다 크면 잔여 시간(초) 동안 표시.
+    var bonusToastSec by remember(attemptId) { mutableFloatStateOf(0f) }
 
-    // 타이머 & 펄스 애니메이션 — 첫 별을 누른 뒤부터 시간 측정.
+    // 타이머 & 펄스 + 별똥별 spawn/이동 — 첫 별을 누른 뒤부터 시간 측정.
     LaunchedEffect(attemptId) {
         var last = 0L
+        var gameTime = 0f
+        // 첫 별똥별까지는 약간의 워밍업, 그 뒤로 7~12초 간격.
+        var nextSpawnAt = 1f
+        val rnd = Random(stage.level * 53L + 11L)
         while (!finished) {
             val now = awaitFrame()
             if (last == 0L) { last = now; continue }
-            val dtMs = (now - last) / 1_000_000L
-            pulse += (now - last) / 1_000_000_000f
+            val deltaNs = now - last
+            val dt = deltaNs / 1_000_000_000f
+            val dtMs = deltaNs / 1_000_000L
+            pulse += dt
             if (reached in 1 until stage.stars.size) elapsedMs += dtMs
+            if (bonusToastSec > 0f) bonusToastSec = (bonusToastSec - dt).coerceAtLeast(0f)
             last = now
+
+            // 별을 한 번이라도 누른 뒤부터 별똥별이 등장한다.
+            if (reached >= 1 && !finished) {
+                gameTime += dt
+                if (gameTime >= nextSpawnAt) {
+                    shootings.add(spawnShooting(rnd))
+                    nextSpawnAt = gameTime + 1f + rnd.nextFloat() *2f
+                }
+                val it = shootings.iterator()
+                while (it.hasNext()) {
+                    val s = it.next()
+                    s.x += s.vx * dt
+                    s.y += s.vy * dt
+                    s.life -= dt
+                    if (s.life <= 0f || s.x < -0.2f || s.x > 1.2f || s.y > 1.2f) {
+                        it.remove()
+                    }
+                }
+            }
         }
     }
 
@@ -172,6 +237,7 @@ fun ConstellationGameScreen(
                         dragEnd = dragEnd,
                         closeOnComplete = stage.closeOnComplete,
                         bgStars = bgStars,
+                        shootings = shootings,
                         pulse = pulse,
                         finished = finished,
                         revealEmoji = stage.revealEmoji,
@@ -195,9 +261,35 @@ fun ConstellationGameScreen(
                                     }
                                 }
                                 StarGesture.End -> { dragEnd = null }
+                                is StarGesture.ShootingTap -> {
+                                    if (gesture.index in shootings.indices) {
+                                        shootings.removeAt(gesture.index)
+                                        elapsedMs = max(0L, elapsedMs - SHOOTING_BONUS_MS)
+                                        bonusToastSec = 1.4f
+                                        SoundManager.playGoal()
+                                    }
+                                }
                             }
                         }
                     )
+
+                    if (bonusToastSec > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 12.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(StarYellow.copy(alpha = 0.92f))
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                        ) {
+                            Text(
+                                text = "별똥별! -2초 ⏱",
+                                color = Color(0xFF3A2A00),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -220,6 +312,7 @@ fun ConstellationGameScreen(
                 emoji = stage.revealEmoji,
                 title = stage.description,
                 elapsedMs = elapsedMs,
+                starsEarned = stage.starsEarned(elapsedMs),
                 isNewBest = isNewBest,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
@@ -232,6 +325,8 @@ private sealed class StarGesture {
     data class Start(val pos: Offset) : StarGesture()
     data class Move(val pos: Offset, val hitNext: Boolean) : StarGesture()
     data object End : StarGesture()
+    /** 별똥별이 탭됐다 — 인덱스로 [shootings]에서 식별. */
+    data class ShootingTap(val index: Int) : StarGesture()
 }
 
 @Composable
@@ -241,14 +336,16 @@ private fun ConstellationCanvas(
     dragEnd: Offset?,
     closeOnComplete: Boolean,
     bgStars: List<Triple<Float, Float, Float>>,
+    shootings: List<Shooting>,
     pulse: Float,
     finished: Boolean,
     revealEmoji: String,
     onGesture: (StarGesture) -> Unit,
 ) {
     // pointerInput을 reached로 키잉하면 별 하나 닿을 때마다 재시작되어 드래그가 끊긴다.
-    // rememberUpdatedState로 최신 값을 우회 참조.
+    // rememberUpdatedState로 최신 값을 우회 참조. 별똥별 목록도 같은 이유로 우회.
     val reachedState = rememberUpdatedState(reached)
+    val shootingsState = rememberUpdatedState(shootings)
     val numberPaint = remember {
         android.graphics.Paint().apply {
             textAlign = android.graphics.Paint.Align.CENTER
@@ -274,9 +371,32 @@ private fun ConstellationCanvas(
                 awaitEachGesture {
                     val w = size.width.toFloat()
                     val h = size.height.toFloat()
-                    val touchR = minOf(w, h) * STAR_HIT_R
+                    val minSide = minOf(w, h)
+                    val touchR = minSide * STAR_HIT_R
+                    val shotR = minSide * SHOOTING_HIT_R
                     val down = awaitFirstDown()
                     val currentReached = reachedState.value
+
+                    // 별똥별 탭 우선 처리 — 다른 손으로 별 잇는 중에도 잡을 수 있게.
+                    // (한 손가락 게임이라 별 잇기 직전의 down도 별똥별로 친다.)
+                    val activeShots = shootingsState.value
+                    var hitIdx = -1
+                    var bestD2 = Float.MAX_VALUE
+                    for ((idx, sh) in activeShots.withIndex()) {
+                        val dx = down.position.x - sh.x * w
+                        val dy = down.position.y - sh.y * h
+                        val d2 = dx * dx + dy * dy
+                        if (d2 <= shotR * shotR && d2 < bestD2) {
+                            bestD2 = d2
+                            hitIdx = idx
+                        }
+                    }
+                    if (hitIdx >= 0) {
+                        down.consume()
+                        onGesture(StarGesture.ShootingTap(hitIdx))
+                        return@awaitEachGesture
+                    }
+
                     // 모두 이은 뒤엔 입력 무시 (결과 오버레이가 떠 있다).
                     if (currentReached >= stars.size) return@awaitEachGesture
                     // 시작 별: 아직 첫 별을 안 눌렀으면 1번, 그 외엔 마지막으로 도달한 별.
@@ -314,8 +434,40 @@ private fun ConstellationCanvas(
         val w = size.width
         val h = size.height
 
-        // 배경 잔별 (반짝임)
         val minSide = minOf(w, h)
+
+        // 별똥별 — 머리(밝은 점) + 꼬리(머리 반대 방향으로 점점 옅어지는 선).
+        // bgStars보다 살짝 앞쪽이지만 별/연결선보다는 뒤에 그려 시야를 안 가린다.
+        for (sh in shootings) {
+            val hx = sh.x * w
+            val hy = sh.y * h
+            // 꼬리 길이는 1프레임 이동량 × 12 정도, 다만 최대치를 제한.
+            val tailLen = minSide * 0.18f
+            val ang = atan2(sh.vy, sh.vx)
+            val tx = hx - cos(ang) * tailLen
+            val ty = hy - sin(ang) * tailLen
+            val alpha = (sh.life / sh.maxLife).coerceIn(0f, 1f)
+            // 꼬리 (점점 굵어지는 글로우 두 줄)
+            drawLine(
+                color = StarYellow.copy(alpha = 0.25f * alpha),
+                start = Offset(tx, ty), end = Offset(hx, hy),
+                strokeWidth = minSide * 0.018f,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = Color.White.copy(alpha = 0.85f * alpha),
+                start = Offset(tx, ty), end = Offset(hx, hy),
+                strokeWidth = minSide * 0.006f,
+                cap = StrokeCap.Round,
+            )
+            // 머리 (별 모양 동심원)
+            val hr = minSide * 0.028f
+            drawCircle(StarYellow.copy(alpha = 0.55f * alpha), radius = hr * 2.4f, center = Offset(hx, hy))
+            drawCircle(StarYellow.copy(alpha = 0.85f * alpha), radius = hr * 1.4f, center = Offset(hx, hy))
+            drawCircle(Color.White.copy(alpha = alpha), radius = hr, center = Offset(hx, hy))
+        }
+
+        // 배경 잔별 (반짝임)
         for ((bx, by, phase) in bgStars) {
             val tw = 0.35f + 0.65f * (sin(pulse * 2.2f + phase) * 0.5f + 0.5f)
             drawCircle(
@@ -452,6 +604,7 @@ private fun ConstellationResultOverlay(
     emoji: String,
     title: String,
     elapsedMs: Long,
+    starsEarned: Int,
     isNewBest: Boolean,
     onRetry: () -> Unit,
     onHome: () -> Unit,
@@ -479,17 +632,30 @@ private fun ConstellationResultOverlay(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.ExtraBold,
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            // 별 등급 ★★★ — 획득한 별만 채워서, 나머지는 흐리게.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                repeat(3) { i ->
+                    val filled = i < starsEarned
+                    Text(
+                        text = "★",
+                        color = if (filled) StarYellow else NightInk.copy(alpha = 0.22f),
+                        fontSize = 44.sp,
+                        fontWeight = FontWeight.Black,
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
             Text(
                 text = formatElapsed(elapsedMs),
                 color = StarYellow,
-                fontSize = 40.sp,
+                fontSize = 36.sp,
                 fontWeight = FontWeight.Black,
             )
             if (isNewBest) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "★ 최고 기록! ★",
+                    "✨ 최고 기록! ✨",
                     color = StarYellow,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
