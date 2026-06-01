@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 
 object AppSettings {
@@ -15,6 +16,8 @@ object AppSettings {
     private const val KEY_SENSOR_OFFSET_X = "sensor_offset_x"
     private const val KEY_SENSOR_OFFSET_Y = "sensor_offset_y"
     private const val KEY_TUTORIAL_SEEN = "tutorial_seen"
+    private const val KEY_BIRTH_MONTH = "birth_month"
+    private const val KEY_BIRTH_DAY = "birth_day"
 
     private var prefs: SharedPreferences? = null
 
@@ -39,6 +42,13 @@ object AppSettings {
     private val _tutorialSeen: MutableState<Boolean> = mutableStateOf(false)
     val tutorialSeen: MutableState<Boolean> get() = _tutorialSeen
 
+    // 생일(월/일). 0이면 미입력 상태.
+    private val _birthMonth = mutableIntStateOf(0)
+    val birthMonth: MutableState<Int> get() = _birthMonth
+
+    private val _birthDay = mutableIntStateOf(0)
+    val birthDay: MutableState<Int> get() = _birthDay
+
     fun init(context: Context) {
         if (prefs == null) {
             val p = context.applicationContext
@@ -51,7 +61,18 @@ object AppSettings {
             _sensorOffsetX.value = p.getFloat(KEY_SENSOR_OFFSET_X, 0f)
             _sensorOffsetY.value = p.getFloat(KEY_SENSOR_OFFSET_Y, 0f)
             _tutorialSeen.value = p.getBoolean(KEY_TUTORIAL_SEEN, false)
+            _birthMonth.value = p.getInt(KEY_BIRTH_MONTH, 0)
+            _birthDay.value = p.getInt(KEY_BIRTH_DAY, 0)
         }
+    }
+
+    fun setBirthday(month: Int, day: Int) {
+        _birthMonth.value = month
+        _birthDay.value = day
+        prefs?.edit()
+            ?.putInt(KEY_BIRTH_MONTH, month)
+            ?.putInt(KEY_BIRTH_DAY, day)
+            ?.apply()
     }
 
     fun setTutorialSeen(value: Boolean) {

@@ -1,12 +1,10 @@
 package com.rts.rys.ryy.wayfinding.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,16 +12,22 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,40 +36,60 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.ConstellationRecordsRepository
 import com.rts.rys.ryy.wayfinding.game.Constellation
 import com.rts.rys.ryy.wayfinding.game.ConstellationStage
+import com.rts.rys.ryy.wayfinding.game.Zodiac
+import com.rts.rys.ryy.wayfinding.game.ZodiacEntry
+import com.rts.rys.ryy.wayfinding.game.dateRangeText
 
 private val NightTop = Color(0xFF050B25)
 private val NightBottom = Color(0xFF1B2A66)
 private val NightInk = Color(0xFFE7E9FF)
 private val CardIndigo = Color(0xFF3949AB)
 private val CardPurple = Color(0xFF6B3FA0)
+private val CardDeep = Color(0xFF243170)
+private val GoldRing = Color(0xFFFFD66B)
 
 @Composable
 fun ConstellationStageSelectScreen(
     onBack: () -> Unit,
-    onSelect: (Int) -> Unit,
+    onSelect: (stageKey: String, recordKey: String) -> Unit,
 ) {
     val context = LocalContext.current
-    val bestTimes = remember {
-        val repo = ConstellationRecordsRepository(context)
-        Constellation.stages.associate { it.level to repo.bestFor(it.level) }
+    val birthMonth by AppSettings.birthMonth
+    val birthDay by AppSettings.birthDay
+    val myZodiac = remember(birthMonth, birthDay) {
+        if (birthMonth == 0 || birthDay == 0) null
+        else Zodiac.forBirthday(birthMonth, birthDay)
     }
+
+    // 매 recomposition마다 SharedPreferences를 다시 읽어 최신 기록이 반영되도록 한다
+    // (게임 클리어 후 pop으로 돌아오면 stage select가 재구성됨).
+    val repo = remember { ConstellationRecordsRepository(context) }
+    val levelBest = Constellation.stages.associate { it.level to repo.bestFor(it.level) }
+    val zodiacBest = Zodiac.entries.associate { it.index to repo.bestForKey("zodiac_${it.index}") }
+
+    var showBirthdayDialog by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(NightTop, NightBottom)))
             .windowInsetsPadding(WindowInsets.systemBars)
-            .padding(20.dp)
+            .padding(horizontal = 20.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
+                    .padding(top = 4.dp)
             ) {
                 BackChip(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart))
                 Text(
@@ -76,33 +100,201 @@ fun ConstellationStageSelectScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
-            Spacer(Modifier.height(16.dp))
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val viewportHeight = maxHeight
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .heightIn(min = viewportHeight)
-                        .padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
-                ) {
-                    Constellation.stages.forEach { stage ->
-                        ConstellationStageCard(
-                            stage = stage,
-                            bg = if (stage.level % 2 == 1) CardIndigo else CardPurple,
-                            bestMs = bestTimes[stage.level],
-                            onClick = { onSelect(stage.level) }
-                        )
-                    }
+            Spacer(Modifier.height(12.dp))
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
+            ) {
+                // 섹션 1: 내 별자리
+                item {
+                    SectionHeader("내 별자리")
                 }
+                item {
+                    MyZodiacCard(
+                        zodiac = myZodiac,
+                        birthMonth = birthMonth,
+                        birthDay = birthDay,
+                        bestMs = myZodiac?.let { zodiacBest[it.index] },
+                        onClickInput = { showBirthdayDialog = true },
+                        onClickPlay = { z ->
+                            onSelect("zodiac_${z.index}", "zodiac_${z.index}")
+                        },
+                    )
+                }
+                // 섹션 2: 기본 별자리
+                item {
+                    SectionHeader("기본 별자리")
+                }
+                items(Constellation.stages) { stage ->
+                    BasicStageCard(
+                        stage = stage,
+                        bg = if (stage.level % 2 == 1) CardIndigo else CardPurple,
+                        bestMs = levelBest[stage.level],
+                        onClick = {
+                            onSelect("level_${stage.level}", "best_${stage.level}")
+                        },
+                    )
+                }
+                // 섹션 3: 황도 12궁
+                item {
+                    SectionHeader("황도 12궁")
+                }
+                items(Zodiac.entries) { entry ->
+                    ZodiacRowCard(
+                        entry = entry,
+                        isMine = entry.index == myZodiac?.index,
+                        bestMs = zodiacBest[entry.index],
+                        onClick = {
+                            onSelect("zodiac_${entry.index}", "zodiac_${entry.index}")
+                        },
+                    )
+                }
+                item { Spacer(Modifier.height(16.dp)) }
+            }
+        }
+
+        if (showBirthdayDialog) {
+            BirthdayPickerDialog(
+                initialMonth = if (birthMonth in 1..12) birthMonth else 1,
+                initialDay = if (birthDay in 1..31) birthDay else 1,
+                onDismiss = { showBirthdayDialog = false },
+                onConfirm = { m, d ->
+                    AppSettings.setBirthday(m, d)
+                    showBirthdayDialog = false
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        color = NightInk.copy(alpha = 0.85f),
+        fontSize = 16.sp,
+        fontWeight = FontWeight.ExtraBold,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
+    )
+}
+
+@Composable
+private fun MyZodiacCard(
+    zodiac: ZodiacEntry?,
+    birthMonth: Int,
+    birthDay: Int,
+    bestMs: Long?,
+    onClickInput: () -> Unit,
+    onClickPlay: (ZodiacEntry) -> Unit,
+) {
+    if (zodiac == null) {
+        // 생일 미입력 — 입력 유도 카드
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .shadow(8.dp, RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(24.dp))
+                .background(Brush.horizontalGradient(listOf(Color(0xFF4A5DBE), Color(0xFF6B3FA0))))
+                .border(2.dp, GoldRing, RoundedCornerShape(24.dp))
+                .clickable(onClick = onClickInput)
+                .padding(20.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("🎂", fontSize = 30.sp)
+                }
+                Spacer(Modifier.size(16.dp))
+                Column {
+                    Text(
+                        text = "생일을 알려주세요",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "내 별자리가 열려요 ✨",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+        return
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(150.dp)
+            .shadow(10.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF1F2A6E), Color(0xFF4F2D8E))))
+            .border(3.dp, GoldRing, RoundedCornerShape(24.dp))
+            .clickable(onClick = { onClickPlay(zodiac) })
+            .padding(20.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(GoldRing.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(zodiac.stage.revealEmoji, fontSize = 38.sp)
+            }
+            Spacer(Modifier.size(18.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = zodiac.korName,
+                        color = Color.White,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.5.sp,
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        text = zodiac.symbol,
+                        color = GoldRing,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "${birthMonth}월 ${birthDay}일 · ${zodiac.dateRangeText()}",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = if (bestMs != null) "최고 기록  ${formatElapsed(bestMs)}" else "아직 기록 없어요",
+                    color = GoldRing,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ConstellationStageCard(
+private fun BasicStageCard(
     stage: ConstellationStage,
     bg: Color,
     bestMs: Long?,
@@ -111,48 +303,244 @@ private fun ConstellationStageCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp)
-            .shadow(8.dp, RoundedCornerShape(28.dp))
-            .clip(RoundedCornerShape(28.dp))
+            .height(112.dp)
+            .shadow(6.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(24.dp),
-        contentAlignment = Alignment.CenterStart
+            .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
-                Text(stage.revealEmoji, fontSize = 36.sp)
+                Text(stage.revealEmoji, fontSize = 28.sp)
             }
-            Spacer(Modifier.size(20.dp))
-            Column {
+            Spacer(Modifier.size(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stage.name,
                     color = Color.White,
-                    fontSize = 28.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 2.sp,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "${stage.description} · 별 ${stage.stars.size}개",
                     color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = if (bestMs != null) "최고 기록  ${formatElapsed(bestMs)}" else "아직 기록 없어요",
                     color = Color.White,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )
             }
         }
     }
+}
+
+@Composable
+private fun ZodiacRowCard(
+    entry: ZodiacEntry,
+    isMine: Boolean,
+    bestMs: Long?,
+    onClick: () -> Unit,
+) {
+    val mod = Modifier
+        .fillMaxWidth()
+        .height(96.dp)
+        .shadow(4.dp, RoundedCornerShape(20.dp))
+        .clip(RoundedCornerShape(20.dp))
+        .background(if (isMine) CardDeep else Color.White.copy(alpha = 0.08f))
+        .let { if (isMine) it.border(2.dp, GoldRing, RoundedCornerShape(20.dp)) else it }
+        .clickable(onClick = onClick)
+        .padding(horizontal = 16.dp, vertical = 12.dp)
+    Box(modifier = mod) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isMine) GoldRing.copy(alpha = 0.25f)
+                        else Color.White.copy(alpha = 0.12f)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(entry.stage.revealEmoji, fontSize = 24.sp)
+            }
+            Spacer(Modifier.size(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = entry.korName,
+                        color = NightInk,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = entry.symbol,
+                        color = if (isMine) GoldRing else NightInk.copy(alpha = 0.7f),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = entry.dateRangeText(),
+                    color = NightInk.copy(alpha = 0.7f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                text = bestMs?.let { formatElapsed(it) } ?: "─",
+                color = if (isMine) GoldRing else NightInk.copy(alpha = 0.7f),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BirthdayPickerDialog(
+    initialMonth: Int,
+    initialDay: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (month: Int, day: Int) -> Unit,
+) {
+    var month by remember { mutableIntStateOf(initialMonth) }
+    var day by remember { mutableIntStateOf(initialDay) }
+    val maxDay = daysInMonth(month)
+    // 큰 달에서 작은 달로 옮길 때 자동 조정 (예: 1/31 → 2월로 옮기면 29로).
+    if (day > maxDay) day = maxDay
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(12.dp, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp))
+                .background(Brush.verticalGradient(listOf(NightTop, NightBottom)))
+                .border(2.dp, GoldRing, RoundedCornerShape(28.dp))
+                .padding(24.dp),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "🎂 생일을 알려주세요",
+                    color = NightInk,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Spacer(Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    NumberStepper("월", month, 1, 12) { month = it }
+                    NumberStepper("일", day, 1, maxDay) { day = it }
+                }
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DialogButton(
+                        label = "취소",
+                        bg = Color.White.copy(alpha = 0.14f),
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DialogButton(
+                        label = "확인",
+                        bg = GoldRing,
+                        onClick = { onConfirm(month, day) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NumberStepper(
+    label: String,
+    value: Int,
+    min: Int,
+    max: Int,
+    onChange: (Int) -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            color = NightInk.copy(alpha = 0.75f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            StepperButton("−") { onChange(if (value > min) value - 1 else max) }
+            Text(
+                text = value.toString(),
+                color = Color.White,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(min = 52.dp),
+            )
+            StepperButton("+") { onChange(if (value < max) value + 1 else min) }
+        }
+    }
+}
+
+@Composable
+private fun StepperButton(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.18f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+    }
+}
+
+@Composable
+private fun DialogButton(
+    label: String,
+    bg: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val textColor = if (bg == GoldRing) Color(0xFF2A1A00) else Color.White
+    Box(
+        modifier = modifier
+            .height(52.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = textColor, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+    }
+}
+
+private fun daysInMonth(month: Int): Int = when (month) {
+    1, 3, 5, 7, 8, 10, 12 -> 31
+    4, 6, 9, 11 -> 30
+    2 -> 29  // 윤년 생일(2/29) 허용.
+    else -> 31
 }

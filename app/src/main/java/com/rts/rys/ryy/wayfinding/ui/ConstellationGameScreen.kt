@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.ConstellationRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
-import com.rts.rys.ryy.wayfinding.game.Constellation
+import com.rts.rys.ryy.wayfinding.game.ConstellationStage
 import com.rts.rys.ryy.wayfinding.game.ConstellationStar
 import kotlinx.coroutines.android.awaitFrame
 import kotlin.math.sin
@@ -68,12 +68,12 @@ private const val STAR_HIT_R = 0.08f
 
 @Composable
 fun ConstellationGameScreen(
-    level: Int,
+    stage: ConstellationStage,
+    recordKey: String,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
-    val stage = remember(level) { Constellation.stageOf(level) }
-    var attemptId by remember(level) { mutableIntStateOf(0) }
+    var attemptId by remember(stage.level) { mutableIntStateOf(0) }
 
     // 배경 잔별: 단계 시드로 결정적 생성 (재시도해도 동일 패턴).
     val bgStars = remember(stage.level) {
@@ -188,7 +188,7 @@ fun ConstellationGameScreen(
                                         SoundManager.playGoal()
                                         if (reached == stage.stars.size) {
                                             isNewBest = ConstellationRecordsRepository(context)
-                                                .record(level, elapsedMs)
+                                                .recordKey(recordKey, elapsedMs)
                                             finished = true
                                             dragEnd = null
                                         }

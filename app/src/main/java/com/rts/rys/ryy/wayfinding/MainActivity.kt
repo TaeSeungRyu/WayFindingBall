@@ -30,8 +30,10 @@ import androidx.compose.ui.platform.LocalContext
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
+import com.rts.rys.ryy.wayfinding.game.Constellation
 import com.rts.rys.ryy.wayfinding.game.DailyChallenge
 import com.rts.rys.ryy.wayfinding.game.Stages
+import com.rts.rys.ryy.wayfinding.game.Zodiac
 import com.rts.rys.ryy.wayfinding.ui.CollectionScreen
 import com.rts.rys.ryy.wayfinding.ui.ColorGameScreen
 import com.rts.rys.ryy.wayfinding.ui.ColorStageSelectScreen
@@ -99,7 +101,7 @@ private sealed class Screen {
     data object HitStageSelect : Screen()
     data class HitGame(val level: Int) : Screen()
     data object ConstellationStageSelect : Screen()
-    data class ConstellationGame(val level: Int) : Screen()
+    data class ConstellationGame(val stageKey: String, val recordKey: String) : Screen()
     data object LevelSelect : Screen()
     data class StageSelect(val level: Int) : Screen()
     data class Game(val stageId: Int) : Screen()
@@ -216,12 +218,27 @@ fun MazeApp() {
             )
             Screen.ConstellationStageSelect -> ConstellationStageSelectScreen(
                 onBack = { pop() },
-                onSelect = { level -> push(Screen.ConstellationGame(level)) }
+                onSelect = { stageKey, recordKey ->
+                    push(Screen.ConstellationGame(stageKey, recordKey))
+                }
             )
-            is Screen.ConstellationGame -> ConstellationGameScreen(
-                level = screen.level,
-                onExit = { pop() }
-            )
+            is Screen.ConstellationGame -> {
+                val stage = remember(screen.stageKey) {
+                    when {
+                        screen.stageKey.startsWith("level_") ->
+                            Constellation.stageOf(screen.stageKey.removePrefix("level_").toInt())
+                        screen.stageKey.startsWith("zodiac_") ->
+                            Zodiac.byIndex(screen.stageKey.removePrefix("zodiac_").toInt())?.stage
+                                ?: Constellation.stages.first()
+                        else -> Constellation.stages.first()
+                    }
+                }
+                ConstellationGameScreen(
+                    stage = stage,
+                    recordKey = screen.recordKey,
+                    onExit = { pop() }
+                )
+            }
             Screen.LevelSelect -> LevelSelectScreen(
                 onBack = { pop() },
                 onSelect = { level -> push(Screen.StageSelect(level)) },
