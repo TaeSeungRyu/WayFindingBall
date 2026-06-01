@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -168,6 +169,10 @@ fun MazeApp() {
         }
     }
 
+    // 화면이 dispose돼도 그 안의 rememberSaveable 상태(스크롤 위치 등)가 유지되도록
+    // 화면 단위로 SaveableStateProvider로 감싼다. 키는 Screen의 toString().
+    val saveableStateHolder = rememberSaveableStateHolder()
+
     AnimatedContent(
         targetState = backStack.last(),
         transitionSpec = {
@@ -181,6 +186,7 @@ fun MazeApp() {
         },
         label = "screen-transition"
     ) { screen ->
+        saveableStateHolder.SaveableStateProvider(key = screen.toString()) {
         when (screen) {
             Screen.Home -> HomeScreen(
                 onStart = { push(Screen.ModeSelect) },
@@ -277,6 +283,7 @@ fun MazeApp() {
                 onSaved = { pop() },
                 onCancel = { pop() }
             )
+        }
         }
     }
 }
