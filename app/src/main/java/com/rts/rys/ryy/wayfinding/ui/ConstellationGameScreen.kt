@@ -74,6 +74,35 @@ private const val STAR_HIT_R = 0.08f
 private const val SHOOTING_HIT_R = 0.12f
 /** 별똥별을 잡았을 때 깎이는 시간(ms). */
 private const val SHOOTING_BONUS_MS = 2000L
+/** 별이 정규 좌표 위에서 떠다니는 원형 궤도의 반지름(=화면 비율). 자녀가 따라잡을 수 있게 작게. */
+private const val DRIFT_AMP = 0.012f
+/** 콤보 임계. 빠른 hit 이만큼 연속하면 보너스. */
+private const val COMBO_THRESHOLD = 3
+/** 콤보 보너스로 깎이는 시간(ms). */
+private const val COMBO_BONUS_MS = 1000L
+/** 다음 hit이 이 시간(ms) 이내여야 콤보 누적. */
+private const val COMBO_WINDOW_MS = 1500L
+/** 완성 후 결과 오버레이가 뜨기까지의 연출 시간(초). */
+private const val COMPLETION_DURATION = 1.0f
+
+/** 별의 단계·순서 기반 결정적 위상. 같은 단계 같은 별은 항상 같은 위상. */
+private fun driftPhase(stageLevel: Int, order: Int): Float {
+    val h = (stageLevel * 73856093) xor (order * 19349663)
+    return ((h and 0xFFFF) / 65535f) * 6.2831855f
+}
+
+/** 별마다 약간 다른 주기 — 별자리가 살아있게 보이도록 동기화 회피. */
+private fun driftFreq(stageLevel: Int, order: Int): Float {
+    val h = (stageLevel * 19349663) xor (order * 83492791)
+    return 0.45f + (((h ushr 16) and 0xFF) / 255f) * 0.5f
+}
+
+/** 정규 좌표 위의 drift된 별 위치 — 같은 (stage, order, time)이면 같은 결과. */
+private fun driftedX(star: ConstellationStar, stageLevel: Int, time: Float): Float =
+    star.x + cos(time * driftFreq(stageLevel, star.order) + driftPhase(stageLevel, star.order)) * DRIFT_AMP
+
+private fun driftedY(star: ConstellationStar, stageLevel: Int, time: Float): Float =
+    star.y + sin(time * driftFreq(stageLevel, star.order) + driftPhase(stageLevel, star.order) * 1.37f) * DRIFT_AMP
 
 /** 화면을 가로지르는 별똥별. 좌표는 정규화 0..1. */
 private class Shooting(
@@ -83,6 +112,17 @@ private class Shooting(
     val vy: Float,
     var life: Float,
     val maxLife: Float,
+)
+
+/** 완성 직후 사방으로 분출되는 작은 별가루. vy는 중력으로 매 프레임 변함. */
+private class Particle(
+    var x: Float,
+    var y: Float,
+    val vx: Float,
+    var vy: Float,
+    var life: Float,
+    val maxLife: Float,
+    val hue: Float,  // 0=흰, 1=황금
 )
 
 /** 좌상단/우상단 근처에서 들어와 반대편 하단으로 흐르는 별똥별 한 개. */
@@ -122,37 +162,66 @@ fun ConstellationGameScreen(
     var dragEnd by remember(attemptId) { mutableStateOf<Offset?>(null) }
     var elapsedMs by remember(attemptId) { mutableLongStateOf(0L) }
     var finished by remember(attemptId) { mutableStateOf(false) }
+    var showResult by remember(attemptId) { mutableStateOf(false) }
     var isNewBest by remember(attemptId) { mutableStateOf(false) }
     var pulse by remember(attemptId) { mutableFloatStateOf(0f) }
+    var driftTime by remember(attemptId) { mutableFloatStateOf(0f) }
+    var completionSec by remember(attemptId) { mutableFloatStateOf(0f) }
     // 화면에 떠 있는 별똥별 목록. 매 프레임 위치 업데이트 + 만료된 건 제거.
     val shootings = remember(attemptId) { mutableStateListOf<Shooting>() }
-    // 별똥별 잡힘 토스트 표시용 — 보너스 메시지가 0보다 크면 잔여 시간(초) 동안 표시.
+    // 완성 직후 분출되는 별가루.
+    val particles = remember(attemptId) { mutableStateListOf<Particle>() }
+    // 별똥별 잡힘 토스트 — 잔여 시간(초).
     var bonusToastSec by remember(attemptId) { mutableFloatStateOf(0f) }
+    // 콤보 보너스 토스트.
+    var comboToastSec by remember(attemptId) { mutableFloatStateOf(0f) }
+    // 콤보 보너스 발동 시 0.6초간 모든 별을 황금빛으로 깜빡이게 함.
+    var comboFlashSec by remember(attemptId) { mutableFloatStateOf(0f) }
+    // 콤보 상태 — 마지막 hit ms, 누적 카운트.
+    var lastHitMs by remember(attemptId) { mutableLongStateOf(-1L) }
+    var comboCount by remember(attemptId) { mutableIntStateOf(0) }
 
-    // 타이머 & 펄스 + 별똥별 spawn/이동 — 첫 별을 누른 뒤부터 시간 측정.
+    // 타이머 + 펄스 + drift + 별똥별 + 완성 연출 — 첫 별을 누른 뒤부터 시간 측정.
     LaunchedEffect(attemptId) {
         var last = 0L
         var gameTime = 0f
-        // 첫 별똥별까지는 약간의 워밍업, 그 뒤로 7~12초 간격.
         var nextSpawnAt = 1f
         val rnd = Random(stage.level * 53L + 11L)
-        while (!finished) {
+        while (!showResult) {
             val now = awaitFrame()
             if (last == 0L) { last = now; continue }
             val deltaNs = now - last
             val dt = deltaNs / 1_000_000_000f
             val dtMs = deltaNs / 1_000_000L
             pulse += dt
+            driftTime += dt
             if (reached in 1 until stage.stars.size) elapsedMs += dtMs
             if (bonusToastSec > 0f) bonusToastSec = (bonusToastSec - dt).coerceAtLeast(0f)
+            if (comboToastSec > 0f) comboToastSec = (comboToastSec - dt).coerceAtLeast(0f)
+            if (comboFlashSec > 0f) comboFlashSec = (comboFlashSec - dt).coerceAtLeast(0f)
             last = now
 
-            // 별을 한 번이라도 누른 뒤부터 별똥별이 등장한다.
-            if (reached >= 1 && !finished) {
+            if (finished) {
+                // 완성 연출: 시간 진행 + 파티클 업데이트. 결과 오버레이는 1초 뒤에.
+                completionSec += dt
+                val pit = particles.iterator()
+                while (pit.hasNext()) {
+                    val p = pit.next()
+                    p.x += p.vx * dt
+                    p.y += p.vy * dt
+                    p.vy += 0.25f * dt
+                    p.life -= dt
+                    if (p.life <= 0f) pit.remove()
+                }
+                if (completionSec >= COMPLETION_DURATION) showResult = true
+                continue
+            }
+
+            if (reached >= 1) {
                 gameTime += dt
                 if (gameTime >= nextSpawnAt) {
                     shootings.add(spawnShooting(rnd))
-                    nextSpawnAt = gameTime + 1f + rnd.nextFloat() *2f
+                    nextSpawnAt = gameTime + 1f + rnd.nextFloat() * 2f
                 }
                 val it = shootings.iterator()
                 while (it.hasNext()) {
@@ -208,15 +277,26 @@ fun ConstellationGameScreen(
                     .padding(horizontal = 18.dp, vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = if (reached == 0)
-                        "1번 별부터 손가락으로 이어요!"
-                    else
-                        "${stage.description} ${stage.revealEmoji}",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = NightInk,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (reached == 0)
+                            "1번 별부터 손가락으로 이어요!"
+                        else
+                            "${stage.description} ${stage.revealEmoji}",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = NightInk,
+                    )
+                    if (comboCount > 0) {
+                        Spacer(Modifier.size(10.dp))
+                        Text(
+                            text = "⚡×$comboCount",
+                            color = StarYellow,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -233,11 +313,16 @@ fun ConstellationGameScreen(
                 ) {
                     ConstellationCanvas(
                         stars = stage.stars,
+                        stageLevel = stage.level,
                         reached = reached,
                         dragEnd = dragEnd,
                         closeOnComplete = stage.closeOnComplete,
                         bgStars = bgStars,
                         shootings = shootings,
+                        particles = particles,
+                        driftTime = driftTime,
+                        completionSec = completionSec,
+                        comboFlashSec = comboFlashSec,
                         pulse = pulse,
                         finished = finished,
                         revealEmoji = stage.revealEmoji,
@@ -251,12 +336,43 @@ fun ConstellationGameScreen(
                                     dragEnd = gesture.pos
                                     if (gesture.hitNext && reached < stage.stars.size) {
                                         reached += 1
+                                        // 콤보: 마지막 hit 이후 COMBO_WINDOW_MS 안이면 누적.
+                                        comboCount = if (
+                                            lastHitMs >= 0L &&
+                                            (elapsedMs - lastHitMs) <= COMBO_WINDOW_MS
+                                        ) comboCount + 1 else 1
+                                        lastHitMs = elapsedMs
+                                        if (comboCount >= COMBO_THRESHOLD) {
+                                            elapsedMs = max(0L, elapsedMs - COMBO_BONUS_MS)
+                                            comboFlashSec = 0.6f
+                                            comboToastSec = 1.4f
+                                            comboCount = 0
+                                        }
                                         SoundManager.playGoal()
                                         if (reached == stage.stars.size) {
                                             isNewBest = ConstellationRecordsRepository(context)
                                                 .recordKey(recordKey, elapsedMs)
                                             finished = true
                                             dragEnd = null
+                                            // 완성 폭죽 — 별마다 6개씩 사방으로.
+                                            val pr = Random(stage.level * 17L + 91L)
+                                            for (s in stage.stars) {
+                                                repeat(6) {
+                                                    val ang = pr.nextFloat() * 6.2832f
+                                                    val speed = 0.18f + pr.nextFloat() * 0.25f
+                                                    val maxL = 0.7f + pr.nextFloat() * 0.6f
+                                                    particles.add(
+                                                        Particle(
+                                                            x = driftedX(s, stage.level, driftTime),
+                                                            y = driftedY(s, stage.level, driftTime),
+                                                            vx = cos(ang) * speed,
+                                                            vy = sin(ang) * speed,
+                                                            life = maxL, maxLife = maxL,
+                                                            hue = if (pr.nextFloat() < 0.6f) 1f else 0f,
+                                                        )
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -290,6 +406,23 @@ fun ConstellationGameScreen(
                             )
                         }
                     }
+                    if (comboToastSec > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFFFFB347).copy(alpha = 0.95f))
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                        ) {
+                            Text(
+                                text = "콤보! ⚡ -1초",
+                                color = Color(0xFF3A2A00),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -307,7 +440,7 @@ fun ConstellationGameScreen(
             Spacer(Modifier.height(8.dp))
         }
 
-        if (finished) {
+        if (showResult) {
             ConstellationResultOverlay(
                 emoji = stage.revealEmoji,
                 title = stage.description,
@@ -332,20 +465,26 @@ private sealed class StarGesture {
 @Composable
 private fun ConstellationCanvas(
     stars: List<ConstellationStar>,
+    stageLevel: Int,
     reached: Int,
     dragEnd: Offset?,
     closeOnComplete: Boolean,
     bgStars: List<Triple<Float, Float, Float>>,
     shootings: List<Shooting>,
+    particles: List<Particle>,
+    driftTime: Float,
+    completionSec: Float,
+    comboFlashSec: Float,
     pulse: Float,
     finished: Boolean,
     revealEmoji: String,
     onGesture: (StarGesture) -> Unit,
 ) {
     // pointerInput을 reached로 키잉하면 별 하나 닿을 때마다 재시작되어 드래그가 끊긴다.
-    // rememberUpdatedState로 최신 값을 우회 참조. 별똥별 목록도 같은 이유로 우회.
+    // rememberUpdatedState로 최신 값을 우회 참조. 별똥별/drift도 같은 이유로 우회.
     val reachedState = rememberUpdatedState(reached)
     val shootingsState = rememberUpdatedState(shootings)
+    val driftTimeState = rememberUpdatedState(driftTime)
     val numberPaint = remember {
         android.graphics.Paint().apply {
             textAlign = android.graphics.Paint.Align.CENTER
@@ -402,8 +541,9 @@ private fun ConstellationCanvas(
                     // 시작 별: 아직 첫 별을 안 눌렀으면 1번, 그 외엔 마지막으로 도달한 별.
                     val startOrder = if (currentReached == 0) 1 else currentReached
                     val startStar = stars[startOrder - 1]
-                    val sx = startStar.x * w
-                    val sy = startStar.y * h
+                    val tStart = driftTimeState.value
+                    val sx = driftedX(startStar, stageLevel, tStart) * w
+                    val sy = driftedY(startStar, stageLevel, tStart) * h
                     val dx0 = down.position.x - sx
                     val dy0 = down.position.y - sy
                     if (dx0 * dx0 + dy0 * dy0 > touchR * touchR) return@awaitEachGesture
@@ -415,8 +555,9 @@ private fun ConstellationCanvas(
                         var hit = false
                         if (localReached < stars.size) {
                             val nxt = stars[localReached]  // 다음 별 (index = localReached)
-                            val nxx = nxt.x * w
-                            val nyy = nxt.y * h
+                            val tNow = driftTimeState.value
+                            val nxx = driftedX(nxt, stageLevel, tNow) * w
+                            val nyy = driftedY(nxt, stageLevel, tNow) * h
                             val dxn = pos.x - nxx
                             val dyn = pos.y - nyy
                             if (dxn * dxn + dyn * dyn <= touchR * touchR) {
@@ -435,6 +576,10 @@ private fun ConstellationCanvas(
         val h = size.height
 
         val minSide = minOf(w, h)
+
+        // 별 위치를 drift 적용해 미리 계산. hit과 동일한 함수라 시각/판정 일치.
+        val sxs = FloatArray(stars.size) { driftedX(stars[it], stageLevel, driftTime) * w }
+        val sys = FloatArray(stars.size) { driftedY(stars[it], stageLevel, driftTime) * h }
 
         // 별똥별 — 머리(밝은 점) + 꼬리(머리 반대 방향으로 점점 옅어지는 선).
         // bgStars보다 살짝 앞쪽이지만 별/연결선보다는 뒤에 그려 시야를 안 가린다.
@@ -479,12 +624,10 @@ private fun ConstellationCanvas(
 
         // 가이드 선 (다음 별까지 연한 점선) — 가장 어둡게.
         if (!finished && reached in 1 until stars.size) {
-            val from = stars[reached - 1]
-            val to = stars[reached]
             drawLine(
                 color = Color.White.copy(alpha = 0.18f),
-                start = Offset(from.x * w, from.y * h),
-                end = Offset(to.x * w, to.y * h),
+                start = Offset(sxs[reached - 1], sys[reached - 1]),
+                end = Offset(sxs[reached], sys[reached]),
                 strokeWidth = minSide * 0.006f,
                 pathEffect = PathEffect.dashPathEffect(
                     floatArrayOf(minSide * 0.02f, minSide * 0.02f), 0f
@@ -492,39 +635,43 @@ private fun ConstellationCanvas(
             )
         }
 
-        // 확정된 연결선들 — 외곽 글로우 + 안쪽 굵은 선
+        // 확정된 연결선들 — 외곽 글로우 + 안쪽 굵은 선. 완성 후엔 두께 살짝 ↑.
+        val lineBoost = if (finished) 1f + (completionSec / COMPLETION_DURATION).coerceIn(0f, 1f) * 0.4f else 1f
         for (i in 1 until reached) {
             drawConstellationLine(
-                stars[i - 1].x * w, stars[i - 1].y * h,
-                stars[i].x * w, stars[i].y * h,
-                minSide,
+                sxs[i - 1], sys[i - 1],
+                sxs[i], sys[i],
+                minSide, boost = lineBoost,
             )
         }
         // 완성 시 닫힘 선
         if (finished && closeOnComplete && stars.size >= 3) {
             drawConstellationLine(
-                stars.last().x * w, stars.last().y * h,
-                stars.first().x * w, stars.first().y * h,
-                minSide,
+                sxs.last(), sys.last(),
+                sxs.first(), sys.first(),
+                minSide, boost = lineBoost,
             )
         }
 
         // 진행 중 드래그 라인 (마지막 도달 별 → 손가락)
         if (dragEnd != null && reached in 1 until stars.size) {
-            val from = stars[reached - 1]
             drawLine(
                 color = LineGold.copy(alpha = 0.55f),
-                start = Offset(from.x * w, from.y * h),
+                start = Offset(sxs[reached - 1], sys[reached - 1]),
                 end = dragEnd,
                 strokeWidth = minSide * 0.012f,
                 cap = StrokeCap.Round,
             )
         }
 
+        // 콤보 발동 깜빡임 — 0.6초 동안 모든 별이 황금으로 펄스.
+        val comboBoost = (comboFlashSec / 0.6f).coerceIn(0f, 1f)
+
         // 별 본체
-        for (s in stars) {
-            val cx = s.x * w
-            val cy = s.y * h
+        for (i in stars.indices) {
+            val s = stars[i]
+            val cx = sxs[i]
+            val cy = sys[i]
             val isReached = s.order <= reached
             val isNext = (reached == 0 && s.order == 1) ||
                 (reached in 1 until stars.size && s.order == reached + 1)
@@ -536,20 +683,20 @@ private fun ConstellationCanvas(
                 isNext -> 0.55f + 0.25f * sin(pulse * 4.5f)
                 isReached -> 0.45f
                 else -> 0.20f
-            }
+            } + comboBoost * 0.35f
             drawCircle(
-                color = StarYellow.copy(alpha = haloAlpha * 0.4f),
-                radius = pulseR * 3.2f,
+                color = StarYellow.copy(alpha = (haloAlpha * 0.4f).coerceAtMost(1f)),
+                radius = pulseR * (3.2f + comboBoost * 0.8f),
                 center = Offset(cx, cy),
             )
             drawCircle(
-                color = StarYellow.copy(alpha = haloAlpha * 0.8f),
+                color = StarYellow.copy(alpha = (haloAlpha * 0.8f).coerceAtMost(1f)),
                 radius = pulseR * 1.9f,
                 center = Offset(cx, cy),
             )
-            // 본체
-            val body = if (isReached) StarYellow else Color.White
-            val rim = if (isReached) StarYellowDeep else Color(0xFFB6BEFF)
+            // 본체 — 콤보 깜빡임이면 모든 별이 황금으로 보이도록 lerp.
+            val body = if (isReached || comboBoost > 0f) StarYellow else Color.White
+            val rim = if (isReached || comboBoost > 0f) StarYellowDeep else Color(0xFFB6BEFF)
             drawCircle(rim, radius = pulseR * 1.12f, center = Offset(cx, cy))
             drawCircle(body, radius = pulseR, center = Offset(cx, cy))
             // 순서 번호
@@ -559,42 +706,74 @@ private fun ConstellationCanvas(
             )
         }
 
-        // 완성 시 가운데 큰 그림
+        // 완성 폭발 — 별자리 중심에서 큰 원이 부드럽게 확장하며 페이드.
         if (finished) {
-            // 별들의 평균 위치 = 그림의 중심으로.
-            val avgX = stars.map { it.x }.average().toFloat() * w
-            val avgY = stars.map { it.y }.average().toFloat() * h
-            emojiPaint.textSize = minSide * 0.30f
-            emojiPaint.alpha = 230
-            drawContext.canvas.nativeCanvas.drawText(
-                revealEmoji, avgX, avgY + minSide * 0.10f, emojiPaint,
-            )
+            val avgX = (0 until stars.size).map { sxs[it] }.average().toFloat()
+            val avgY = (0 until stars.size).map { sys[it] }.average().toFloat()
+            val burstProg = (completionSec / 0.5f).coerceIn(0f, 1f)
+            if (burstProg < 1f) {
+                val burstR = minSide * (0.05f + burstProg * 0.55f)
+                drawCircle(
+                    color = StarYellow.copy(alpha = (0.55f * (1f - burstProg)).coerceAtLeast(0f)),
+                    radius = burstR,
+                    center = Offset(avgX, avgY),
+                )
+                drawCircle(
+                    color = Color.White.copy(alpha = (0.35f * (1f - burstProg)).coerceAtLeast(0f)),
+                    radius = burstR * 0.65f,
+                    center = Offset(avgX, avgY),
+                )
+            }
+
+            // 파티클 — 별가루 사방으로.
+            for (p in particles) {
+                val pa = (p.life / p.maxLife).coerceIn(0f, 1f)
+                val col = if (p.hue > 0.5f) StarYellow else Color.White
+                drawCircle(
+                    color = col.copy(alpha = 0.9f * pa),
+                    radius = minSide * 0.008f * (0.6f + pa * 0.6f),
+                    center = Offset(p.x * w, p.y * h),
+                )
+            }
+
+            // 가운데 큰 그림 — 폭발이 잦아든 뒤 등장 + 살짝 떠오름.
+            val emojiProg = ((completionSec - 0.3f) / (COMPLETION_DURATION - 0.3f)).coerceIn(0f, 1f)
+            if (emojiProg > 0f) {
+                emojiPaint.textSize = minSide * 0.30f
+                emojiPaint.alpha = (255 * emojiProg).toInt().coerceIn(0, 255)
+                drawContext.canvas.nativeCanvas.drawText(
+                    revealEmoji,
+                    avgX,
+                    avgY + minSide * 0.10f - emojiProg * minSide * 0.04f,
+                    emojiPaint,
+                )
+            }
         }
     }
 }
 
-/** 별자리 연결선 — 노란 글로우 + 흰 코어. */
+/** 별자리 연결선 — 노란 글로우 + 흰 코어. boost는 완성 시 라인 강도 증폭(>1f). */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawConstellationLine(
-    x1: Float, y1: Float, x2: Float, y2: Float, minSide: Float,
+    x1: Float, y1: Float, x2: Float, y2: Float, minSide: Float, boost: Float = 1f,
 ) {
     val s = Offset(x1, y1)
     val e = Offset(x2, y2)
     drawLine(
-        color = LineGold.copy(alpha = 0.35f),
+        color = LineGold.copy(alpha = (0.35f * boost).coerceAtMost(1f)),
         start = s, end = e,
-        strokeWidth = minSide * 0.024f,
+        strokeWidth = minSide * 0.024f * boost,
         cap = StrokeCap.Round,
     )
     drawLine(
-        color = LineGold.copy(alpha = 0.75f),
+        color = LineGold.copy(alpha = (0.75f * boost).coerceAtMost(1f)),
         start = s, end = e,
-        strokeWidth = minSide * 0.014f,
+        strokeWidth = minSide * 0.014f * boost,
         cap = StrokeCap.Round,
     )
     drawLine(
         color = Color.White,
         start = s, end = e,
-        strokeWidth = minSide * 0.006f,
+        strokeWidth = minSide * 0.006f * boost,
         cap = StrokeCap.Round,
     )
 }
