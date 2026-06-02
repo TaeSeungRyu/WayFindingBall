@@ -4,10 +4,12 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.SoundPool
+import android.speech.tts.TextToSpeech
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
@@ -23,6 +25,14 @@ object SoundManager {
     private const val GOAL_FILE = "sfx_goal.wav"
     private const val BGM_FILE = "bgm_loop.wav"
     private const val BGM_VERSION = 2
+    private const val STAR_TONE_COUNT = 12
+    private const val STAR_TONE_VERSION = 1
+
+    /** C5부터 G6까지 C-major 음계 12음(흰건반만). 별 order-1을 인덱스로 사용. */
+    private val STAR_TONE_HZ = doubleArrayOf(
+        523.25, 587.33, 659.25, 698.46, 783.99, 880.00,
+        987.77, 1046.50, 1174.66, 1318.51, 1396.91, 1567.98,
+    )
 
     private var soundPool: SoundPool? = null
     private var bonkId: Int = 0
@@ -32,6 +42,14 @@ object SoundManager {
 
     private var bgmPlayer: MediaPlayer? = null
     private var bgmFile: File? = null
+
+    // 별자리 모드용 — 별 순서마다 다른 음정. C major 음계 한 옥타브 반(12음).
+    private val starToneIds = IntArray(STAR_TONE_COUNT)
+    private val starToneLoaded = BooleanArray(STAR_TONE_COUNT)
+
+    // 별자리 이름을 읽어주는 TTS — null이면 아직 초기화 안 됐거나 한국어 미지원.
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
 
     fun init(context: Context) {
         if (soundPool != null) return
@@ -49,6 +67,9 @@ object SoundManager {
                 if (status == 0) {
                     if (sampleId == bonkId) bonkLoaded = true
                     if (sampleId == goalId) goalLoaded = true
+                    for (i in starToneIds.indices) {
+                        if (sampleId == starToneIds[i]) starToneLoaded[i] = true
+                    }
                 }
             }
             soundPool = pool
@@ -64,6 +85,27 @@ object SoundManager {
             val bgmFile = File(context.cacheDir, "bgm_loop_v${BGM_VERSION}.wav")
             if (!bgmFile.exists()) writeWav(bgmFile, generateBgm())
             this.bgmFile = bgmFile
+
+            // 별 음정 12개 미리 생성/로드 — 종 소리 톤.
+            for (i in 0 until STAR_TONE_COUNT) {
+                val toneFile = File(context.cacheDir, "sfx_star_v${STAR_TONE_VERSION}_$i.wav")
+                if (!toneFile.exists()) writeWav(toneFile, generateStarTone(STAR_TONE_HZ[i]))
+                starToneIds[i] = pool.load(toneFile.absolutePath, 1)
+            }
+        }
+
+        // TTS — 한국어 별자리 이름 안내. 초기화 비동기.
+        runCatching {
+            tts = TextToSpeech(context.applicationContext) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    val result = tts?.setLanguage(Locale.KOREAN)
+                    ttsReady = result == TextToSpeech.LANG_AVAILABLE ||
+                        result == TextToSpeech.LANG_COUNTRY_AVAILABLE ||
+                        result == TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE
+                    tts?.setSpeechRate(0.95f)
+                    tts?.setPitch(1.05f)
+                }
+            }
         }
     }
 
@@ -121,7 +163,48 @@ object SoundManager {
         pool.play(goalId, 1f, 1f, 1, 0, 1f)
     }
 
+    /** 별 잇기 시 [orderIndex] (0-based) 별의 음정을 재생. 범위 밖이면 가장 가까운 톤 사용. */
+    fun playStarTone(orderIndex: Int) {
+        if (!AppSettings.soundEnabled.value) return
+        val pool = soundPool ?: return
+        val i = orderIndex.coerceIn(0, STAR_TONE_COUNT - 1)
+        if (!starToneLoaded[i]) return
+        pool.play(starToneIds[i], 0.85f, 0.85f, 2, 0, 1f)
+    }
+
+    /** 별자리 이름 등 짧은 한국어 텍스트를 TTS로 읽어준다. 비활성/미준비 시 무시. */
+    fun speak(text: String) {
+        if (!AppSettings.soundEnabled.value) return
+        if (!ttsReady) return
+        runCatching {
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "constellation")
+        }
+    }
+
     // ---- Sample generation ----
+
+    /** 종 같은 별 음정 — 사인파 + 부드러운 어택/감쇠. ~280ms 짧고 또렷하게. */
+    private fun generateStarTone(freq: Double): ShortArray {
+        val durationS = 0.28
+        val n = (SAMPLE_RATE * durationS).toInt()
+        val out = ShortArray(n)
+        val attack = 0.008
+        for (i in 0 until n) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val env = when {
+                t < attack -> t / attack
+                else -> exp(-(t - attack) * 7.0)
+            }
+            // 종 느낌: 기본 주파수 + 옥타브 + 약한 5도 배음
+            val s = (
+                sin(2 * PI * freq * t) * 0.55 +
+                    sin(2 * PI * freq * 2 * t) * 0.18 +
+                    sin(2 * PI * freq * 3 * t) * 0.08
+                ) * env * 0.65
+            out[i] = (s.coerceIn(-0.99, 0.99) * Short.MAX_VALUE).toInt().toShort()
+        }
+        return out
+    }
 
     private fun generateBonk(): ShortArray {
         // 90ms percussive thump around 180Hz with snappy decay.

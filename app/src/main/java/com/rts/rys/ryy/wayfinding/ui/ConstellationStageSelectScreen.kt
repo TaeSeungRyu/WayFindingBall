@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,14 +33,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import kotlin.random.Random
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.ConstellationRecordsRepository
 import com.rts.rys.ryy.wayfinding.game.Constellation
@@ -109,6 +113,18 @@ fun ConstellationStageSelectScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
             ) {
+                // 누적 야경 — 클리어한 별자리들이 모이는 "내가 만든 밤하늘".
+                // 매 composition마다 다시 읽어 게임 클리어 직후 즉시 반영되게 한다.
+                item { SectionHeader("내가 만든 밤하늘") }
+                item {
+                    val clearedStages =
+                        Constellation.stages.filter { levelBest[it.level] != null } +
+                            Zodiac.entries
+                                .filter { zodiacBest[it.index] != null }
+                                .map { it.stage }
+                    NightSkyPanel(clearedStages = clearedStages)
+                }
+
                 // 섹션 1: 내 별자리
                 item {
                     SectionHeader("내 별자리")
@@ -166,6 +182,123 @@ fun ConstellationStageSelectScreen(
                     AppSettings.setBirthday(m, d)
                     showBirthdayDialog = false
                 },
+            )
+        }
+    }
+}
+
+@Composable
+private fun NightSkyPanel(clearedStages: List<ConstellationStage>) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xFF050B25), Color(0xFF14215C))))
+            .border(1.dp, GoldRing.copy(alpha = 0.35f), RoundedCornerShape(22.dp)),
+    ) {
+        // 잔별(반짝이지 않는 정적 점) — 배경 깊이감.
+        val ambient = remember {
+            val rr = Random(2025)
+            List(80) { Triple(rr.nextFloat(), rr.nextFloat(), 0.3f + rr.nextFloat() * 0.5f) }
+        }
+        // 별자리 18개 슬롯 — deterministic 배치. 위쪽 6개, 가운데 6개, 아래 6개로 흩뿌림.
+        val slots = remember {
+            val r = Random(1207)
+            List(18) {
+                val cx = 0.06f + r.nextFloat() * 0.88f
+                val cy = 0.10f + r.nextFloat() * 0.80f
+                val sz = 0.13f + r.nextFloat() * 0.06f
+                Triple(cx, cy, sz)
+            }
+        }
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val minSide = minOf(w, h)
+
+            for ((bx, by, br) in ambient) {
+                drawCircle(
+                    color = Color.White.copy(alpha = br * 0.45f),
+                    radius = minSide * 0.004f,
+                    center = Offset(bx * w, by * h),
+                )
+            }
+
+            // 클리어된 별자리만 슬롯에 그림.
+            val stagesToShow = clearedStages.take(slots.size)
+            for ((idx, stage) in stagesToShow.withIndex()) {
+                val (cx, cy, sz) = slots[idx]
+                val boxX = cx * w
+                val boxY = cy * h
+                val side = sz * w  // 가로 비율 기준
+                val starsXs = FloatArray(stage.stars.size) {
+                    boxX + (stage.stars[it].x - 0.5f) * side
+                }
+                val starsYs = FloatArray(stage.stars.size) {
+                    boxY + (stage.stars[it].y - 0.5f) * side
+                }
+                // 연결선
+                for (i in 1 until stage.stars.size) {
+                    drawLine(
+                        color = GoldRing.copy(alpha = 0.70f),
+                        start = Offset(starsXs[i - 1], starsYs[i - 1]),
+                        end = Offset(starsXs[i], starsYs[i]),
+                        strokeWidth = minSide * 0.005f,
+                        cap = StrokeCap.Round,
+                    )
+                }
+                if (stage.closeOnComplete && stage.stars.size >= 3) {
+                    drawLine(
+                        color = GoldRing.copy(alpha = 0.70f),
+                        start = Offset(starsXs.last(), starsYs.last()),
+                        end = Offset(starsXs.first(), starsYs.first()),
+                        strokeWidth = minSide * 0.005f,
+                        cap = StrokeCap.Round,
+                    )
+                }
+                // 별 점
+                for (i in stage.stars.indices) {
+                    drawCircle(
+                        color = Color.White,
+                        radius = minSide * 0.010f,
+                        center = Offset(starsXs[i], starsYs[i]),
+                    )
+                    drawCircle(
+                        color = GoldRing.copy(alpha = 0.4f),
+                        radius = minSide * 0.018f,
+                        center = Offset(starsXs[i], starsYs[i]),
+                    )
+                }
+            }
+        }
+
+        // 우상단 진척도 뱃지.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black.copy(alpha = 0.35f))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        ) {
+            Text(
+                text = "✨ ${clearedStages.size} / 18",
+                color = GoldRing,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+            )
+        }
+
+        if (clearedStages.isEmpty()) {
+            Text(
+                text = "별자리를 완성하면\n여기에 모여요 ✨",
+                color = NightInk.copy(alpha = 0.75f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center),
             )
         }
     }

@@ -20,8 +20,10 @@ data class ConstellationStage(
     val stars: List<ConstellationStar>,
     /** true면 마지막 별과 첫 별을 자동으로 이어 닫힌 도형을 완성한다. */
     val closeOnComplete: Boolean = false,
-    /** 도감에 표시할 짧은 한 줄 이야기. */
+    /** 도감에 표시할 짧은 한 줄 요약. */
     val lore: String = "",
+    /** 도감 카드를 탭하면 보이는 자녀용 짧은 신화/이야기. */
+    val myth: String = "",
 )
 
 /** 3별 컷오프(이 시간 이하면 ★★★). */
@@ -58,6 +60,7 @@ object Constellation {
                 0.90f to 0.65f,
             ),
             lore = "지그재그로 솟은 작은 산봉우리예요.",
+            myth = "옛날 옛적, 부지런한 거인이 하늘에 닿으려고 흙을 쌓아 산봉우리를 만들었어요. 그때 흘린 땀방울이 별이 되어 산봉우리 위에 박혔답니다.",
         ),
         ConstellationStage(
             level = 2,
@@ -72,6 +75,7 @@ object Constellation {
                 0.88f to 0.30f,
             ),
             lore = "왕비의 의자 모양인 W 별자리예요.",
+            myth = "카시오페아 왕비는 자기 자랑이 너무 심했어요. 화가 난 신들이 왕비를 의자에 묶어 하늘에 매달았답니다. 지금도 W 모양으로 빛나고 있어요.",
         ),
         ConstellationStage(
             level = 3,
@@ -88,6 +92,7 @@ object Constellation {
                 0.80f to 0.40f,
             ),
             lore = "일곱 형제 별이 국자처럼 모였어요.",
+            myth = "사이좋은 일곱 형제가 매일 함께 놀았어요. 죽어서도 헤어지지 않으려고 일곱 별이 되어 국자처럼 하늘에 나란히 모였답니다.",
         ),
         ConstellationStage(
             level = 4,
@@ -105,6 +110,7 @@ object Constellation {
             ),
             closeOnComplete = true,
             lore = "바닷속을 헤엄치는 물고기 모양이에요.",
+            myth = "어느 맑은 강가, 작은 물고기가 하늘의 별을 향해 폴짝 뛰어올랐어요. 하늘 사람들이 그 모습이 너무 예뻐서 물고기를 별로 만들어 주었답니다.",
         ),
         ConstellationStage(
             level = 5,
@@ -125,6 +131,7 @@ object Constellation {
             ),
             closeOnComplete = true,
             lore = "다섯 갈래로 빛나는 큰 별 모양이에요.",
+            myth = "어두운 밤, 길을 잃은 아이를 위해 다섯 친구 별이 모여 큰 빛을 만들었어요. 그 다섯 빛이 모인 모양이 지금의 별 모양이 되었답니다.",
         ),
         ConstellationStage(
             level = 6,
@@ -146,6 +153,7 @@ object Constellation {
             ),
             closeOnComplete = true,
             lore = "푸른 바다의 거대한 고래예요.",
+            myth = "바다와 하늘이 친구이던 시절, 가장 큰 고래가 하늘로 올라가 바다를 그리워했어요. 신이 슬퍼하는 고래에게 별 옷을 입혀 밤하늘의 고래로 만들어 주었답니다.",
         ),
     )
 

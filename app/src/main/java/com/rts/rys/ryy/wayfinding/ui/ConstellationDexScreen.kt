@@ -3,6 +3,7 @@ package com.rts.rys.ryy.wayfinding.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +25,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.data.ConstellationRecordsRepository
 import com.rts.rys.ryy.wayfinding.game.Constellation
 import com.rts.rys.ryy.wayfinding.game.ConstellationStage
@@ -74,6 +80,9 @@ fun ConstellationDexScreen(onBack: () -> Unit) {
     val cleared = bests.values.count { it != null }
     val totalStars = entries.sumOf { it.stage.starsEarnedFor(bests[it.recordKey]) }
     val maxStars = total * 3
+
+    // 탭한 별자리의 신화 모달. null이면 닫힘.
+    var openMyth by remember { mutableStateOf<DexEntry?>(null) }
 
     Box(
         modifier = Modifier
@@ -153,6 +162,91 @@ fun ConstellationDexScreen(onBack: () -> Unit) {
                         title = entry.title,
                         stage = entry.stage,
                         bestMs = bests[entry.recordKey],
+                        onClick = if (bests[entry.recordKey] != null) {
+                            { openMyth = entry }
+                        } else null,
+                    )
+                }
+            }
+        }
+
+        openMyth?.let { entry ->
+            MythDialog(
+                title = entry.title,
+                emoji = entry.stage.revealEmoji,
+                myth = entry.stage.myth.ifBlank { entry.stage.lore },
+                onDismiss = { openMyth = null },
+                onSpeak = { SoundManager.speak(entry.title) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MythDialog(
+    title: String,
+    emoji: String,
+    myth: String,
+    onDismiss: () -> Unit,
+    onSpeak: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(12.dp, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF101A50), Color(0xFF2E3F8E))))
+                .border(2.dp, GoldRing.copy(alpha = 0.65f), RoundedCornerShape(28.dp))
+                .padding(24.dp),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(emoji, fontSize = 64.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        color = NightInk,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(17.dp))
+                            .background(GoldRing.copy(alpha = 0.22f))
+                            .border(1.dp, GoldRing.copy(alpha = 0.6f), RoundedCornerShape(17.dp))
+                            .clickable(onClick = onSpeak),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("🔊", fontSize = 16.sp)
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = myth,
+                    color = NightInk.copy(alpha = 0.92f),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp,
+                )
+                Spacer(Modifier.height(20.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(GoldRing)
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "닫기",
+                        color = Color(0xFF2A1A00),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
                     )
                 }
             }
@@ -165,6 +259,7 @@ private fun DexCard(
     title: String,
     stage: ConstellationStage,
     bestMs: Long?,
+    onClick: (() -> Unit)? = null,
 ) {
     val cleared = bestMs != null
     val stars = stage.starsEarnedFor(bestMs)
@@ -180,6 +275,7 @@ private fun DexCard(
                 color = if (cleared) GoldRing.copy(alpha = 0.5f) else Color.Transparent,
                 shape = RoundedCornerShape(20.dp),
             )
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

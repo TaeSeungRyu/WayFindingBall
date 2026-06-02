@@ -347,13 +347,16 @@ fun ConstellationGameScreen(
                                             comboFlashSec = 0.6f
                                             comboToastSec = 1.4f
                                             comboCount = 0
+                                            SoundManager.playGoal()
                                         }
-                                        SoundManager.playGoal()
+                                        // 별마다 다른 음정으로. order-1 = 방금 이은 별의 인덱스.
+                                        SoundManager.playStarTone(reached - 1)
                                         if (reached == stage.stars.size) {
                                             isNewBest = ConstellationRecordsRepository(context)
                                                 .recordKey(recordKey, elapsedMs)
                                             finished = true
                                             dragEnd = null
+                                            SoundManager.speak(stage.description)
                                             // 완성 폭죽 — 별마다 6개씩 사방으로.
                                             val pr = Random(stage.level * 17L + 91L)
                                             for (s in stage.stars) {
