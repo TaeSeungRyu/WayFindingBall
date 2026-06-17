@@ -26,7 +26,9 @@
       "Bash(findstr /s /i \"applicationId\" app\\\\build.gradle*)",
       "Bash(adb devices *)",
       "Bash(adb shell *)",
-      "PowerShell(adb shell *)"
+      "PowerShell(adb shell *)",
+      "Bash(python -c \"import PIL; print\\(PIL.__version__\\)\")",
+      "Bash(python *)"
     ]
   }
 }
