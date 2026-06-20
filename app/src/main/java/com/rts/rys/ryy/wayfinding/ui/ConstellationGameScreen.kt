@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.ConstellationRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.ConstellationStage
@@ -180,6 +182,9 @@ fun ConstellationGameScreen(
     // 콤보 상태 — 마지막 hit ms, 누적 카운트.
     var lastHitMs by remember(attemptId) { mutableLongStateOf(-1L) }
     var comboCount by remember(attemptId) { mutableIntStateOf(0) }
+    var paused by remember(stage.level) { mutableStateOf(false) }
+
+    BackHandler(enabled = !paused && !showResult) { paused = true }
 
     // 타이머 + 펄스 + drift + 별똥별 + 완성 연출 — 첫 별을 누른 뒤부터 시간 측정.
     LaunchedEffect(attemptId) {
@@ -189,6 +194,7 @@ fun ConstellationGameScreen(
         val rnd = Random(stage.level * 53L + 11L)
         while (!showResult) {
             val now = awaitFrame()
+            if (paused) { last = 0L; continue }
             if (last == 0L) { last = now; continue }
             val deltaNs = now - last
             val dt = deltaNs / 1_000_000_000f
@@ -250,7 +256,7 @@ fun ConstellationGameScreen(
                     .fillMaxWidth()
                     .height(48.dp)
             ) {
-                BackChip(onClick = onExit, modifier = Modifier.align(Alignment.CenterStart))
+                BackChip(onClick = { paused = true }, modifier = Modifier.align(Alignment.CenterStart))
                 Text(
                     text = "${reached} / ${stage.stars.size}",
                     fontSize = 22.sp,
@@ -452,6 +458,20 @@ fun ConstellationGameScreen(
                 isNewBest = isNewBest,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
+            )
+        }
+
+        if (paused && !showResult) {
+            val soundEnabled by AppSettings.soundEnabled
+            PauseDialog(
+                onResume = { paused = false },
+                onRestart = {
+                    paused = false
+                    attemptId += 1
+                },
+                onExit = onExit,
+                soundEnabled = soundEnabled,
+                onToggleSound = { AppSettings.setSoundEnabled(!soundEnabled) },
             )
         }
     }

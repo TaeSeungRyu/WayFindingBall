@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -139,6 +140,7 @@ fun ColorGameScreen(
     var chaserX by remember(attemptId) { mutableFloatStateOf(0f) }
     var chaserY by remember(attemptId) { mutableFloatStateOf(0f) }
     var showMemorize by remember(attemptId) { mutableStateOf(stage.memorizeOrder) }
+    var paused by remember(level) { mutableStateOf(false) }
     var reshuffleTimer by remember(attemptId) { mutableFloatStateOf(0f) }
     // 카드 뒤집기 공개: 시작은 전부 숨김. 3초마다 전체가 뒤집히며 보임↔숨김 전환.
     var floorVisible by remember(attemptId) { mutableStateOf(false) }
@@ -150,6 +152,8 @@ fun ColorGameScreen(
         if (sensorEnabled) tilt.start() else tilt.stop()
         onDispose { tilt.stop() }
     }
+
+    BackHandler(enabled = !paused && !finished) { paused = true }
 
     LaunchedEffect(attemptId) {
         physics.reset()
@@ -166,7 +170,7 @@ fun ColorGameScreen(
         var last = 0L
         while (!finished) {
             val now = awaitFrame()
-            if (showMemorize) { last = 0L; continue }  // 기억 단계 동안 정지
+            if (showMemorize || paused) { last = 0L; continue }  // 기억 단계/일시정지 동안 정지
             if (last == 0L) { last = now; continue }
             val dt = ((now - last).coerceAtMost(33_000_000L)) / 1_000_000_000f
             elapsedMs += (now - last) / 1_000_000L
@@ -314,7 +318,7 @@ fun ColorGameScreen(
                     .fillMaxWidth()
                     .height(48.dp)
             ) {
-                BackChip(onClick = onExit, modifier = Modifier.align(Alignment.CenterStart))
+                BackChip(onClick = { paused = true }, modifier = Modifier.align(Alignment.CenterStart))
                 Text(
                     text = "${score} / ${stage.targetCount}",
                     fontSize = 22.sp,
@@ -472,6 +476,22 @@ fun ColorGameScreen(
                 caught = caught,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
+            )
+        }
+
+        if (paused && !finished) {
+            val soundEnabled by AppSettings.soundEnabled
+            PauseDialog(
+                onResume = { paused = false },
+                onRestart = {
+                    paused = false
+                    attemptId += 1
+                },
+                onExit = onExit,
+                soundEnabled = soundEnabled,
+                onToggleSound = { AppSettings.setSoundEnabled(!soundEnabled) },
+                sensorEnabled = sensorEnabled,
+                onToggleSensor = { AppSettings.setSensorEnabled(!sensorEnabled) },
             )
         }
     }

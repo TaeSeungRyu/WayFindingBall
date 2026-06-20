@@ -54,7 +54,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.rts.rys.ryy.wayfinding.data.AchievementsRepository
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.BallSkins
@@ -79,7 +78,6 @@ import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.CreamBg
 import com.rts.rys.ryy.wayfinding.ui.theme.GoalGold
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
-import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
 import com.rts.rys.ryy.wayfinding.ui.theme.Lavender
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBlue
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
@@ -1341,38 +1339,19 @@ fun GameScreen(
         if (paused) {
             val soundEnabled by AppSettings.soundEnabled
             PauseDialog(
-                sensorEnabled = sensorEnabled,
-                soundEnabled = soundEnabled,
-                onToggleSensor = { AppSettings.setSensorEnabled(!sensorEnabled) },
-                onToggleSound = { AppSettings.setSoundEnabled(!soundEnabled) },
-                onCalibrate = { AppSettings.setSensorOffset(tilt.tiltX, tilt.tiltY) },
                 onResume = { paused = false },
                 onRestart = {
                     paused = false
                     attemptId++
                 },
-                onExit = onExit
+                onExit = onExit,
+                soundEnabled = soundEnabled,
+                onToggleSound = { AppSettings.setSoundEnabled(!soundEnabled) },
+                sensorEnabled = sensorEnabled,
+                onToggleSensor = { AppSettings.setSensorEnabled(!sensorEnabled) },
+                onCalibrate = { AppSettings.setSensorOffset(tilt.tiltX, tilt.tiltY) },
             )
         }
-    }
-}
-
-@Composable
-private fun PillToggleChip(label: String, enabled: Boolean, onClick: () -> Unit) {
-    val bg = if (enabled) SkyBlue else InkSoft
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = label,
-            color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
     }
 }
 
@@ -1428,80 +1407,6 @@ private fun BombIcon(state: BombState, modifier: Modifier = Modifier) {
                 center = fuseEnd
             )
         }
-    }
-}
-
-@Composable
-private fun PauseDialog(
-    sensorEnabled: Boolean,
-    soundEnabled: Boolean,
-    onToggleSensor: () -> Unit,
-    onToggleSound: () -> Unit,
-    onCalibrate: () -> Unit,
-    onResume: () -> Unit,
-    onRestart: () -> Unit,
-    onExit: () -> Unit
-) {
-    Dialog(onDismissRequest = onResume) {
-        Box(
-            modifier = Modifier
-                .size(width = 320.dp, height = if (sensorEnabled) 420.dp else 360.dp)
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color.White)
-                .padding(24.dp)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("잠깐 멈췄어요", color = InkDark, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PillToggleChip(
-                        label = if (sensorEnabled) "센서 ON" else "센서 OFF",
-                        enabled = sensorEnabled,
-                        onClick = onToggleSensor
-                    )
-                    PillToggleChip(
-                        label = if (soundEnabled) "소리 ON" else "소리 OFF",
-                        enabled = soundEnabled,
-                        onClick = onToggleSound
-                    )
-                }
-                if (sensorEnabled) {
-                    DialogButton(
-                        label = "지금 각도를 가운데로",
-                        bg = Lavender,
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onCalibrate
-                    )
-                }
-                DialogButton(
-                    label = "다시 시작",
-                    bg = SunYellow,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onRestart
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    DialogButton("그만할래요", CoralPink, modifier = Modifier.weight(1f), onClick = onExit)
-                    DialogButton("계속해요", SkyBlue, modifier = Modifier.weight(1f), onClick = onResume)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DialogButton(label: String, bg: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .height(56.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(bg)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 

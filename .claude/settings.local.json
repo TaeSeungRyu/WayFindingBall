@@ -31,7 +31,8 @@
       "Bash(python *)",
       "PowerShell(Get-Content \"D:\\\\dev\\\\android\\\\ChildrenWayfinding\\\\keystore.properties\" | ForEach-Object { if \\($_ -match '='\\) { $parts = $_ -split '=', 2; \"$\\($parts[0]\\)=[len:$\\($parts[1].Length\\)]\" } else { $_ } })",
       "Bash(./gradlew clean *)",
-      "Bash(./gradlew bundleRelease)"
+      "Bash(./gradlew bundleRelease)",
+      "PowerShell(.\\\\gradlew.bat bundleRelease)"
     ]
   }
 }

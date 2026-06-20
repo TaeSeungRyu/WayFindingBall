@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -160,11 +161,14 @@ fun HitGameScreen(
     var finished by remember(attemptId) { mutableStateOf(false) }
     var isNewBest by remember(attemptId) { mutableStateOf(false) }
     var pulse by remember(attemptId) { mutableFloatStateOf(0f) }
+    var paused by remember(level) { mutableStateOf(false) }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
         onDispose { tilt.stop() }
     }
+
+    BackHandler(enabled = !paused && !finished) { paused = true }
 
     LaunchedEffect(attemptId) {
         physics.reset()
@@ -177,6 +181,7 @@ fun HitGameScreen(
         var last = 0L
         while (!finished) {
             val now = awaitFrame()
+            if (paused) { last = 0L; continue }
             if (last == 0L) { last = now; continue }
             val dt = ((now - last).coerceAtMost(33_000_000L)) / 1_000_000_000f
             elapsedMs += (now - last) / 1_000_000L
@@ -397,7 +402,7 @@ fun HitGameScreen(
                     .fillMaxWidth()
                     .height(48.dp)
             ) {
-                BackChip(onClick = onExit, modifier = Modifier.align(Alignment.CenterStart))
+                BackChip(onClick = { paused = true }, modifier = Modifier.align(Alignment.CenterStart))
                 Text(
                     text = "$score / $totalTargets",
                     fontSize = 22.sp,
@@ -486,6 +491,22 @@ fun HitGameScreen(
                 isNewBest = isNewBest,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
+            )
+        }
+
+        if (paused && !finished) {
+            val soundEnabled by AppSettings.soundEnabled
+            PauseDialog(
+                onResume = { paused = false },
+                onRestart = {
+                    paused = false
+                    attemptId += 1
+                },
+                onExit = onExit,
+                soundEnabled = soundEnabled,
+                onToggleSound = { AppSettings.setSoundEnabled(!soundEnabled) },
+                sensorEnabled = sensorEnabled,
+                onToggleSensor = { AppSettings.setSensorEnabled(!sensorEnabled) },
             )
         }
     }

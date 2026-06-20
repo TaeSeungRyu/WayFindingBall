@@ -4,7 +4,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -162,12 +165,20 @@ fun MazeApp() {
         backStack[backStack.lastIndex] = screen
     }
 
+    val context = LocalContext.current
+    var lastBackPressMs by remember { mutableLongStateOf(0L) }
     BackHandler {
         if (backStack.size > 1) {
             forward = false
             backStack.removeAt(backStack.lastIndex)
         } else {
-            activity?.finish()
+            val nowMs = SystemClock.uptimeMillis()
+            if (nowMs - lastBackPressMs < 2000L) {
+                activity?.finish()
+            } else {
+                lastBackPressMs = nowMs
+                Toast.makeText(context, "한 번 더 누르면 종료해요", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
