@@ -2,15 +2,18 @@
 
 현재 `RecordsScreen` / `RecordsRepository` / `GameRecord` 의 한계를 정리하고, 강화 작업과 추가 기능 아이디어를 모은 문서입니다.
 
+> **상태 (2026-06-30 기준):** 화면은 이 문서가 가정한 "시도별 리스트"가 아니라 **레벨별 최고기록 요약** 방향으로 다시 구현되었습니다. 아래 1번을 현재 코드 기준으로 갱신했고, 강화 항목 중 완료된 것은 ✅로 표시했습니다. 나머지는 여전히 열린 아이디어입니다.
+
 ---
 
-## 1. 현재 상태 요약
+## 1. 현재 상태 요약 (2026-06-30 갱신)
 
-- **데이터 모델 (`GameRecord`)**: `stageId`, `stageName`, `elapsedMs`, `timestamp` 4개 필드만 보관.
-- **저장소 (`RecordsRepository`)**: `SharedPreferences` + `JSONArray` 기반. `load / add / clear` 만 존재. 정렬은 최신순(timestamp 내림차순).
-- **화면 (`RecordsScreen`)**: 카드 형태로 스테이지번호 / 이름 / 날짜 / 걸린시간만 보여주는 단순 리스트. 빈 상태 메시지만 존재.
-- **별점 (`MazePar.starsFor`)**: 결과 화면(`ResultScreen`)에서만 계산되며 **저장되지 않음**.
-- **최고 기록**: `ResultScreen` 진입 시점에 같은 stageId의 최소 elapsedMs 만 한 번 비교.
+- **데이터 모델 (`GameRecord`)**: `stageId`, `stageName`, `elapsedMs`, `timestamp` + `cleared`(무한모드 도달 단계). `earnedStars` / `level` / `isCustom` 은 아직 미도입 — 별점은 화면에서 `MazePar.starsFor`로 매번 계산, level은 `Stages.byId(stageId).level`로 조회.
+- **저장소 (`RecordsRepository`)**: `SharedPreferences` + `JSONArray` 기반. `load / add / clear`. ✅ **보관 한도 정책 도입됨** — `MAX_RECORDS = 500`, 초과 시 스테이지별 최고기록은 보존하고 나머지는 최신순으로 trim(`trim()`). delete/bestByStage/summary 등 조회 API는 아직 없음.
+- **화면 (`RecordsScreen`)**: 시도별 리스트가 아니라 **세 게임 모드별(미로 찾기 / 색깔 찾기 / 굴려서 맞히기) 레벨 카드 요약**. 미로는 레벨 1~13(획득 별 `★ N/M`)·14~20(무한모드 최고 도달 단계)로 묶고, 색깔·굴리기는 레벨별 최고 시간 표시. ✅ 별 배지·✅ 카드별 공유 버튼(`ShareUtils.renderRecordCard`) 포함.
+- **별점**: `MazePar.starsFor`로 화면에서 계산해 카드에 표시(✅). 다만 `GameRecord`에 영구 저장하지는 않음.
+- **최고 기록**: 화면에서 stageId별 `minByOrNull { elapsedMs }`로 집계. `ResultScreen`의 신기록 비교는 여전히 그 자리에서 수행.
+- **갱신**: `RecordsScreen`은 아직 `LaunchedEffect(Unit)` 1회 로드 — 게임 후 복귀 시 자동 재로딩 미적용(아래 2.3 열린 항목).
 
 ---
 
@@ -29,7 +32,7 @@
 - [ ] `deleteByStage(stageId)` — 특정 스테이지의 기록만 일괄 삭제
 - [ ] `bestByStage(stageId): GameRecord?` — 스테이지별 최고 기록 조회 (현재는 화면에서 매번 filter+min)
 - [ ] `summary(): RecordsSummary` — 총 플레이 횟수, 누적 별, 평균 시간 등 집계
-- [ ] **보관 한도 정책** — 기록이 무한히 쌓이지 않도록 stage별 최근 N개 또는 전체 최대치 (예: 500개) 제한
+- [x] **보관 한도 정책** — ✅ 구현됨. `MAX_RECORDS = 500`, 초과 시 스테이지별 최고기록 보존 + 나머지 최신순 trim (`RecordsRepository.trim()`)
 - [ ] (선택) SharedPreferences → DataStore 또는 Room 마이그레이션 검토
   - 현재 모든 기록을 통째로 JSON 문자열로 직렬화 → 기록이 늘어나면 add 비용 O(n)
   - Room으로 가면 정렬/필터/집계 쿼리가 쉬워짐
@@ -39,7 +42,7 @@
 - [ ] **정렬 선택** — 최신순 / 빠른시간순 / 별점순 / 스테이지순 (토글 또는 segmented control)
 - [ ] **난이도 필터** — 전체 / 난이도1 / 난이도2 / 난이도3 / 난이도4 / 커스텀
 - [ ] **스테이지별 그룹/접기** — 같은 stageId를 묶고 펼치면 시도 이력이 나오는 형태 (옵션)
-- [ ] **카드에 별점 배지** 추가 — 현재 시간만 강조됨
+- [x] **카드에 별점 배지** 추가 — ✅ 미로 레벨 카드에 획득 별 `★ N/M` 표시 (`RecordsScreen.LevelBestCard`)
 - [ ] **"최고 기록" 뱃지** — 해당 스테이지의 베스트인 항목에 왕관/별 표시
 - [ ] **개별 항목 스와이프 삭제** 또는 길게 눌러 삭제
 - [ ] **전체 삭제 버튼** (이미 repo에 `clear()` 존재) — 상단 우측 + 확인 다이얼로그
@@ -67,7 +70,7 @@
 - **도전 과제 화면** — 진행 중/완료된 과제 목록. 기록 보기와 분리된 별도 탭
 
 ### 3.3 공유 / 백업
-- **결과 공유** — 최고 기록 스크린샷을 카카오톡/사진첩으로 저장. 별점 + 시간 + 스테이지 이름 디자인된 이미지 생성
+- ✅ **결과 공유** — 구현됨. 기록 카드의 공유 버튼이 별점/시간/레벨 디자인 이미지를 생성해 공유 (`ShareUtils.renderRecordCard` + `ShareUtils.shareBitmap`)
 - **기록 내보내기/가져오기** — JSON 파일로 백업, 기기 변경 시 복원 (Storage Access Framework)
 - **클라우드 동기화** — Google 계정 기반 (선택, 권한/개인정보 이슈로 신중하게)
 
