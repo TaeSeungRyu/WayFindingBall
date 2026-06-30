@@ -56,6 +56,7 @@ fun HomeScreen(
     onDaily: () -> Unit,
     onRecords: () -> Unit,
     onCollection: () -> Unit,
+    onVersus: () -> Unit = {},
     onTutorial: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -148,6 +149,17 @@ fun HomeScreen(
                 bg = SkyBlue,
                 onClick = onCollection
             )
+            // 1:1 대전모드 — Nearby Connections는 위치 권한 없이 동작하려면 API 32+ 필요.
+            // 구버전 기기에서는 진입점을 아예 숨긴다.
+            if (android.os.Build.VERSION.SDK_INT >= 32) {
+                Spacer(Modifier.height(20.dp))
+                BigButton(
+                    label = "1:1 대전모드",
+                    emoji = "🤝",
+                    bg = CoralPink,
+                    onClick = onVersus
+                )
+            }
 
             Spacer(Modifier.height(24.dp))
             SettingRow(

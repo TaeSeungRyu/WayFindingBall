@@ -21,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -34,6 +35,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
+import com.rts.rys.ryy.wayfinding.data.VersusNames
+import com.rts.rys.ryy.wayfinding.net.NearbyManager
 import com.rts.rys.ryy.wayfinding.game.Constellation
 import com.rts.rys.ryy.wayfinding.game.DailyChallenge
 import com.rts.rys.ryy.wayfinding.game.Stages
@@ -56,6 +59,11 @@ import com.rts.rys.ryy.wayfinding.ui.ResultScreen
 import com.rts.rys.ryy.wayfinding.ui.SplashScreen
 import com.rts.rys.ryy.wayfinding.ui.StageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.TutorialScreen
+import com.rts.rys.ryy.wayfinding.ui.VersusHubScreen
+import com.rts.rys.ryy.wayfinding.ui.VersusLobbyScreen
+import com.rts.rys.ryy.wayfinding.ui.VersusMazeScreen
+import com.rts.rys.ryy.wayfinding.ui.VersusNameScreen
+import com.rts.rys.ryy.wayfinding.ui.VersusRecordsScreen
 import com.rts.rys.ryy.wayfinding.ui.theme.ChildrenWayfindingTheme
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
@@ -120,6 +128,11 @@ private sealed class Screen {
     data object Records : Screen()
     data object Collection : Screen()
     data class Editor(val level: Int) : Screen()
+    data object VersusHub : Screen()
+    data object VersusName : Screen()
+    data object VersusRecords : Screen()
+    data class VersusLobby(val game: Char) : Screen()
+    data class VersusMaze(val game: Char) : Screen()
 }
 
 @Composable
@@ -166,6 +179,8 @@ fun MazeApp() {
     }
 
     val context = LocalContext.current
+    // 대전 세션 동안 로비~게임 화면이 공유하는 Nearby 매니저.
+    var versusManager by remember { mutableStateOf<NearbyManager?>(null) }
     var lastBackPressMs by remember { mutableLongStateOf(0L) }
     BackHandler {
         if (backStack.size > 1) {
@@ -210,6 +225,12 @@ fun MazeApp() {
                 },
                 onRecords = { push(Screen.Records) },
                 onCollection = { push(Screen.Collection) },
+                onVersus = {
+                    if (AppSettings.versusName.value.isBlank()) {
+                        AppSettings.setVersusName(VersusNames.randomDefault())
+                    }
+                    push(Screen.VersusHub)
+                },
                 onTutorial = { showTutorial = true }
             )
             Screen.ModeSelect -> ModeSelectScreen(
@@ -293,6 +314,54 @@ fun MazeApp() {
             )
             Screen.Records -> RecordsScreen(onBack = { pop() })
             Screen.Collection -> CollectionScreen(onBack = { pop() })
+            Screen.VersusHub -> VersusHubScreen(
+                onBack = {
+                    versusManager?.stop()
+                    versusManager = null
+                    pop()
+                },
+                onSelectGame = { g ->
+                    versusManager?.stop()
+                    versusManager = NearbyManager(
+                        context.applicationContext,
+                        AppSettings.versusName.value.ifBlank { "친구" }
+                    )
+                    push(Screen.VersusLobby(g))
+                },
+                onRecords = { push(Screen.VersusRecords) },
+                onName = { push(Screen.VersusName) }
+            )
+            Screen.VersusName -> VersusNameScreen(onBack = { pop() })
+            Screen.VersusRecords -> VersusRecordsScreen(onBack = { pop() })
+            is Screen.VersusLobby -> {
+                val mgr = versusManager
+                if (mgr == null) {
+                    LaunchedEffect(Unit) { popUntil { it is Screen.VersusHub } }
+                } else {
+                    VersusLobbyScreen(
+                        game = screen.game,
+                        manager = mgr,
+                        onBack = { mgr.stop(); pop() },
+                        onMatchReady = { replaceTop(Screen.VersusMaze(screen.game)) }
+                    )
+                }
+            }
+            is Screen.VersusMaze -> {
+                val mgr = versusManager
+                if (mgr == null) {
+                    LaunchedEffect(Unit) { popUntil { it is Screen.VersusHub } }
+                } else {
+                    VersusMazeScreen(
+                        game = screen.game,
+                        manager = mgr,
+                        onExit = {
+                            mgr.stop()
+                            versusManager = null
+                            popUntil { it is Screen.VersusHub }
+                        }
+                    )
+                }
+            }
             is Screen.Editor -> MazeEditorScreen(
                 initialLevel = screen.level,
                 onSaved = { pop() },

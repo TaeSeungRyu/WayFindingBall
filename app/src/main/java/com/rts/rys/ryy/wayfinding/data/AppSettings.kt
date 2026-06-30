@@ -18,6 +18,7 @@ object AppSettings {
     private const val KEY_TUTORIAL_SEEN = "tutorial_seen"
     private const val KEY_BIRTH_MONTH = "birth_month"
     private const val KEY_BIRTH_DAY = "birth_day"
+    private const val KEY_VERSUS_NAME = "versus_name"
 
     private var prefs: SharedPreferences? = null
 
@@ -49,6 +50,10 @@ object AppSettings {
     private val _birthDay = mutableIntStateOf(0)
     val birthDay: MutableState<Int> get() = _birthDay
 
+    // 1:1 대전에서 상대에게 보일 닉네임. 빈 문자열이면 미설정.
+    private val _versusName = mutableStateOf("")
+    val versusName: MutableState<String> get() = _versusName
+
     fun init(context: Context) {
         if (prefs == null) {
             val p = context.applicationContext
@@ -63,7 +68,13 @@ object AppSettings {
             _tutorialSeen.value = p.getBoolean(KEY_TUTORIAL_SEEN, false)
             _birthMonth.value = p.getInt(KEY_BIRTH_MONTH, 0)
             _birthDay.value = p.getInt(KEY_BIRTH_DAY, 0)
+            _versusName.value = p.getString(KEY_VERSUS_NAME, "") ?: ""
         }
+    }
+
+    fun setVersusName(value: String) {
+        _versusName.value = value
+        prefs?.edit()?.putString(KEY_VERSUS_NAME, value)?.apply()
     }
 
     fun setBirthday(month: Int, day: Int) {
