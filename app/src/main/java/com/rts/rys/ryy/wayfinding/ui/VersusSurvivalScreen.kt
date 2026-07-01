@@ -398,7 +398,7 @@ fun VersusSurvivalScreen(
         )
     }
 
-    val elapsedSec = (clockMs / 1000L).toInt()
+    val elapsedText = formatVersusSeconds(clockMs)
 
     Box(
         modifier = Modifier
@@ -442,7 +442,7 @@ fun VersusSurvivalScreen(
                             letterSpacing = 2.sp
                         )
                         Text(
-                            text = "${elapsedSec}초 버팀",
+                            text = "${elapsedText}초 버팀",
                             color = InkDark,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.ExtraBold
@@ -590,7 +590,7 @@ private fun SurvivalResultOverlay(
         VersusResult.DRAW -> Triple("둘 다 살아남았어요!", "🤝", Color(0xFF9E9E9E))
         VersusResult.OPPONENT_LEFT -> Triple("상대가 나갔어요", "🏁", WallGreen)
     }
-    val sub = myCaughtMs?.let { "${(it / 1000L)}초 버팀" } ?: "60초 생존!"
+    val sub = myCaughtMs?.let { "${formatVersusSeconds(it)}초 버팀" } ?: "60초 생존!"
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
         contentAlignment = Alignment.Center

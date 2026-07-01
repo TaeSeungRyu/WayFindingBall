@@ -321,7 +321,7 @@ fun VersusMazeScreen(
         )
     }
 
-    val remainSec = ((TIME_LIMIT_MS - clockMs).coerceAtLeast(0L) / 1000L).toInt()
+    val remainMs = (TIME_LIMIT_MS - clockMs).coerceAtLeast(0L)
 
     Box(
         modifier = Modifier
@@ -346,8 +346,8 @@ fun VersusMazeScreen(
                     BackChip(onClick = onExit)
                     Spacer(Modifier.weight(1f))
                     Text(
-                        text = "${remainSec}초",
-                        color = if (remainSec <= 10) CoralPink else InkDark,
+                        text = "${formatVersusSeconds(remainMs)}초",
+                        color = if (remainMs <= 10_000L) CoralPink else InkDark,
                         fontSize = 26.sp,
                         fontWeight = FontWeight.Black
                     )

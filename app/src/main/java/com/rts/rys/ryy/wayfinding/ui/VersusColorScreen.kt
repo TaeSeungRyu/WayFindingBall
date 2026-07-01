@@ -304,7 +304,7 @@ fun VersusColorScreen(
         )
     }
 
-    val remainSec = ((TIME_LIMIT_MS - clockMs).coerceAtLeast(0L) / 1000L).toInt()
+    val remainMs = (TIME_LIMIT_MS - clockMs).coerceAtLeast(0L)
     val targetZone = targetSeq?.getOrNull(currentIdx)?.let { zones.getOrNull(it) }
 
     Box(
@@ -331,7 +331,7 @@ fun VersusColorScreen(
                     Text("완료!", color = InkDark, fontSize = 20.sp, fontWeight = FontWeight.Black)
                 }
                 Spacer(Modifier.weight(1f))
-                Text("${remainSec}초", color = InkDark, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                Text("${formatVersusSeconds(remainMs)}초", color = InkDark, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
             }
             Spacer(Modifier.height(8.dp))
             VersusProgressBars(myProgress = myProgress, oppProgress = oppProgress, oppName = manager.peerName ?: "친구")

@@ -308,7 +308,7 @@ fun VersusHitScreen(
         )
     }
 
-    val remainSec = ((TIME_LIMIT_MS - clockMs).coerceAtLeast(0L) / 1000L).toInt()
+    val remainMs = (TIME_LIMIT_MS - clockMs).coerceAtLeast(0L)
     val remaining = (targets?.size ?: 0) - hitCount
 
     Box(
@@ -324,7 +324,7 @@ fun VersusHitScreen(
                 Spacer(Modifier.weight(1f))
                 Text("남은 표적 $remaining", color = InkDark, fontSize = 20.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.weight(1f))
-                Text("${remainSec}초", color = InkDark, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                Text("${formatVersusSeconds(remainMs)}초", color = InkDark, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
             }
             Spacer(Modifier.height(8.dp))
             VersusProgressBars(myProgress = myProgress, oppProgress = oppProgress, oppName = manager.peerName ?: "친구")

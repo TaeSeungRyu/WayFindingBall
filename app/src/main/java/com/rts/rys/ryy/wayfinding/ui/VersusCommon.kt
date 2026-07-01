@@ -34,6 +34,12 @@ enum class VersusPhase { WAITING, COUNTDOWN, RACE, RESULT }
 /** 상대 고스트 표시 색(모든 대전 공용). */
 val VersusGhostColor = Color(0xFF7E57C2)
 
+/** 밀리초를 "N.NN초" 형태(소수 둘째 자리)로 포맷. 대전 시간 표시 공용. */
+fun formatVersusSeconds(ms: Long): String {
+    val cs = (ms.coerceAtLeast(0L)) / 10L   // centiseconds
+    return "%d.%02d".format(cs / 100L, cs % 100L)
+}
+
 /** 레이스형 판정: 완주 시간이 빠른 쪽 승리. */
 fun versusDecideByTime(mine: Long, opp: Long): VersusResult = when {
     mine < opp -> VersusResult.WIN
