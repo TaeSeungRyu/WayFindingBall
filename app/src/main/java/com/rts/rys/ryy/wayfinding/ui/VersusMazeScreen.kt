@@ -51,19 +51,21 @@ import com.rts.rys.ryy.wayfinding.data.VersusResult
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.Maze
 import com.rts.rys.ryy.wayfinding.game.SquashAxis
-import com.rts.rys.ryy.wayfinding.game.Stages
+import com.rts.rys.ryy.wayfinding.game.generateRandomMaze
 import com.rts.rys.ryy.wayfinding.game.themeForLevel
 import com.rts.rys.ryy.wayfinding.net.NearbyManager
 import com.rts.rys.ryy.wayfinding.net.NearbyStatus
 import com.rts.rys.ryy.wayfinding.net.VersusProtocol
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
+import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.delay
 import kotlin.math.floor
+import kotlin.random.Random
 
 private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
@@ -72,8 +74,9 @@ private const val KEYPAD_MAX_SPEED = 14f
 
 private const val TIME_LIMIT_MS = 60_000L
 private const val FINISH_GRACE_MS = 5_000L
+private const val MAZE_SIZE = 13
 
-private enum class Phase { COUNTDOWN, RACE, RESULT }
+private enum class Phase { WAITING, COUNTDOWN, RACE, RESULT }
 
 private val GhostColor = Color(0xFF7E57C2)
 
@@ -84,36 +87,35 @@ fun VersusMazeScreen(
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
-    // v1: 미로 찾기 2단계 고정 (양쪽 동일 프리셋)
-    val maze = remember { Stages.byLevel(2).first().maze }
-    val physics = remember { BallPhysics(maze) }
     val theme = remember { themeForLevel(2) }
     val currentSkin = remember { BallSkins.byId(AchievementsRepository(context).loadCurrentSkinId()) }
     val tilt = remember { com.rts.rys.ryy.wayfinding.game.TiltSensor(context) }
     val sensorEnabled by AppSettings.sensorEnabled
 
-    val distFromGoal = remember { bfsDistFromGoal(maze) }
-    val startDist = remember {
-        distFromGoal[maze.startRow][maze.startCol].coerceAtLeast(1)
-    }
+    // 공유 시드로 양쪽이 동일한 무작위 맵을 생성한다(규칙 1).
+    var seed by remember { mutableStateOf<Long?>(null) }
+    var startSignal by remember { mutableStateOf(false) }
+    val maze = remember(seed) { seed?.let { generateRandomMaze(MAZE_SIZE, Random(it)) } }
+    val physics = remember(maze) { maze?.let { BallPhysics(it) } }
+    val distFromGoal = remember(maze) { maze?.let { bfsDistFromGoal(it) } }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
         onDispose { tilt.stop() }
     }
 
-    var phase by remember { mutableStateOf(Phase.COUNTDOWN) }
+    var phase by remember { mutableStateOf(Phase.WAITING) }
     var countdownN by remember { mutableIntStateOf(3) }
 
-    var ballX by remember { mutableFloatStateOf(physics.x) }
-    var ballY by remember { mutableFloatStateOf(physics.y) }
+    var ballX by remember { mutableFloatStateOf(1.5f) }
+    var ballY by remember { mutableFloatStateOf(1.5f) }
     var ballRotation by remember { mutableFloatStateOf(0f) }
     var ballHeading by remember { mutableFloatStateOf(0f) }
     var ballSquash by remember { mutableFloatStateOf(0f) }
     var ballSquashIsX by remember { mutableStateOf(false) }
 
-    var oppX by remember { mutableFloatStateOf(maze.startCol + 0.5f) }
-    var oppY by remember { mutableFloatStateOf(maze.startRow + 0.5f) }
+    var oppX by remember { mutableFloatStateOf(1.5f) }
+    var oppY by remember { mutableFloatStateOf(1.5f) }
     var oppProgress by remember { mutableFloatStateOf(0f) }
 
     var clockMs by remember { mutableLongStateOf(0L) }
@@ -125,10 +127,23 @@ fun VersusMazeScreen(
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
 
+    // 호스트: 시드 생성 후 SEED → START 전송, 자기도 시작.
+    LaunchedEffect(Unit) {
+        if (manager.isHost) {
+            val s = Random.Default.nextLong()
+            seed = s
+            manager.send(VersusProtocol.seed(s))
+            manager.send(VersusProtocol.start())
+            startSignal = true
+        }
+    }
+
     // 수신 처리
     DisposableEffect(manager) {
         manager.onMessage = { bytes ->
             when (val m = VersusProtocol.parse(bytes)) {
+                is VersusProtocol.Msg.Seed -> if (seed == null) seed = m.seed
+                is VersusProtocol.Msg.Start -> startSignal = true
                 is VersusProtocol.Msg.Pos -> {
                     oppX = m.x; oppY = m.y; oppProgress = m.progress
                 }
@@ -141,14 +156,30 @@ fun VersusMazeScreen(
         onDispose { manager.onMessage = null }
     }
 
+    // 준비 단계에서 상대가 끊기면 나간다.
+    LaunchedEffect(manager.status) {
+        if (manager.status == NearbyStatus.DISCONNECTED && result == null && phase == Phase.WAITING) {
+            onExit()
+        }
+    }
+
     BackHandler { onExit() }
 
-    // 게임 루프
-    LaunchedEffect(Unit) {
+    val ready = physics != null && startSignal
+
+    // 게임 루프 — 준비 완료 시 카운트다운 후 레이스.
+    LaunchedEffect(ready) {
+        if (!ready) return@LaunchedEffect
+        val phys = physics ?: return@LaunchedEffect
+        val dist = distFromGoal ?: return@LaunchedEffect
+        val mz = maze ?: return@LaunchedEffect
+        val startDist = dist[mz.startRow][mz.startCol].coerceAtLeast(1)
+
+        phase = Phase.COUNTDOWN
         for (n in 3 downTo 1) { countdownN = n; delay(900) }
         phase = Phase.RACE
-        physics.reset()
-        ballX = physics.x; ballY = physics.y
+        phys.reset()
+        ballX = phys.x; ballY = phys.y
 
         var last = 0L
         var posAccumMs = 0L
@@ -174,25 +205,25 @@ fun VersusMazeScreen(
                 if (useKeypad) {
                     ax = kx * KEYPAD_ACCEL_GAIN
                     ay = ky * KEYPAD_ACCEL_GAIN
-                    physics.maxSpeed = KEYPAD_MAX_SPEED
+                    phys.maxSpeed = KEYPAD_MAX_SPEED
                 } else {
                     ax = sx * SENSOR_ACCEL_GAIN
                     ay = sy * SENSOR_ACCEL_GAIN
-                    physics.maxSpeed = if (sensorEnabled) SENSOR_MAX_SPEED else KEYPAD_MAX_SPEED
+                    phys.maxSpeed = if (sensorEnabled) SENSOR_MAX_SPEED else KEYPAD_MAX_SPEED
                 }
-                val reached = physics.step(dt, ax, ay)
-                ballX = physics.x
-                ballY = physics.y
-                ballRotation = physics.rotation
-                ballHeading = physics.headingRad
-                ballSquash = physics.squashAmount
-                ballSquashIsX = physics.squashAxis == SquashAxis.X
-                myProgress = progressOf(distFromGoal, startDist, physics.x, physics.y)
+                val reached = phys.step(dt, ax, ay)
+                ballX = phys.x
+                ballY = phys.y
+                ballRotation = phys.rotation
+                ballHeading = phys.headingRad
+                ballSquash = phys.squashAmount
+                ballSquashIsX = phys.squashAxis == SquashAxis.X
+                myProgress = progressOf(dist, startDist, phys.x, phys.y)
 
                 posAccumMs += deltaMs
                 if (posAccumMs >= 66L) {
                     posAccumMs = 0L
-                    manager.send(VersusProtocol.pos(physics.x, physics.y, myProgress))
+                    manager.send(VersusProtocol.pos(phys.x, phys.y, myProgress))
                 }
                 if (reached) {
                     myFinishMs = clockMs
@@ -241,77 +272,78 @@ fun VersusMazeScreen(
             .windowInsetsPadding(WindowInsets.systemBars)
             .padding(16.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // HUD
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        if (maze == null) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                BackChip(onClick = onExit)
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "${remainSec}초",
-                    color = if (remainSec <= 10) CoralPink else InkDark,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Black
-                )
-                Spacer(Modifier.weight(1f))
-                // 균형용 빈 공간
-                Spacer(Modifier.size(64.dp))
+                Text("🛜", fontSize = 56.sp)
+                Spacer(Modifier.height(12.dp))
+                Text("친구와 준비 중이에요…", color = InkDark, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
             }
-            Spacer(Modifier.height(8.dp))
-            ProgressBars(myProgress = myProgress, oppProgress = oppProgress, oppName = manager.peerName ?: "친구")
-            Spacer(Modifier.height(10.dp))
-
-            // 미로 + 상대 고스트
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                MazeCanvas(
-                    maze = maze,
-                    ballX = ballX,
-                    ballY = ballY,
-                    rotation = ballRotation,
-                    squashAmount = ballSquash,
-                    squashAxisIsX = ballSquashIsX,
-                    headingRad = ballHeading,
-                    theme = theme,
-                    ballSkin = currentSkin,
-                    modifier = Modifier.matchParentSize()
-                )
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    val cs = minOf(size.width / maze.cols, size.height / maze.rows)
-                    val ox = (size.width - cs * maze.cols) / 2f
-                    val oy = (size.height - cs * maze.rows) / 2f
-                    val center = Offset(ox + oppX * cs, oy + oppY * cs)
-                    val r = cs * 0.34f
-                    drawCircle(GhostColor.copy(alpha = 0.40f), r, center)
-                    drawCircle(GhostColor.copy(alpha = 0.85f), r, center, style = Stroke(width = cs * 0.06f))
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    BackChip(onClick = onExit)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "${remainSec}초",
+                        color = if (remainSec <= 10) CoralPink else InkDark,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.size(64.dp))
                 }
-            }
+                Spacer(Modifier.height(8.dp))
+                ProgressBars(myProgress = myProgress, oppProgress = oppProgress, oppName = manager.peerName ?: "친구")
+                Spacer(Modifier.height(10.dp))
 
-            Spacer(Modifier.height(10.dp))
-            // D-pad (센서 없이도 조작)
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                DPad(
-                    onInput = { dx, dy -> kx = dx; ky = dy },
-                    enabled = phase == Phase.RACE && myFinishMs == null
-                )
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    MazeCanvas(
+                        maze = maze,
+                        ballX = ballX,
+                        ballY = ballY,
+                        rotation = ballRotation,
+                        squashAmount = ballSquash,
+                        squashAxisIsX = ballSquashIsX,
+                        headingRad = ballHeading,
+                        theme = theme,
+                        ballSkin = currentSkin,
+                        modifier = Modifier.matchParentSize()
+                    )
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        val cs = minOf(size.width / maze.cols, size.height / maze.rows)
+                        val ox = (size.width - cs * maze.cols) / 2f
+                        val oy = (size.height - cs * maze.rows) / 2f
+                        val center = Offset(ox + oppX * cs, oy + oppY * cs)
+                        val r = cs * 0.34f
+                        drawCircle(GhostColor.copy(alpha = 0.40f), r, center)
+                        drawCircle(GhostColor.copy(alpha = 0.85f), r, center, style = Stroke(width = cs * 0.06f))
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    DPad(
+                        onInput = { dx, dy -> kx = dx; ky = dy },
+                        enabled = phase == Phase.RACE && myFinishMs == null
+                    )
+                }
             }
         }
 
         if (phase == Phase.COUNTDOWN) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text("$countdownN", color = Color.White, fontSize = 96.sp, fontWeight = FontWeight.Black)
             }
         }
 
-        result?.let { res ->
-            ResultOverlay(result = res, onExit = onExit)
-        }
+        result?.let { res -> ResultOverlay(result = res, onExit = onExit) }
     }
 }
 
@@ -361,9 +393,7 @@ private fun ResultOverlay(result: VersusResult, onExit: () -> Unit) {
         VersusResult.OPPONENT_LEFT -> Triple("상대가 나갔어요", "🏁", WallGreen)
     }
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f)),
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
         contentAlignment = Alignment.Center
     ) {
         Column(

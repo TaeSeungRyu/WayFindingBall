@@ -6,7 +6,8 @@ import java.nio.ByteBuffer
  * 대전 메시지 프레임. 모두 BYTES 페이로드(작게 유지).
  * byte[0] = 타입, 이후 타입별 본문.
  *
- * v1은 미로 대전(A) 기준:
+ * 미로 대전(A) 기준:
+ * - SEED: 호스트 → 게스트, 공유 시드(양쪽이 동일 무작위 맵 생성)
  * - START: 호스트 → 게스트, 카운트다운 시작 신호
  * - POS: 진행 중 내 공 위치 + 진행도(0..1) 연속 송신
  * - FINISHED: 골인 시 내 완주 시간(ms)
@@ -17,8 +18,14 @@ object VersusProtocol {
     private const val TYPE_START: Byte = 1
     private const val TYPE_POS: Byte = 2
     private const val TYPE_FINISHED: Byte = 3
+    private const val TYPE_SEED: Byte = 4
 
     fun start(): ByteArray = byteArrayOf(TYPE_START)
+
+    fun seed(seed: Long): ByteArray =
+        ByteBuffer.allocate(1 + 8).apply {
+            put(TYPE_SEED); putLong(seed)
+        }.array()
 
     fun pos(x: Float, y: Float, progress: Float): ByteArray =
         ByteBuffer.allocate(1 + 12).apply {
@@ -32,6 +39,7 @@ object VersusProtocol {
 
     sealed interface Msg {
         data object Start : Msg
+        data class Seed(val seed: Long) : Msg
         data class Pos(val x: Float, val y: Float, val progress: Float) : Msg
         data class Finished(val elapsedMs: Long) : Msg
     }
@@ -41,6 +49,7 @@ object VersusProtocol {
         val buf = ByteBuffer.wrap(bytes)
         return when (buf.get()) {
             TYPE_START -> Msg.Start
+            TYPE_SEED -> if (bytes.size >= 9) Msg.Seed(buf.long) else null
             TYPE_POS -> if (bytes.size >= 13) Msg.Pos(buf.float, buf.float, buf.float) else null
             TYPE_FINISHED -> if (bytes.size >= 9) Msg.Finished(buf.long) else null
             else -> null
