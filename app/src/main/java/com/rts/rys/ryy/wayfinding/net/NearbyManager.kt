@@ -38,6 +38,8 @@ class NearbyManager(context: Context, private val localName: String) {
         private set
     var peerName by mutableStateOf<String?>(null)
         private set
+    var errorMessage by mutableStateOf<String?>(null)
+        private set
     val rooms = mutableStateListOf<DiscoveredRoom>()
 
     /** 수신 페이로드 콜백(메인 스레드). 활성 대전 화면이 설정한다. */
@@ -93,25 +95,34 @@ class NearbyManager(context: Context, private val localName: String) {
 
     fun startHosting() {
         isHost = true
+        errorMessage = null
         status = NearbyStatus.ADVERTISING
         val options = AdvertisingOptions.Builder().setStrategy(STRATEGY).build()
         client.startAdvertising(localName, SERVICE_ID, lifecycleCallback, options)
-            .addOnFailureListener { status = NearbyStatus.ERROR }
+            .addOnFailureListener { fail(it) }
     }
 
     fun startDiscovery() {
         isHost = false
+        errorMessage = null
         rooms.clear()
         status = NearbyStatus.DISCOVERING
         val options = DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
         client.startDiscovery(SERVICE_ID, discoveryCallback, options)
-            .addOnFailureListener { status = NearbyStatus.ERROR }
+            .addOnFailureListener { fail(it) }
     }
 
     fun connectTo(endpointId: String) {
+        errorMessage = null
         status = NearbyStatus.CONNECTING
         client.requestConnection(localName, endpointId, lifecycleCallback)
-            .addOnFailureListener { status = NearbyStatus.ERROR }
+            .addOnFailureListener { fail(it) }
+    }
+
+    private fun fail(e: Exception) {
+        val code = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+        errorMessage = if (code != null) "$code: ${e.message}" else e.message
+        status = NearbyStatus.ERROR
     }
 
     fun send(bytes: ByteArray) {
@@ -126,6 +137,7 @@ class NearbyManager(context: Context, private val localName: String) {
         connectedEndpointId = null
         rooms.clear()
         peerName = null
+        errorMessage = null
         status = NearbyStatus.IDLE
     }
 

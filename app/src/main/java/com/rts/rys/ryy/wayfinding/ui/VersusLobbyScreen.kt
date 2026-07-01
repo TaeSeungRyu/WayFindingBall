@@ -122,7 +122,10 @@ fun VersusLobbyScreen(
                 manager.status == NearbyStatus.ADVERTISING -> WaitingPanel()
                 manager.status == NearbyStatus.DISCOVERING -> RoomListPanel(manager, onPick = { manager.connectTo(it) })
                 manager.status == NearbyStatus.CONNECTING -> InfoPanel("연결 중이에요…")
-                manager.status == NearbyStatus.ERROR -> InfoPanel("연결에 문제가 생겼어요. 뒤로 갔다 다시 시도해요.")
+                manager.status == NearbyStatus.ERROR -> ErrorPanel(
+                    detail = manager.errorMessage,
+                    onRetry = { manager.stop() }
+                )
                 else -> ChoicePanel(
                     onHost = { manager.startHosting() },
                     onJoin = { manager.startDiscovery() }
@@ -229,6 +232,42 @@ private fun RoomListPanel(manager: NearbyManager, onPick: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ErrorPanel(detail: String?, onRetry: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+        Text("😵", fontSize = 48.sp)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "연결을 시작하지 못했어요",
+            color = InkDark,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "블루투스와 Wi‑Fi를 켰는지 확인해요.\n(실제 휴대폰 두 대에서만 동작해요)",
+            color = InkSoft,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp
+        )
+        if (!detail.isNullOrBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = detail,
+                color = InkSoft.copy(alpha = 0.7f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal,
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        BigActionButton(label = "다시 시도", bg = SkyBlue, onClick = onRetry)
     }
 }
 
