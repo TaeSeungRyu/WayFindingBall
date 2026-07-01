@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,7 +65,10 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.delay
+import android.view.HapticFeedbackConstants
 import kotlin.math.floor
+import kotlin.math.hypot
+import kotlin.math.sin
 import kotlin.random.Random
 
 private const val SENSOR_ACCEL_GAIN = 36f
@@ -74,13 +79,41 @@ private const val KEYPAD_MAX_SPEED = 14f
 private const val SURVIVE_MS = 60_000L
 private const val START_BUFFER_MS = 3_200L
 private const val MAZE_SIZE = 13
-private const val CHASER_COUNT = 2
+private const val START_ENEMY_COUNT = 5
+private const val CHASER_ENEMY_COUNT = 2          // 나를 추격하는 적 수(나머지는 랜덤 배회)
+private const val ENEMY_SPAWN_INTERVAL_MS = 4_000L
+private const val ENEMY_MOVE_INTERVAL_S = 0.55f   // 랜덤 배회 적 이동 주기
+private const val CHASER_MOVE_INTERVAL_S = 0.95f  // 추격 적: 느리게
+private const val ENEMY_SPAWN_MIN_DISTANCE = 4
+private const val MAZE_OPENNESS = 0.55f
 private const val CATCH_DIST = 0.45f
+
+private const val ENEMY_POP_MS = 380L             // 등장 팝인 애니메이션 길이
+private const val ENEMY_RIPPLE_MS = 620L          // 등장 파문 길이
+private const val DANGER_RADIUS = 2.6f            // 이 거리 안이면 위험 경고 시작
+private const val HEARTBEAT_MIN_MS = 220L         // 아주 가까울 때 심박 간격
+private const val HEARTBEAT_MAX_MS = 620L         // 위험 시작점 심박 간격
 
 private enum class SurvivalPhase { WAITING, COUNTDOWN, RACE, RESULT }
 
 private val GhostColor = Color(0xFF7E57C2)
 private val EnemyColor = Color(0xFFE53935)
+private val ChaserColor = Color(0xFFFF7043)       // 추격 적은 다른 색으로 구분
+private val StarCore = Color(0xFFFFFDF0)
+private val StarGlow = Color(0xFFFFE9A8)
+private val DangerRed = Color(0xFFD32F2F)
+
+private class SurvivalEnemy(
+    val ctrl: ChaserController,
+    val isChaser: Boolean,
+    val spawnMs: Long,
+) {
+    val spawnX = ctrl.visualX
+    val spawnY = ctrl.visualY
+}
+
+// 배경 별: x,y는 0..1 비율 좌표, phase는 반짝임 위상, sizeF는 크기 배수.
+private class StarSpec(val x: Float, val y: Float, val phase: Float, val sizeF: Float)
 
 @Composable
 fun VersusSurvivalScreen(
@@ -97,16 +130,20 @@ fun VersusSurvivalScreen(
     var seed by remember { mutableStateOf<Long?>(null) }
     var goAtRealtime by remember { mutableStateOf<Long?>(null) }
     var pingSentAt by remember { mutableLongStateOf(0L) }
-    val maze = remember(seed) { seed?.let { generateRandomMaze(MAZE_SIZE, Random(it)) } }
+    val maze = remember(seed) { seed?.let { generateRandomMaze(MAZE_SIZE, Random(it), openness = MAZE_OPENNESS) } }
     val physics = remember(maze) { maze?.let { BallPhysics(it) } }
-    // 적: randomMove=false + spawnIndex → RNG 없이 결정론적 스폰·추격(양쪽 동일).
-    val chasers = remember(maze) {
-        maze?.let { m ->
-            List(CHASER_COUNT) { i ->
-                ChaserController(m, moveIntervalS = 0.55f, spawnIndex = i, randomMove = false)
-            }
+    // 적: 2마리는 느리게 추격, 나머지는 랜덤 배회. 로컬 시뮬레이션이라 기기별 랜덤 무방.
+    val enemies = remember(maze) { mutableStateListOf<SurvivalEnemy>() }
+    val view = LocalView.current
+    // 별자리 배경 별들 — 시드 기반으로 위치/반짝임 위상 고정.
+    val stars = remember(seed) {
+        val rnd = Random(seed ?: 0L)
+        List(70) {
+            StarSpec(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat() * 6.28f, 0.4f + rnd.nextFloat() * 0.6f)
         }
     }
+    var twinklePhase by remember { mutableFloatStateOf(0f) }
+    var dangerLevel by remember { mutableFloatStateOf(0f) }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
@@ -209,13 +246,37 @@ fun VersusSurvivalScreen(
 
     BackHandler { onExit() }
 
+    // 별자리 배경 반짝임 — 미로가 준비되면 매 프레임 위상 갱신(레이스 전에도 반짝임).
+    LaunchedEffect(maze) {
+        if (maze == null) return@LaunchedEffect
+        while (true) {
+            val now = awaitFrame()
+            twinklePhase = (now / 1_000_000L % 100_000L) / 1000f
+        }
+    }
+
     val ready = physics != null && goAtRealtime != null
 
     LaunchedEffect(ready, round) {
         if (!ready) return@LaunchedEffect
         val phys = physics ?: return@LaunchedEffect
-        val enemies = chasers ?: return@LaunchedEffect
+        val m = maze ?: return@LaunchedEffect
         val goAt = goAtRealtime ?: return@LaunchedEffect
+
+        val spawnEnemy: (Boolean) -> Unit = { chaser ->
+            enemies.add(
+                SurvivalEnemy(
+                    ctrl = ChaserController(
+                        m,
+                        moveIntervalS = if (chaser) CHASER_MOVE_INTERVAL_S else ENEMY_MOVE_INTERVAL_S,
+                        randomMove = !chaser,
+                        randomSpawnMinDistance = ENEMY_SPAWN_MIN_DISTANCE,
+                    ),
+                    isChaser = chaser,
+                    spawnMs = clockMs,
+                )
+            )
+        }
 
         phase = SurvivalPhase.COUNTDOWN
         while (true) {
@@ -226,11 +287,15 @@ fun VersusSurvivalScreen(
         }
         phase = SurvivalPhase.RACE
         phys.reset()
-        enemies.forEach { it.reset() }
+        enemies.clear()
+        dangerLevel = 0f
+        repeat(START_ENEMY_COUNT) { i -> spawnEnemy(i < CHASER_ENEMY_COUNT) }
         ballX = phys.x; ballY = phys.y
 
         var last = 0L
         var posAccumMs = 0L
+        var spawnAccumMs = 0L
+        var lastBeatMs = 0L
 
         while (result == null) {
             val now = awaitFrame()
@@ -266,14 +331,23 @@ fun VersusSurvivalScreen(
                 ballSquash = phys.squashAmount
                 ballSquashIsX = phys.squashAxis == SquashAxis.X
 
+                spawnAccumMs += deltaMs
+                if (spawnAccumMs >= ENEMY_SPAWN_INTERVAL_MS) {
+                    spawnAccumMs -= ENEMY_SPAWN_INTERVAL_MS
+                    spawnEnemy(false)
+                }
+
                 val bc = floor(phys.x).toInt()
                 val br = floor(phys.y).toInt()
-                enemies.forEach { it.tick(dt, bc, br) }
+                enemies.forEach { it.ctrl.tick(dt, bc, br) }
                 chaserTick++
 
-                for (ch in enemies) {
-                    val ddx = ch.visualX - phys.x
-                    val ddy = ch.visualY - phys.y
+                var nearest = Float.MAX_VALUE
+                for (e in enemies) {
+                    val ddx = e.ctrl.visualX - phys.x
+                    val ddy = e.ctrl.visualY - phys.y
+                    val d = hypot(ddx, ddy)
+                    if (d < nearest) nearest = d
                     if (ddx * ddx + ddy * ddy < CATCH_DIST * CATCH_DIST) {
                         myCaughtMs = clockMs
                         manager.send(VersusProtocol.finished(clockMs))
@@ -281,11 +355,25 @@ fun VersusSurvivalScreen(
                     }
                 }
 
+                // 위험 경고: 가장 가까운 적 거리로 위험도 산출 + 심박 진동.
+                dangerLevel = ((DANGER_RADIUS - nearest) / DANGER_RADIUS).coerceIn(0f, 1f)
+                if (dangerLevel > 0.05f) {
+                    val beatInterval = (HEARTBEAT_MAX_MS - (HEARTBEAT_MAX_MS - HEARTBEAT_MIN_MS) * dangerLevel).toLong()
+                    if (clockMs - lastBeatMs >= beatInterval) {
+                        lastBeatMs = clockMs
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    }
+                } else {
+                    lastBeatMs = clockMs
+                }
+
                 posAccumMs += deltaMs
                 if (posAccumMs >= 66L) {
                     posAccumMs = 0L
                     manager.send(VersusProtocol.pos(phys.x, phys.y, 0f))
                 }
+            } else {
+                dangerLevel = 0f
             }
 
             // 먼저 잡히는 쪽이 패배. 둘 다 60초 생존 시 무승부.
@@ -319,6 +407,17 @@ fun VersusSurvivalScreen(
             .windowInsetsPadding(WindowInsets.systemBars)
             .padding(16.dp)
     ) {
+        // 별자리 배경 — 반짝이는 별밭 (콘텐츠 뒤).
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val tw = twinklePhase
+            stars.forEach { s ->
+                val t = 0.35f + 0.65f * (0.5f + 0.5f * sin(tw * 2.2f + s.phase))
+                val r = size.minDimension * (0.003f + 0.005f * s.sizeF)
+                val center = Offset(s.x * size.width, s.y * size.height)
+                drawCircle(StarGlow.copy(alpha = 0.22f * t), r * 2.6f, center)
+                drawCircle(StarCore.copy(alpha = 0.9f * t), r, center)
+            }
+        }
         if (maze == null) {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -334,12 +433,21 @@ fun VersusSurvivalScreen(
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     BackChip(onClick = onExit)
                     Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "${elapsedSec}초 버팀",
-                        color = InkDark,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "별자리",
+                            color = InkDark,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp
+                        )
+                        Text(
+                            text = "${elapsedSec}초 버팀",
+                            color = InkDark,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     Spacer(Modifier.size(64.dp))
                 }
@@ -373,12 +481,29 @@ fun VersusSurvivalScreen(
                         val gc = Offset(ox + oppX * cs, oy + oppY * cs)
                         drawCircle(GhostColor.copy(alpha = 0.40f), cs * 0.34f, gc)
                         drawCircle(GhostColor.copy(alpha = 0.85f), cs * 0.34f, gc, style = Stroke(width = cs * 0.06f))
-                        // 내 적들
-                        chasers?.forEach { ch ->
-                            val ec = Offset(ox + ch.visualX * cs, oy + ch.visualY * cs)
-                            drawCircle(EnemyColor, cs * 0.32f, ec)
-                            drawCircle(Color.White, cs * 0.08f, Offset(ec.x - cs * 0.10f, ec.y - cs * 0.05f))
-                            drawCircle(Color.White, cs * 0.08f, Offset(ec.x + cs * 0.10f, ec.y - cs * 0.05f))
+                        // 내 적들 — 등장 팝인 + 파문, 추격 적은 다른 색.
+                        enemies.forEach { e ->
+                            val col = if (e.isChaser) ChaserColor else EnemyColor
+                            val age = clockMs - e.spawnMs
+                            // 등장 파문(spawn 위치에서 확산).
+                            if (age in 0 until ENEMY_RIPPLE_MS) {
+                                val rp = age.toFloat() / ENEMY_RIPPLE_MS
+                                val rc = Offset(ox + e.spawnX * cs, oy + e.spawnY * cs)
+                                drawCircle(
+                                    col.copy(alpha = (1f - rp) * 0.5f),
+                                    cs * (0.3f + rp * 0.95f),
+                                    rc,
+                                    style = Stroke(width = cs * 0.06f)
+                                )
+                            }
+                            // easeOutBack 팝인 스케일(0 → 살짝 오버슈트 → 1).
+                            val pop = (age.toFloat() / ENEMY_POP_MS).coerceIn(0f, 1f)
+                            val p = pop - 1f
+                            val scale = 1f + 2.70158f * p * p * p + 1.70158f * p * p
+                            val ec = Offset(ox + e.ctrl.visualX * cs, oy + e.ctrl.visualY * cs)
+                            drawCircle(col, cs * 0.32f * scale, ec)
+                            drawCircle(Color.White, cs * 0.08f * scale, Offset(ec.x - cs * 0.10f, ec.y - cs * 0.05f))
+                            drawCircle(Color.White, cs * 0.08f * scale, Offset(ec.x + cs * 0.10f, ec.y - cs * 0.05f))
                         }
                     }
                 }
@@ -390,6 +515,21 @@ fun VersusSurvivalScreen(
                         enabled = phase == SurvivalPhase.RACE && myCaughtMs == null
                     )
                 }
+            }
+        }
+
+        // 위험 경고 비네트 — 가까운 적이 있을 때 화면 가장자리 빨간 맥박.
+        if (dangerLevel > 0.02f && phase == SurvivalPhase.RACE) {
+            val pulse = 0.5f + 0.5f * sin(twinklePhase * 9f)
+            val alpha = (dangerLevel * (0.32f + 0.26f * pulse)).coerceIn(0f, 0.6f)
+            Canvas(modifier = Modifier.matchParentSize()) {
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color.Transparent, DangerRed.copy(alpha = alpha)),
+                        center = Offset(size.width / 2f, size.height / 2f),
+                        radius = size.minDimension * 0.72f
+                    )
+                )
             }
         }
 

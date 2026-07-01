@@ -21,6 +21,7 @@ fun generateRandomMaze(
     random: Random = Random.Default,
     starCount: Int = 0,
     withPortals: Boolean = false,
+    openness: Float = 0f,
 ): Maze {
     val n = if (size % 2 == 1) size else size - 1
     val board = Array(n) { CharArray(n) { '#' } }
@@ -43,6 +44,23 @@ fun generateRandomMaze(
             }
         }
         if (!moved) stack.removeAt(stack.lastIndex)
+    }
+    // Knock down connector walls to create loops / open rooms. Deterministic
+    // given [random], so seed-synced mazes stay identical across devices.
+    if (openness > 0f) {
+        val connectors = mutableListOf<Pair<Int, Int>>()
+        for (r in 1 until n - 1) for (c in 1 until n - 1) {
+            if (board[r][c] != '#') continue
+            var open = 0
+            if (board[r - 1][c] == ' ') open++
+            if (board[r + 1][c] == ' ') open++
+            if (board[r][c - 1] == ' ') open++
+            if (board[r][c + 1] == ' ') open++
+            if (open >= 2) connectors.add(c to r)
+        }
+        for ((c, r) in connectors) {
+            if (random.nextFloat() < openness) board[r][c] = ' '
+        }
     }
     val (gc, gr) = farthestEmpty(board, 1, 1)
     board[1][1] = 'S'
