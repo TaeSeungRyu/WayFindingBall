@@ -5,8 +5,10 @@
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
 
     <!-- 1:1 대전 모드 (Nearby Connections) — API 32+ 한정, 위치 권한 미사용 -->
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" android:maxSdkVersion="31" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" android:maxSdkVersion="31" />
+    <!-- Wi-Fi 상태 권한(일반 권한, 런타임 요청 없음). Nearby의 Wi-Fi 미디엄에 API 32+에서도
+         필요하므로 상한을 두지 않는다. (공식 예제의 maxSdkVersion=31 은 실제로 32+에서 연결 실패를 유발) -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" android:minSdkVersion="31" />
