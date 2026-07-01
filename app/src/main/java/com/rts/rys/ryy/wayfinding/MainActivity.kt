@@ -64,6 +64,7 @@ import com.rts.rys.ryy.wayfinding.ui.VersusLobbyScreen
 import com.rts.rys.ryy.wayfinding.ui.VersusMazeScreen
 import com.rts.rys.ryy.wayfinding.ui.VersusNameScreen
 import com.rts.rys.ryy.wayfinding.ui.VersusRecordsScreen
+import com.rts.rys.ryy.wayfinding.ui.VersusSurvivalScreen
 import com.rts.rys.ryy.wayfinding.ui.theme.ChildrenWayfindingTheme
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
@@ -133,6 +134,7 @@ private sealed class Screen {
     data object VersusRecords : Screen()
     data class VersusLobby(val game: Char) : Screen()
     data class VersusMaze(val game: Char) : Screen()
+    data class VersusSurvival(val game: Char) : Screen()
 }
 
 @Composable
@@ -342,7 +344,11 @@ fun MazeApp() {
                         game = screen.game,
                         manager = mgr,
                         onBack = { mgr.stop(); pop() },
-                        onMatchReady = { replaceTop(Screen.VersusMaze(screen.game)) }
+                        onMatchReady = {
+                            val next = if (screen.game == 'D') Screen.VersusSurvival(screen.game)
+                            else Screen.VersusMaze(screen.game)
+                            replaceTop(next)
+                        }
                     )
                 }
             }
@@ -352,6 +358,22 @@ fun MazeApp() {
                     LaunchedEffect(Unit) { popUntil { it is Screen.VersusHub } }
                 } else {
                     VersusMazeScreen(
+                        game = screen.game,
+                        manager = mgr,
+                        onExit = {
+                            mgr.stop()
+                            versusManager = null
+                            popUntil { it is Screen.VersusHub }
+                        }
+                    )
+                }
+            }
+            is Screen.VersusSurvival -> {
+                val mgr = versusManager
+                if (mgr == null) {
+                    LaunchedEffect(Unit) { popUntil { it is Screen.VersusHub } }
+                } else {
+                    VersusSurvivalScreen(
                         game = screen.game,
                         manager = mgr,
                         onExit = {

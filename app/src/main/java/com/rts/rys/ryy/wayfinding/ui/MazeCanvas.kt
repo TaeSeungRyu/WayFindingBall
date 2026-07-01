@@ -53,6 +53,7 @@ fun MazeCanvas(
     surpriseLevel: Float = 0f,
     theme: MazeTheme = themeForLevel(1),
     ballSkin: BallSkin = BallSkins.DEFAULT,
+    showGoal: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val infinite = rememberInfiniteTransition(label = "maze")
@@ -85,7 +86,7 @@ fun MazeCanvas(
     )
     Canvas(modifier = modifier) {
         drawMaze(maze, theme)
-        drawGoal(maze, goalPulse, rayRotation, sparkleTime)
+        if (showGoal) drawGoal(maze, goalPulse, rayRotation, sparkleTime)
         if (trail.isNotEmpty() && ballScale > 0f) drawTrail(maze, trail, ballSkin)
         if (ballScale > 0f) drawBall(maze, ballX, ballY, rotation, squashAmount, squashAxisIsX, ballScale, headingRad, isHappy, surpriseLevel, ballSkin)
     }
