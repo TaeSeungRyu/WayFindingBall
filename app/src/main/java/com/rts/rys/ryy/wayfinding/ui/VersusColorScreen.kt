@@ -66,7 +66,7 @@ private const val KEYPAD_ACCEL_GAIN = 18f
 private const val SENSOR_MAX_SPEED = 22f
 private const val KEYPAD_MAX_SPEED = 14f
 private const val TIME_LIMIT_MS = 60_000L
-private const val FINISH_GRACE_MS = 5_000L
+private const val FINISH_GRACE_MS = 3_000L
 
 @Composable
 fun VersusColorScreen(
@@ -112,6 +112,7 @@ fun VersusColorScreen(
     var myProgress by remember { mutableFloatStateOf(0f) }
     var myFinishMs by remember { mutableStateOf<Long?>(null) }
     var oppFinishMs by remember { mutableStateOf<Long?>(null) }
+    var graceStartMs by remember { mutableStateOf<Long?>(null) }
     var result by remember { mutableStateOf<VersusResult?>(null) }
 
     var round by remember { mutableIntStateOf(0) }
@@ -127,6 +128,7 @@ fun VersusColorScreen(
         clockMs = 0L
         myFinishMs = null
         oppFinishMs = null
+        graceStartMs = null
         myProgress = 0f
         oppProgress = 0f
         currentIdx = 0
@@ -191,7 +193,6 @@ fun VersusColorScreen(
 
         var last = 0L
         var posAccumMs = 0L
-        var firstFinishClockMs: Long? = null
 
         while (result == null) {
             val now = awaitFrame()
@@ -247,8 +248,8 @@ fun VersusColorScreen(
                 }
             }
 
-            if (firstFinishClockMs == null && (myFinishMs != null || oppFinishMs != null)) {
-                firstFinishClockMs = clockMs
+            if (graceStartMs == null && (myFinishMs != null || oppFinishMs != null)) {
+                graceStartMs = clockMs
             }
 
             result = when {
@@ -256,7 +257,7 @@ fun VersusColorScreen(
                     if (myFinishMs != null && oppFinishMs != null) versusDecideByTime(myFinishMs!!, oppFinishMs!!)
                     else VersusResult.OPPONENT_LEFT
                 myFinishMs != null && oppFinishMs != null -> versusDecideByTime(myFinishMs!!, oppFinishMs!!)
-                firstFinishClockMs != null && clockMs - firstFinishClockMs >= FINISH_GRACE_MS ->
+                graceStartMs != null && clockMs - graceStartMs!! >= FINISH_GRACE_MS ->
                     if (myFinishMs != null) VersusResult.WIN else VersusResult.LOSE
                 clockMs >= TIME_LIMIT_MS -> when {
                     myProgress > oppProgress + 0.01f -> VersusResult.WIN
@@ -380,6 +381,15 @@ fun VersusColorScreen(
             ) {
                 Text("친구와 준비 중이에요…", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
             }
+        }
+
+        if (phase == VersusPhase.RACE && myFinishMs == null && oppFinishMs != null && graceStartMs != null) {
+            val left = (FINISH_GRACE_MS - (clockMs - graceStartMs!!)).coerceAtLeast(0L)
+            val n = ((left + 999L) / 1000L).toInt().coerceIn(1, 3)
+            VersusGraceCountdown(
+                seconds = n,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 90.dp)
+            )
         }
 
         result?.let { res ->

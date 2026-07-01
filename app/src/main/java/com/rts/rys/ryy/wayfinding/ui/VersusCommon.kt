@@ -41,6 +41,24 @@ fun versusDecideByTime(mine: Long, opp: Long): VersusResult = when {
     else -> VersusResult.DRAW
 }
 
+/**
+ * 상대가 먼저 끝냈을 때, 아직 못 끝낸 쪽 화면에 뜨는 "서둘러요!" 3-2-1 카운트.
+ * 게임을 가리지 않도록 반투명 배지로 상단에 띄운다.
+ */
+@Composable
+fun VersusGraceCountdown(seconds: Int, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(CoralPink.copy(alpha = 0.92f))
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("서둘러요!", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+        Text("$seconds", color = Color.White, fontSize = 44.sp, fontWeight = FontWeight.Black)
+    }
+}
+
 @Composable
 fun VersusProgressBars(myProgress: Float, oppProgress: Float, oppName: String) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
