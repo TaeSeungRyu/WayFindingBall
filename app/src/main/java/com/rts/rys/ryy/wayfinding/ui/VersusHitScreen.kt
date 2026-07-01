@@ -116,8 +116,28 @@ fun VersusHitScreen(
     var oppFinishMs by remember { mutableStateOf<Long?>(null) }
     var result by remember { mutableStateOf<VersusResult?>(null) }
 
+    var round by remember { mutableIntStateOf(0) }
+    var iWantRematch by remember { mutableStateOf(false) }
+    var oppWantsRematch by remember { mutableStateOf(false) }
+
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
+
+    val startNewRound: (Long) -> Unit = { newSeed ->
+        result = null
+        phase = VersusPhase.WAITING
+        clockMs = 0L
+        myFinishMs = null
+        oppFinishMs = null
+        myProgress = 0f
+        oppProgress = 0f
+        hitCount = 0
+        iWantRematch = false
+        oppWantsRematch = false
+        seed = newSeed
+        startSignal = true
+        round++
+    }
 
     LaunchedEffect(Unit) {
         if (manager.isHost) {
@@ -136,6 +156,8 @@ fun VersusHitScreen(
                 is VersusProtocol.Msg.Start -> startSignal = true
                 is VersusProtocol.Msg.Pos -> { oppX = m.x; oppY = m.y; oppProgress = m.progress }
                 is VersusProtocol.Msg.Finished -> if (oppFinishMs == null) oppFinishMs = m.elapsedMs
+                is VersusProtocol.Msg.Rematch -> oppWantsRematch = true
+                is VersusProtocol.Msg.NewRound -> startNewRound(m.seed)
                 else -> {}
             }
         }
@@ -148,11 +170,19 @@ fun VersusHitScreen(
         }
     }
 
+    LaunchedEffect(iWantRematch, oppWantsRematch) {
+        if (manager.isHost && iWantRematch && oppWantsRematch) {
+            val s = Random.Default.nextLong()
+            manager.send(VersusProtocol.newRound(s))
+            startNewRound(s)
+        }
+    }
+
     BackHandler { onExit() }
 
     val ready = targets != null && startSignal
 
-    LaunchedEffect(ready) {
+    LaunchedEffect(ready, round) {
         if (!ready) return@LaunchedEffect
         val ts = targets ?: return@LaunchedEffect
         phase = VersusPhase.COUNTDOWN
@@ -331,6 +361,19 @@ fun VersusHitScreen(
             }
         }
 
-        result?.let { res -> VersusRaceResultOverlay(result = res, onExit = onExit) }
+        result?.let { res ->
+            VersusRaceResultOverlay(
+                result = res,
+                onExit = onExit,
+                onRematch = {
+                    if (!iWantRematch) {
+                        iWantRematch = true
+                        manager.send(VersusProtocol.rematch())
+                    }
+                },
+                waitingRematch = iWantRematch,
+                opponentGone = res == VersusResult.OPPONENT_LEFT,
+            )
+        }
     }
 }

@@ -19,12 +19,23 @@ object VersusProtocol {
     private const val TYPE_POS: Byte = 2
     private const val TYPE_FINISHED: Byte = 3
     private const val TYPE_SEED: Byte = 4
+    private const val TYPE_REMATCH: Byte = 5
+    private const val TYPE_NEW_ROUND: Byte = 6
 
     fun start(): ByteArray = byteArrayOf(TYPE_START)
+
+    /** "한 번 더 하고 싶어요" 의사 표시(양쪽이 보내면 호스트가 새 라운드를 연다). */
+    fun rematch(): ByteArray = byteArrayOf(TYPE_REMATCH)
 
     fun seed(seed: Long): ByteArray =
         ByteBuffer.allocate(1 + 8).apply {
             put(TYPE_SEED); putLong(seed)
+        }.array()
+
+    /** 호스트 → 게스트: 이 시드로 리셋하고 새 라운드 시작. */
+    fun newRound(seed: Long): ByteArray =
+        ByteBuffer.allocate(1 + 8).apply {
+            put(TYPE_NEW_ROUND); putLong(seed)
         }.array()
 
     fun pos(x: Float, y: Float, progress: Float): ByteArray =
@@ -39,7 +50,9 @@ object VersusProtocol {
 
     sealed interface Msg {
         data object Start : Msg
+        data object Rematch : Msg
         data class Seed(val seed: Long) : Msg
+        data class NewRound(val seed: Long) : Msg
         data class Pos(val x: Float, val y: Float, val progress: Float) : Msg
         data class Finished(val elapsedMs: Long) : Msg
     }
@@ -49,7 +62,9 @@ object VersusProtocol {
         val buf = ByteBuffer.wrap(bytes)
         return when (buf.get()) {
             TYPE_START -> Msg.Start
+            TYPE_REMATCH -> Msg.Rematch
             TYPE_SEED -> if (bytes.size >= 9) Msg.Seed(buf.long) else null
+            TYPE_NEW_ROUND -> if (bytes.size >= 9) Msg.NewRound(buf.long) else null
             TYPE_POS -> if (bytes.size >= 13) Msg.Pos(buf.float, buf.float, buf.float) else null
             TYPE_FINISHED -> if (bytes.size >= 9) Msg.Finished(buf.long) else null
             else -> null

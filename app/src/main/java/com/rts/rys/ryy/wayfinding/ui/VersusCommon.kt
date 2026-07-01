@@ -79,7 +79,14 @@ private fun VersusProgressRow(label: String, progress: Float, color: Color) {
 }
 
 @Composable
-fun VersusRaceResultOverlay(result: VersusResult, onExit: () -> Unit) {
+fun VersusRaceResultOverlay(
+    result: VersusResult,
+    onExit: () -> Unit,
+    subtitle: String? = null,
+    onRematch: (() -> Unit)? = null,
+    waitingRematch: Boolean = false,
+    opponentGone: Boolean = false,
+) {
     val (text, emoji, color) = when (result) {
         VersusResult.WIN -> Triple("이겼어요!", "🏆", WallGreen)
         VersusResult.LOSE -> Triple("졌어요", "😢", CoralPink)
@@ -100,18 +107,41 @@ fun VersusRaceResultOverlay(result: VersusResult, onExit: () -> Unit) {
             Text(emoji, fontSize = 64.sp)
             Spacer(Modifier.height(8.dp))
             Text(text, color = color, fontSize = 28.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(24.dp))
-            Row(
-                modifier = Modifier
-                    .height(60.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(color)
-                    .clickable(onClick = onExit)
-                    .padding(horizontal = 40.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("나가기", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            if (subtitle != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, color = InkDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
+            Spacer(Modifier.height(24.dp))
+            // 상대가 나갔으면 재대결 불가 — 나가기만.
+            if (onRematch != null && !opponentGone) {
+                if (waitingRematch) {
+                    Text("친구를 기다리는 중…", color = InkDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(14.dp))
+                } else {
+                    ResultButton(label = "한 번 더", bg = color, onClick = onRematch)
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+            ResultButton(
+                label = "나가기",
+                bg = if (onRematch != null && !opponentGone) Color(0xFFBDB7B0) else color,
+                onClick = onExit
+            )
         }
+    }
+}
+
+@Composable
+private fun ResultButton(label: String, bg: Color, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .height(58.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 44.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
     }
 }

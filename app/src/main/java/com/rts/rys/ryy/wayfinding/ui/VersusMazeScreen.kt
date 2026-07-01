@@ -124,8 +124,27 @@ fun VersusMazeScreen(
     var oppFinishMs by remember { mutableStateOf<Long?>(null) }
     var result by remember { mutableStateOf<VersusResult?>(null) }
 
+    var round by remember { mutableIntStateOf(0) }
+    var iWantRematch by remember { mutableStateOf(false) }
+    var oppWantsRematch by remember { mutableStateOf(false) }
+
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
+
+    val startNewRound: (Long) -> Unit = { newSeed ->
+        result = null
+        phase = Phase.WAITING
+        clockMs = 0L
+        myFinishMs = null
+        oppFinishMs = null
+        myProgress = 0f
+        oppProgress = 0f
+        iWantRematch = false
+        oppWantsRematch = false
+        seed = newSeed
+        startSignal = true
+        round++
+    }
 
     // 호스트: 시드 생성 후 SEED → START 전송, 자기도 시작.
     LaunchedEffect(Unit) {
@@ -150,6 +169,8 @@ fun VersusMazeScreen(
                 is VersusProtocol.Msg.Finished -> {
                     if (oppFinishMs == null) oppFinishMs = m.elapsedMs
                 }
+                is VersusProtocol.Msg.Rematch -> oppWantsRematch = true
+                is VersusProtocol.Msg.NewRound -> startNewRound(m.seed)
                 else -> {}
             }
         }
@@ -163,12 +184,21 @@ fun VersusMazeScreen(
         }
     }
 
+    // 양쪽이 "한 번 더"를 누르면 호스트가 새 라운드를 연다.
+    LaunchedEffect(iWantRematch, oppWantsRematch) {
+        if (manager.isHost && iWantRematch && oppWantsRematch) {
+            val s = Random.Default.nextLong()
+            manager.send(VersusProtocol.newRound(s))
+            startNewRound(s)
+        }
+    }
+
     BackHandler { onExit() }
 
     val ready = physics != null && startSignal
 
-    // 게임 루프 — 준비 완료 시 카운트다운 후 레이스.
-    LaunchedEffect(ready) {
+    // 게임 루프 — 준비 완료 시 카운트다운 후 레이스. round가 바뀌면 새 라운드로 재시작.
+    LaunchedEffect(ready, round) {
         if (!ready) return@LaunchedEffect
         val phys = physics ?: return@LaunchedEffect
         val dist = distFromGoal ?: return@LaunchedEffect
@@ -343,7 +373,20 @@ fun VersusMazeScreen(
             }
         }
 
-        result?.let { res -> ResultOverlay(result = res, onExit = onExit) }
+        result?.let { res ->
+            VersusRaceResultOverlay(
+                result = res,
+                onExit = onExit,
+                onRematch = {
+                    if (!iWantRematch) {
+                        iWantRematch = true
+                        manager.send(VersusProtocol.rematch())
+                    }
+                },
+                waitingRematch = iWantRematch,
+                opponentGone = res == VersusResult.OPPONENT_LEFT,
+            )
+        }
     }
 }
 
@@ -380,44 +423,6 @@ private fun ProgressRow(label: String, progress: Float, color: Color) {
                     .clip(RoundedCornerShape(7.dp))
                     .background(color)
             )
-        }
-    }
-}
-
-@Composable
-private fun ResultOverlay(result: VersusResult, onExit: () -> Unit) {
-    val (text, emoji, color) = when (result) {
-        VersusResult.WIN -> Triple("이겼어요!", "🏆", WallGreen)
-        VersusResult.LOSE -> Triple("졌어요", "😢", CoralPink)
-        VersusResult.DRAW -> Triple("비겼어요", "🤝", Color(0xFF9E9E9E))
-        VersusResult.OPPONENT_LEFT -> Triple("상대가 나갔어요", "🏁", WallGreen)
-    }
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color.White)
-                .padding(horizontal = 40.dp, vertical = 32.dp)
-        ) {
-            Text(emoji, fontSize = 64.sp)
-            Spacer(Modifier.height(8.dp))
-            Text(text, color = color, fontSize = 28.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(24.dp))
-            Row(
-                modifier = Modifier
-                    .height(60.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(color)
-                    .clickable(onClick = onExit)
-                    .padding(horizontal = 40.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("나가기", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-            }
         }
     }
 }

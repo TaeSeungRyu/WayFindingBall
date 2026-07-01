@@ -129,8 +129,25 @@ fun VersusSurvivalScreen(
     var oppCaughtMs by remember { mutableStateOf<Long?>(null) }
     var result by remember { mutableStateOf<VersusResult?>(null) }
 
+    var round by remember { mutableIntStateOf(0) }
+    var iWantRematch by remember { mutableStateOf(false) }
+    var oppWantsRematch by remember { mutableStateOf(false) }
+
     var kx by remember { mutableFloatStateOf(0f) }
     var ky by remember { mutableFloatStateOf(0f) }
+
+    val startNewRound: (Long) -> Unit = { newSeed ->
+        result = null
+        phase = SurvivalPhase.WAITING
+        clockMs = 0L
+        myCaughtMs = null
+        oppCaughtMs = null
+        iWantRematch = false
+        oppWantsRematch = false
+        seed = newSeed
+        startSignal = true
+        round++
+    }
 
     LaunchedEffect(Unit) {
         if (manager.isHost) {
@@ -149,6 +166,8 @@ fun VersusSurvivalScreen(
                 is VersusProtocol.Msg.Start -> startSignal = true
                 is VersusProtocol.Msg.Pos -> { oppX = m.x; oppY = m.y }
                 is VersusProtocol.Msg.Finished -> if (oppCaughtMs == null) oppCaughtMs = m.elapsedMs
+                is VersusProtocol.Msg.Rematch -> oppWantsRematch = true
+                is VersusProtocol.Msg.NewRound -> startNewRound(m.seed)
                 else -> {}
             }
         }
@@ -161,11 +180,19 @@ fun VersusSurvivalScreen(
         }
     }
 
+    LaunchedEffect(iWantRematch, oppWantsRematch) {
+        if (manager.isHost && iWantRematch && oppWantsRematch) {
+            val s = Random.Default.nextLong()
+            manager.send(VersusProtocol.newRound(s))
+            startNewRound(s)
+        }
+    }
+
     BackHandler { onExit() }
 
     val ready = physics != null && startSignal
 
-    LaunchedEffect(ready) {
+    LaunchedEffect(ready, round) {
         if (!ready) return@LaunchedEffect
         val phys = physics ?: return@LaunchedEffect
         val enemies = chasers ?: return@LaunchedEffect
@@ -350,7 +377,21 @@ fun VersusSurvivalScreen(
             }
         }
 
-        result?.let { res -> SurvivalResultOverlay(result = res, myCaughtMs = myCaughtMs, onExit = onExit) }
+        result?.let { res ->
+            SurvivalResultOverlay(
+                result = res,
+                myCaughtMs = myCaughtMs,
+                onExit = onExit,
+                onRematch = {
+                    if (!iWantRematch) {
+                        iWantRematch = true
+                        manager.send(VersusProtocol.rematch())
+                    }
+                },
+                waitingRematch = iWantRematch,
+                opponentGone = res == VersusResult.OPPONENT_LEFT,
+            )
+        }
     }
 }
 
@@ -370,7 +411,14 @@ private fun StatusChip(label: String, alive: Boolean) {
 }
 
 @Composable
-private fun SurvivalResultOverlay(result: VersusResult, myCaughtMs: Long?, onExit: () -> Unit) {
+private fun SurvivalResultOverlay(
+    result: VersusResult,
+    myCaughtMs: Long?,
+    onExit: () -> Unit,
+    onRematch: () -> Unit,
+    waitingRematch: Boolean,
+    opponentGone: Boolean,
+) {
     val (text, emoji, color) = when (result) {
         VersusResult.WIN -> Triple("이겼어요!", "🏆", WallGreen)
         VersusResult.LOSE -> Triple("잡혔어요!", "😢", CoralPink)
@@ -395,18 +443,36 @@ private fun SurvivalResultOverlay(result: VersusResult, myCaughtMs: Long?, onExi
             Spacer(Modifier.height(4.dp))
             Text(sub, color = InkDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(24.dp))
-            Row(
-                modifier = Modifier
-                    .height(60.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(color)
-                    .clickable(onClick = onExit)
-                    .padding(horizontal = 40.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("나가기", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            if (!opponentGone) {
+                if (waitingRematch) {
+                    Text("친구를 기다리는 중…", color = InkDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(14.dp))
+                } else {
+                    ResultActionButton(label = "한 번 더", bg = color, onClick = onRematch)
+                    Spacer(Modifier.height(12.dp))
+                }
             }
+            ResultActionButton(
+                label = "나가기",
+                bg = if (!opponentGone) Color(0xFFBDB7B0) else color,
+                onClick = onExit
+            )
         }
+    }
+}
+
+@Composable
+private fun ResultActionButton(label: String, bg: Color, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .height(58.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 44.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 
