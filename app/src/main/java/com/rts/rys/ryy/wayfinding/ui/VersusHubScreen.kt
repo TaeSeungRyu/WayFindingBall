@@ -57,8 +57,8 @@ private data class VersusGameEntry(
 
 private val VERSUS_GAMES = listOf(
     VersusGameEntry('A', "🧩", "미로 찾기", SkyBlue, enabled = true),
-    VersusGameEntry('B', "🎨", "색깔 찾기", CoralPink, enabled = false),
-    VersusGameEntry('C', "🎯", "굴려서 맞히기", WallGreen, enabled = false),
+    VersusGameEntry('B', "🎨", "색깔 찾기", CoralPink, enabled = true),
+    VersusGameEntry('C', "🎯", "굴려서 맞히기", WallGreen, enabled = true),
     VersusGameEntry('D', "🏃", "서바이벌", Color(0xFF3949AB), enabled = true),
 )
 

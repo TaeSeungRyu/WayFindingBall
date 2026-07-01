@@ -60,6 +60,8 @@ import com.rts.rys.ryy.wayfinding.ui.SplashScreen
 import com.rts.rys.ryy.wayfinding.ui.StageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.TutorialScreen
 import com.rts.rys.ryy.wayfinding.ui.VersusHubScreen
+import com.rts.rys.ryy.wayfinding.ui.VersusColorScreen
+import com.rts.rys.ryy.wayfinding.ui.VersusHitScreen
 import com.rts.rys.ryy.wayfinding.ui.VersusLobbyScreen
 import com.rts.rys.ryy.wayfinding.ui.VersusMazeScreen
 import com.rts.rys.ryy.wayfinding.ui.VersusNameScreen
@@ -135,6 +137,8 @@ private sealed class Screen {
     data class VersusLobby(val game: Char) : Screen()
     data class VersusMaze(val game: Char) : Screen()
     data class VersusSurvival(val game: Char) : Screen()
+    data class VersusColor(val game: Char) : Screen()
+    data class VersusHit(val game: Char) : Screen()
 }
 
 @Composable
@@ -345,8 +349,12 @@ fun MazeApp() {
                         manager = mgr,
                         onBack = { mgr.stop(); pop() },
                         onMatchReady = {
-                            val next = if (screen.game == 'D') Screen.VersusSurvival(screen.game)
-                            else Screen.VersusMaze(screen.game)
+                            val next = when (screen.game) {
+                                'B' -> Screen.VersusColor(screen.game)
+                                'C' -> Screen.VersusHit(screen.game)
+                                'D' -> Screen.VersusSurvival(screen.game)
+                                else -> Screen.VersusMaze(screen.game)
+                            }
                             replaceTop(next)
                         }
                     )
@@ -374,6 +382,38 @@ fun MazeApp() {
                     LaunchedEffect(Unit) { popUntil { it is Screen.VersusHub } }
                 } else {
                     VersusSurvivalScreen(
+                        game = screen.game,
+                        manager = mgr,
+                        onExit = {
+                            mgr.stop()
+                            versusManager = null
+                            popUntil { it is Screen.VersusHub }
+                        }
+                    )
+                }
+            }
+            is Screen.VersusColor -> {
+                val mgr = versusManager
+                if (mgr == null) {
+                    LaunchedEffect(Unit) { popUntil { it is Screen.VersusHub } }
+                } else {
+                    VersusColorScreen(
+                        game = screen.game,
+                        manager = mgr,
+                        onExit = {
+                            mgr.stop()
+                            versusManager = null
+                            popUntil { it is Screen.VersusHub }
+                        }
+                    )
+                }
+            }
+            is Screen.VersusHit -> {
+                val mgr = versusManager
+                if (mgr == null) {
+                    LaunchedEffect(Unit) { popUntil { it is Screen.VersusHub } }
+                } else {
+                    VersusHitScreen(
                         game = screen.game,
                         manager = mgr,
                         onExit = {
