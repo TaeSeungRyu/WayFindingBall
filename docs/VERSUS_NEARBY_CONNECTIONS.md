@@ -3,8 +3,8 @@
 `또르르 미로`의 네 게임 모드 각각에 **가까운 친구와 같은 판을 동시에 겨루는** 1:1 로컬 대전을 추가하기 위한 계획서.
 인터넷·계정·서버 없이 기기 간 직접 연결(Nearby Connections)만 사용한다.
 
-> **상태 (2026-07-01 기준): 구현 진행 중 (`feature/versus-mode-phase1` 브랜치).**
-> A(미로, 시드 무작위 동일 맵)·B(색깔)·C(굴리기)·D(서바이벌) 4개 모드 + **재대결 UI** 구현 완료(컴파일 통과). **실기기 2대 QA는 미완**(Nearby는 실하드웨어 필요).
+> **상태 (2026-07-01 기준): 구현 완료 — `main`에 병합됨.**
+> A(미로, 시드 무작위 동일 맵)·B(색깔)·C(굴리기)·D(서바이벌) 4개 모드 + **재대결 UI** 구현 완료. API 32 미만 기기는 홈에서 '지원 불가' 비활성 버튼으로 표시. **실기기 2대 QA는 미완**(Nearby는 실하드웨어 필요).
 > 재대결: 결과 화면의 "한 번 더"를 양쪽이 누르면 호스트가 새 시드로 새 라운드를 연다(REMATCH/NEW_ROUND 메시지). 상대 이탈 시엔 재대결 불가(나가기만).
 
 ---
@@ -15,8 +15,8 @@
   - API 32+에서 Nearby는 `NEARBY_WIFI_DEVICES` + `BLUETOOTH_*`(모두 "근처 기기" 권한 그룹)만 사용하고, 위치 권한이 필요 없다.
 - **`minSdk`는 26(Android 8.0) 그대로 유지한다 — 올리지 않는다.**
   - 심사 승인은 `targetSdk`(현재 35)가 기준이고 `minSdk`는 "설치 가능 기기 범위"만 정한다. minSdk를 올려도 심사가 쉬워지지 않고, 올리면 Android 8~12 구형/물려받은 기기(아동 앱에서 비중 큼) 사용자를 잃는다.
-  - 따라서 minSdk는 26 그대로 두고 **대전 기능만 런타임으로 게이팅**한다 (`Build.VERSION.SDK_INT >= 32`). 구버전 기기는 앱을 정상 설치·플레이하되 "대결" 진입점만 숨긴다.
-  - **게이팅 방식: 숨김(hide).** API 32 미만에서는 홈 화면의 **"1:1 대전모드"** 버튼을 아예 렌더하지 않는다. (비활성+안내 방식 대신, 아동 앱 혼란을 줄이려 완전히 숨김.)
+  - 따라서 minSdk는 26 그대로 두고 **대전 기능만 런타임으로 게이팅**한다 (`Build.VERSION.SDK_INT >= 32`). 구버전 기기는 앱을 정상 설치·플레이하되 "대결"에만 진입할 수 없다.
+  - **게이팅 방식: 비활성 버튼(disabled).** API 32 미만에서는 홈 화면의 **"1:1 대전모드"** 버튼 대신 회색 비활성 버튼("대전모드 / 이 기기에서는 지원 불가")을 같은 자리에 보여준다 (`HomeScreen.DisabledBigButton`). 초기에는 완전 숨김이었으나, 자리와 안내를 함께 노출하려고 비활성 버튼으로 전환했다.
 - **완전 오프라인 P2P** — `INTERNET` 권한조차 선언하지 않는다. 서버·계정·외부 전송 없음.
 - **자유 채팅·텍스트 입력 없음. PII·식별자 전송 없음. 광고 SDK 없음.** (아동 앱 정책상 가장 안전한 형태)
 
@@ -95,7 +95,7 @@
 ### 1-6. 화면 흐름 (구현 요구)
 
 ```
-홈 ──[1:1 대전모드 버튼 · API 32+에서만 노출]──▶ 대전 허브
+홈 ──[1:1 대전모드 버튼 · API 32+ / 미만은 '지원 불가' 비활성 버튼]──▶ 대전 허브
 대전 허브 ── 게임 리스트 A · B · C · D
           └ 하단: [기록]  [이름]
 게임 선택 ──▶ [방 만들기]  [방 참여하기]
@@ -125,7 +125,7 @@
 - 상태 모델: `game/GameState.kt` (`ballX/ballY/velX/velY/elapsedMs/finished`).
 - 결정론 생성: `game/MazeGen.generateRandomMaze(size, random, ...)`가 시드된 `Random`을 받음 → 공유 시드로 동일 미로 보장.
 - 효과 컨트롤러: `Chaser`/`MovingGoal`/`Rotation`/`DynamicMaze`/`KeyDoor`/`Stars`/`ShadowChaser`Controller. 자율 효과는 `tick(dt)`만으로 진행(동일화 쉬움), 반응형은 `tick(.., ball)`로 자기 공 추적. **내부 난수가 있는 컨트롤러는 공유 시드 파생 `Random` 주입이 필요**(현재는 기본 RNG → 대전용 시드 인자 추가 작업 발생).
-- 네비게이션: `MainActivity.kt`의 커스텀 `Screen` 백스택. 진입점은 **`ui/HomeScreen.kt`의 신규 "1:1 대전모드" 버튼**(API 32+에서만 렌더). 이름 저장은 `data/AppSettings.kt`.
+- 네비게이션: `MainActivity.kt`의 커스텀 `Screen` 백스택. 진입점은 **`ui/HomeScreen.kt`의 신규 "1:1 대전모드" 버튼**(API 32+; 미만 기기는 '지원 불가' 비활성 버튼). 이름 저장은 `data/AppSettings.kt`.
 
 ---
 
@@ -144,7 +144,7 @@
 | `ui/VersusHitScreen.kt` | 신규 (2차) | 굴려서 맞히기 대전(C) |
 | `ui/VersusSurvivalScreen.kt` | 신규 (2차) | 서바이벌 대전(D) — 적 회피, 더 오래 버티기 |
 | `MainActivity.kt` | 변경 | `Screen`에 `VersusHub`, `VersusLobby`, `VersusRecords`, `Versus{Maze/Color/Hit/Survival}` 추가 |
-| `ui/HomeScreen.kt` | 변경 | API 32+에서만 "1:1 대전모드" 버튼 렌더, 미만은 숨김 (`onVersus` 콜백 추가) |
+| `ui/HomeScreen.kt` | 변경 | API 32+는 "1:1 대전모드" 버튼, 미만은 '지원 불가' 비활성 버튼 (`onVersus` 콜백 추가) |
 | `data/AppSettings.kt` | 변경 | `versusName`(상대에게 보일 이름) 저장 |
 | `AndroidManifest.xml` | 변경 | 아래 3-2 권한 추가 (위치·인터넷·저장소 **미선언**) |
 | `gradle/libs.versions.toml`, `app/build.gradle.kts` | 변경 | Nearby 의존성 추가 |
@@ -167,8 +167,10 @@ API 32+ 게이팅 전제이므로 위치 권한·저장소 권한을 **선언하
 
 ```xml
 <!-- Nearby Connections — API 32+ 한정, 위치 권한 미사용 -->
-<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" android:maxSdkVersion="31" />
-<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" android:maxSdkVersion="31" />
+<!-- Wi-Fi 상태 권한은 상한(maxSdkVersion)을 두지 않는다: Nearby의 Wi-Fi 미디엄이
+     API 32+에서도 요구하므로 31로 막으면 연결 실패(8032)한다. (실기기 확인) -->
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
 <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
 <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" android:minSdkVersion="31" />
