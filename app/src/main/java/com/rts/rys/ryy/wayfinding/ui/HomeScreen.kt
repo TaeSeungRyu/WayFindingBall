@@ -25,7 +25,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.DailyRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
@@ -64,6 +68,7 @@ fun HomeScreen(
     val dailyRepo = remember { DailyRepository(context) }
     val dailyCleared = remember { dailyRepo.bestFor(today) != null }
     val streak = remember { dailyRepo.streak(today) }
+    var showSettings by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -162,22 +167,72 @@ fun HomeScreen(
             }
 
             Spacer(Modifier.height(24.dp))
+            SettingsButton(onClick = { showSettings = true })
+            }
+        }
+    }
+
+    if (showSettings) {
+        SettingsDialog(onDismiss = { showSettings = false })
+    }
+}
+
+@Composable
+private fun SettingsButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .shadow(6.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.White)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("⚙", fontSize = 20.sp)
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = "설정",
+            color = InkDark,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 2.sp
+        )
+    }
+}
+
+@Composable
+private fun SettingsDialog(onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color.White)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("설정", color = InkDark, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.height(20.dp))
             SettingRow(
                 label = "기울기 센서",
                 enabled = AppSettings.sensorEnabled.value,
                 onSet = { AppSettings.setSensorEnabled(it) }
             )
             if (AppSettings.sensorEnabled.value) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 SensitivityRow()
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
             SettingRow(
                 label = "소리",
                 enabled = AppSettings.soundEnabled.value,
                 onSet = { AppSettings.setSoundEnabled(it) }
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
             SettingRow(
                 label = "음악",
                 enabled = AppSettings.bgmEnabled.value,
@@ -186,6 +241,17 @@ fun HomeScreen(
                     SoundManager.applyBgmEnabled()
                 }
             )
+            Spacer(Modifier.height(24.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(SkyBlue)
+                    .clickable(onClick = onDismiss),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("닫기", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
             }
         }
     }
