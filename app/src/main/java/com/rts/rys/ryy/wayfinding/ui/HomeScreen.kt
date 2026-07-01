@@ -36,6 +36,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -155,14 +156,19 @@ fun HomeScreen(
                 onClick = onCollection
             )
             // 1:1 대전모드 — Nearby Connections는 위치 권한 없이 동작하려면 API 32+ 필요.
-            // 구버전 기기에서는 진입점을 아예 숨긴다.
+            // 구버전 기기에서는 '지원 불가' 버튼으로 교체해 보여준다.
+            Spacer(Modifier.height(20.dp))
             if (android.os.Build.VERSION.SDK_INT >= 32) {
-                Spacer(Modifier.height(20.dp))
                 BigButton(
                     label = "1:1 대전모드",
                     emoji = "🤝",
                     bg = CoralPink,
                     onClick = onVersus
+                )
+            } else {
+                DisabledBigButton(
+                    label = "대전모드\n이 기기에서는 지원 불가",
+                    emoji = "🤝"
                 )
             }
 
@@ -444,6 +450,44 @@ private fun BigButton(
             fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 2.sp
+        )
+    }
+}
+
+@Composable
+private fun DisabledBigButton(
+    label: String,
+    emoji: String
+) {
+    val disabledBg = Color(0xFFB8B5C6)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(68.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(disabledBg)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.25f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(emoji, color = Color.White.copy(alpha = 0.7f), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.size(16.dp))
+        Text(
+            text = label,
+            color = Color.White.copy(alpha = 0.85f),
+            fontSize = 15.sp,
+            lineHeight = 19.sp,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.sp
         )
     }
 }
