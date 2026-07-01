@@ -76,7 +76,9 @@
 | **A** | 🧩 미로 찾기 | 같은 미로 레이스, 먼저 골인 | **v1: 2단계 고정** / 이후: `seed`+레벨 | 공 위치 `(x,y)` | 골인 + 시간 |
 | B | 🎨 색깔 찾기 | 같은 지시 시퀀스, 먼저 다 맞히기 | `seed`+레벨 → 동일 시퀀스 | 현재 라운드·점수 | 완료 + 시간 |
 | C | 🎯 굴려서 맞히기 | 같은 표적 배치, 먼저 다 맞히기 | `seed`+레벨 → 동일 표적 배치 | 맞힌 표적 수 (`+공 위치`) | 완료 + 시간 |
-| D | ✨ 별자리 잇기 | 같은 별자리, 먼저 완성 | 별자리 키 | 이은 선 진행도 | 완성 + 시간 |
+| D | 🏃 서바이벌 | 쫓아오는 적을 피해 더 오래 버티기 | `seed` → 동일 적 스폰/타이밍 | 공 위치 `(x,y)` | 잡힘 + 생존 시간 |
+
+> D(서바이벌)는 별자리 잇기 대신 채택. 목표(골)가 없고 **더 오래 살아남는 쪽이 승리**. 적은 각자의 공을 쫓지만(반응형) 스폰 위치·수·타이밍은 공유 시드로 동일해 공정하다. 둘 다 60초 생존 시 무승부.
 
 → 모든 모드가 **일시적 게임 상태(좌표/점수/진행도)만** 교환. 식별자·PII·채팅 없음 → 정책 부담 동일하게 낮음.
 
@@ -138,8 +140,8 @@
 | `data/VersusRecordsRepository.kt` | 신규 | `VersusRecord` 저장/로드 (SharedPreferences + JSON) |
 | `ui/VersusColorScreen.kt` | 신규 (2차) | 색깔 찾기 대전(B) |
 | `ui/VersusHitScreen.kt` | 신규 (2차) | 굴려서 맞히기 대전(C) |
-| `ui/VersusConstellationScreen.kt` | 신규 (2차) | 별자리 잇기 대전(D) |
-| `MainActivity.kt` | 변경 | `Screen`에 `VersusHub`, `VersusLobby`, `VersusRecords`, `Versus{Maze/Color/Hit/Constellation}` 추가 |
+| `ui/VersusSurvivalScreen.kt` | 신규 (2차) | 서바이벌 대전(D) — 적 회피, 더 오래 버티기 |
+| `MainActivity.kt` | 변경 | `Screen`에 `VersusHub`, `VersusLobby`, `VersusRecords`, `Versus{Maze/Color/Hit/Survival}` 추가 |
 | `ui/HomeScreen.kt` | 변경 | API 32+에서만 "1:1 대전모드" 버튼 렌더, 미만은 숨김 (`onVersus` 콜백 추가) |
 | `data/AppSettings.kt` | 변경 | `versusName`(상대에게 보일 이름) 저장 |
 | `AndroidManifest.xml` | 변경 | 아래 3-2 권한 추가 (위치·인터넷·저장소 **미선언**) |
@@ -226,7 +228,7 @@ API 32+ 게이팅 전제이므로 위치 권한·저장소 권한을 **선언하
 12. 미로 대전 맵을 **시드 기반 무작위 동일 맵**으로 확장(규칙 1 본래 목표) + 효과 레벨 도입 시 자율 효과 결정론화.
 13. `VersusColorScreen`(B) — 색깔 찾기 대전 (시드 합의 + 라운드/점수 교환).
 14. `VersusHitScreen`(C) — 굴려서 맞히기 대전 (시드 합의 + 맞힌 수 교환).
-15. `VersusConstellationScreen`(D) — 별자리 잇기 대전 (별자리 키 + 진행도 교환).
+15. `VersusSurvivalScreen`(D) — 서바이벌 대전 (공유 시드 적 스폰 + 위치/생존시간 교환, 더 오래 버티면 승).
 
 각 단계는 독립 커밋 단위로 가능하며, 중단해도 대전 외 기존 기능에는 영향 없음. 2차는 1차의 `NearbyManager`/`VersusProtocol`/`VersusHubScreen`/`VersusLobbyScreen`을 재사용한다.
 
