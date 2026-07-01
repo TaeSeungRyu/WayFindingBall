@@ -21,8 +21,19 @@ object VersusProtocol {
     private const val TYPE_SEED: Byte = 4
     private const val TYPE_REMATCH: Byte = 5
     private const val TYPE_NEW_ROUND: Byte = 6
+    private const val TYPE_SYNC_REQ: Byte = 7
+    private const val TYPE_SYNC_RESP: Byte = 8
 
     fun start(): ByteArray = byteArrayOf(TYPE_START)
+
+    /** 게스트 → 호스트: 시작 시각 동기화 요청(게스트는 보낸 시각을 로컬에 기억). */
+    fun syncReq(): ByteArray = byteArrayOf(TYPE_SYNC_REQ)
+
+    /** 호스트 → 게스트: 호스트 수신시각(t2) + 시작 목표시각(둘 다 호스트 단조시계). */
+    fun syncResp(t2Host: Long, startAtHost: Long): ByteArray =
+        ByteBuffer.allocate(1 + 16).apply {
+            put(TYPE_SYNC_RESP); putLong(t2Host); putLong(startAtHost)
+        }.array()
 
     /** "한 번 더 하고 싶어요" 의사 표시(양쪽이 보내면 호스트가 새 라운드를 연다). */
     fun rematch(): ByteArray = byteArrayOf(TYPE_REMATCH)
@@ -51,6 +62,8 @@ object VersusProtocol {
     sealed interface Msg {
         data object Start : Msg
         data object Rematch : Msg
+        data object SyncReq : Msg
+        data class SyncResp(val t2Host: Long, val startAtHost: Long) : Msg
         data class Seed(val seed: Long) : Msg
         data class NewRound(val seed: Long) : Msg
         data class Pos(val x: Float, val y: Float, val progress: Float) : Msg
@@ -63,6 +76,8 @@ object VersusProtocol {
         return when (buf.get()) {
             TYPE_START -> Msg.Start
             TYPE_REMATCH -> Msg.Rematch
+            TYPE_SYNC_REQ -> Msg.SyncReq
+            TYPE_SYNC_RESP -> if (bytes.size >= 17) Msg.SyncResp(buf.long, buf.long) else null
             TYPE_SEED -> if (bytes.size >= 9) Msg.Seed(buf.long) else null
             TYPE_NEW_ROUND -> if (bytes.size >= 9) Msg.NewRound(buf.long) else null
             TYPE_POS -> if (bytes.size >= 13) Msg.Pos(buf.float, buf.float, buf.float) else null

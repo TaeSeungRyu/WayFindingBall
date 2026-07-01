@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -74,6 +75,7 @@ private const val KEYPAD_MAX_SPEED = 14f
 
 private const val TIME_LIMIT_MS = 60_000L
 private const val FINISH_GRACE_MS = 3_000L
+private const val START_BUFFER_MS = 3_200L
 private const val MAZE_SIZE = 13
 
 private enum class Phase { WAITING, COUNTDOWN, RACE, RESULT }
@@ -94,7 +96,9 @@ fun VersusMazeScreen(
 
     // 공유 시드로 양쪽이 동일한 무작위 맵을 생성한다(규칙 1).
     var seed by remember { mutableStateOf<Long?>(null) }
-    var startSignal by remember { mutableStateOf(false) }
+    // 시작 동기화: 양쪽이 같은 절대 시각(로컬 단조시계)에 GO 하도록 보정.
+    var goAtRealtime by remember { mutableStateOf<Long?>(null) }
+    var pingSentAt by remember { mutableLongStateOf(0L) }
     val maze = remember(seed) { seed?.let { generateRandomMaze(MAZE_SIZE, Random(it)) } }
     val physics = remember(maze) { maze?.let { BallPhysics(it) } }
     val distFromGoal = remember(maze) { maze?.let { bfsDistFromGoal(it) } }
@@ -143,19 +147,17 @@ fun VersusMazeScreen(
         oppProgress = 0f
         iWantRematch = false
         oppWantsRematch = false
+        goAtRealtime = null
         seed = newSeed
-        startSignal = true
         round++
     }
 
-    // 호스트: 시드 생성 후 SEED → START 전송, 자기도 시작.
+    // 호스트: 시드 생성 후 SEED 전송. 시작 시각은 게스트의 SYNC_REQ에 응답하며 정한다.
     LaunchedEffect(Unit) {
         if (manager.isHost) {
             val s = Random.Default.nextLong()
             seed = s
             manager.send(VersusProtocol.seed(s))
-            manager.send(VersusProtocol.start())
-            startSignal = true
         }
     }
 
@@ -163,8 +165,22 @@ fun VersusMazeScreen(
     DisposableEffect(manager) {
         manager.onMessage = { bytes ->
             when (val m = VersusProtocol.parse(bytes)) {
-                is VersusProtocol.Msg.Seed -> if (seed == null) seed = m.seed
-                is VersusProtocol.Msg.Start -> startSignal = true
+                is VersusProtocol.Msg.Seed -> if (seed == null) {
+                    seed = m.seed
+                    pingSentAt = SystemClock.elapsedRealtime()
+                    manager.send(VersusProtocol.syncReq())
+                }
+                is VersusProtocol.Msg.SyncReq -> {
+                    val t2 = SystemClock.elapsedRealtime()
+                    val startAt = t2 + START_BUFFER_MS
+                    goAtRealtime = startAt
+                    manager.send(VersusProtocol.syncResp(t2, startAt))
+                }
+                is VersusProtocol.Msg.SyncResp -> {
+                    val t4 = SystemClock.elapsedRealtime()
+                    val offset = m.t2Host - (pingSentAt + t4) / 2
+                    goAtRealtime = m.startAtHost - offset
+                }
                 is VersusProtocol.Msg.Pos -> {
                     oppX = m.x; oppY = m.y; oppProgress = m.progress
                 }
@@ -172,7 +188,11 @@ fun VersusMazeScreen(
                     if (oppFinishMs == null) oppFinishMs = m.elapsedMs
                 }
                 is VersusProtocol.Msg.Rematch -> oppWantsRematch = true
-                is VersusProtocol.Msg.NewRound -> startNewRound(m.seed)
+                is VersusProtocol.Msg.NewRound -> {
+                    startNewRound(m.seed)
+                    pingSentAt = SystemClock.elapsedRealtime()
+                    manager.send(VersusProtocol.syncReq())
+                }
                 else -> {}
             }
         }
@@ -197,7 +217,7 @@ fun VersusMazeScreen(
 
     BackHandler { onExit() }
 
-    val ready = physics != null && startSignal
+    val ready = physics != null && goAtRealtime != null
 
     // 게임 루프 — 준비 완료 시 카운트다운 후 레이스. round가 바뀌면 새 라운드로 재시작.
     LaunchedEffect(ready, round) {
@@ -205,10 +225,17 @@ fun VersusMazeScreen(
         val phys = physics ?: return@LaunchedEffect
         val dist = distFromGoal ?: return@LaunchedEffect
         val mz = maze ?: return@LaunchedEffect
+        val goAt = goAtRealtime ?: return@LaunchedEffect
         val startDist = dist[mz.startRow][mz.startCol].coerceAtLeast(1)
 
+        // 동기화된 목표 시각까지 카운트다운(양쪽이 같은 순간에 GO).
         phase = Phase.COUNTDOWN
-        for (n in 3 downTo 1) { countdownN = n; delay(900) }
+        while (true) {
+            val remain = goAt - SystemClock.elapsedRealtime()
+            if (remain <= 0L) break
+            countdownN = ((remain + 999L) / 1000L).toInt().coerceIn(1, 3)
+            awaitFrame()
+        }
         phase = Phase.RACE
         phys.reset()
         ballX = phys.x; ballY = phys.y

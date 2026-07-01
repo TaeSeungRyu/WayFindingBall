@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -67,6 +68,7 @@ private const val SENSOR_MAX_SPEED = 22f
 private const val KEYPAD_MAX_SPEED = 14f
 private const val TIME_LIMIT_MS = 60_000L
 private const val FINISH_GRACE_MS = 3_000L
+private const val START_BUFFER_MS = 3_200L
 
 @Composable
 fun VersusColorScreen(
@@ -85,7 +87,8 @@ fun VersusColorScreen(
     val sensorEnabled by AppSettings.sensorEnabled
 
     var seed by remember { mutableStateOf<Long?>(null) }
-    var startSignal by remember { mutableStateOf(false) }
+    var goAtRealtime by remember { mutableStateOf<Long?>(null) }
+    var pingSentAt by remember { mutableLongStateOf(0L) }
     val targetSeq = remember(seed) { seed?.let { ColorGame.targetSequence(stage, Random(it)) } }
 
     DisposableEffect(sensorEnabled) {
@@ -134,8 +137,8 @@ fun VersusColorScreen(
         currentIdx = 0
         iWantRematch = false
         oppWantsRematch = false
+        goAtRealtime = null
         seed = newSeed
-        startSignal = true
         round++
     }
 
@@ -144,20 +147,36 @@ fun VersusColorScreen(
             val s = Random.Default.nextLong()
             seed = s
             manager.send(VersusProtocol.seed(s))
-            manager.send(VersusProtocol.start())
-            startSignal = true
         }
     }
 
     DisposableEffect(manager) {
         manager.onMessage = { bytes ->
             when (val m = VersusProtocol.parse(bytes)) {
-                is VersusProtocol.Msg.Seed -> if (seed == null) seed = m.seed
-                is VersusProtocol.Msg.Start -> startSignal = true
+                is VersusProtocol.Msg.Seed -> if (seed == null) {
+                    seed = m.seed
+                    pingSentAt = SystemClock.elapsedRealtime()
+                    manager.send(VersusProtocol.syncReq())
+                }
+                is VersusProtocol.Msg.SyncReq -> {
+                    val t2 = SystemClock.elapsedRealtime()
+                    val startAt = t2 + START_BUFFER_MS
+                    goAtRealtime = startAt
+                    manager.send(VersusProtocol.syncResp(t2, startAt))
+                }
+                is VersusProtocol.Msg.SyncResp -> {
+                    val t4 = SystemClock.elapsedRealtime()
+                    val offset = m.t2Host - (pingSentAt + t4) / 2
+                    goAtRealtime = m.startAtHost - offset
+                }
                 is VersusProtocol.Msg.Pos -> { oppX = m.x; oppY = m.y; oppProgress = m.progress }
                 is VersusProtocol.Msg.Finished -> if (oppFinishMs == null) oppFinishMs = m.elapsedMs
                 is VersusProtocol.Msg.Rematch -> oppWantsRematch = true
-                is VersusProtocol.Msg.NewRound -> startNewRound(m.seed)
+                is VersusProtocol.Msg.NewRound -> {
+                    startNewRound(m.seed)
+                    pingSentAt = SystemClock.elapsedRealtime()
+                    manager.send(VersusProtocol.syncReq())
+                }
                 else -> {}
             }
         }
@@ -180,13 +199,19 @@ fun VersusColorScreen(
 
     BackHandler { onExit() }
 
-    val ready = targetSeq != null && startSignal
+    val ready = targetSeq != null && goAtRealtime != null
 
     LaunchedEffect(ready, round) {
         if (!ready) return@LaunchedEffect
         val seq = targetSeq ?: return@LaunchedEffect
+        val goAt = goAtRealtime ?: return@LaunchedEffect
         phase = VersusPhase.COUNTDOWN
-        for (n in 3 downTo 1) { countdownN = n; delay(900) }
+        while (true) {
+            val remain = goAt - SystemClock.elapsedRealtime()
+            if (remain <= 0L) break
+            countdownN = ((remain + 999L) / 1000L).toInt().coerceIn(1, 3)
+            awaitFrame()
+        }
         phase = VersusPhase.RACE
         physics.reset()
         ballX = physics.x; ballY = physics.y

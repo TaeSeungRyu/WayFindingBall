@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -71,6 +72,7 @@ private const val SENSOR_MAX_SPEED = 22f
 private const val KEYPAD_MAX_SPEED = 14f
 
 private const val SURVIVE_MS = 60_000L
+private const val START_BUFFER_MS = 3_200L
 private const val MAZE_SIZE = 13
 private const val CHASER_COUNT = 2
 private const val CATCH_DIST = 0.45f
@@ -93,7 +95,8 @@ fun VersusSurvivalScreen(
     val sensorEnabled by AppSettings.sensorEnabled
 
     var seed by remember { mutableStateOf<Long?>(null) }
-    var startSignal by remember { mutableStateOf(false) }
+    var goAtRealtime by remember { mutableStateOf<Long?>(null) }
+    var pingSentAt by remember { mutableLongStateOf(0L) }
     val maze = remember(seed) { seed?.let { generateRandomMaze(MAZE_SIZE, Random(it)) } }
     val physics = remember(maze) { maze?.let { BallPhysics(it) } }
     // 적: randomMove=false + spawnIndex → RNG 없이 결정론적 스폰·추격(양쪽 동일).
@@ -144,8 +147,8 @@ fun VersusSurvivalScreen(
         oppCaughtMs = null
         iWantRematch = false
         oppWantsRematch = false
+        goAtRealtime = null
         seed = newSeed
-        startSignal = true
         round++
     }
 
@@ -154,20 +157,36 @@ fun VersusSurvivalScreen(
             val s = Random.Default.nextLong()
             seed = s
             manager.send(VersusProtocol.seed(s))
-            manager.send(VersusProtocol.start())
-            startSignal = true
         }
     }
 
     DisposableEffect(manager) {
         manager.onMessage = { bytes ->
             when (val m = VersusProtocol.parse(bytes)) {
-                is VersusProtocol.Msg.Seed -> if (seed == null) seed = m.seed
-                is VersusProtocol.Msg.Start -> startSignal = true
+                is VersusProtocol.Msg.Seed -> if (seed == null) {
+                    seed = m.seed
+                    pingSentAt = SystemClock.elapsedRealtime()
+                    manager.send(VersusProtocol.syncReq())
+                }
+                is VersusProtocol.Msg.SyncReq -> {
+                    val t2 = SystemClock.elapsedRealtime()
+                    val startAt = t2 + START_BUFFER_MS
+                    goAtRealtime = startAt
+                    manager.send(VersusProtocol.syncResp(t2, startAt))
+                }
+                is VersusProtocol.Msg.SyncResp -> {
+                    val t4 = SystemClock.elapsedRealtime()
+                    val offset = m.t2Host - (pingSentAt + t4) / 2
+                    goAtRealtime = m.startAtHost - offset
+                }
                 is VersusProtocol.Msg.Pos -> { oppX = m.x; oppY = m.y }
                 is VersusProtocol.Msg.Finished -> if (oppCaughtMs == null) oppCaughtMs = m.elapsedMs
                 is VersusProtocol.Msg.Rematch -> oppWantsRematch = true
-                is VersusProtocol.Msg.NewRound -> startNewRound(m.seed)
+                is VersusProtocol.Msg.NewRound -> {
+                    startNewRound(m.seed)
+                    pingSentAt = SystemClock.elapsedRealtime()
+                    manager.send(VersusProtocol.syncReq())
+                }
                 else -> {}
             }
         }
@@ -190,15 +209,21 @@ fun VersusSurvivalScreen(
 
     BackHandler { onExit() }
 
-    val ready = physics != null && startSignal
+    val ready = physics != null && goAtRealtime != null
 
     LaunchedEffect(ready, round) {
         if (!ready) return@LaunchedEffect
         val phys = physics ?: return@LaunchedEffect
         val enemies = chasers ?: return@LaunchedEffect
+        val goAt = goAtRealtime ?: return@LaunchedEffect
 
         phase = SurvivalPhase.COUNTDOWN
-        for (n in 3 downTo 1) { countdownN = n; delay(900) }
+        while (true) {
+            val remain = goAt - SystemClock.elapsedRealtime()
+            if (remain <= 0L) break
+            countdownN = ((remain + 999L) / 1000L).toInt().coerceIn(1, 3)
+            awaitFrame()
+        }
         phase = SurvivalPhase.RACE
         phys.reset()
         enemies.forEach { it.reset() }
