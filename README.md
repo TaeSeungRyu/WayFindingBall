@@ -94,6 +94,18 @@ app/src/main/java/com/rts/rys/ryy/wayfinding/
     └── theme/                                           # 하늘·잔디 톤 컬러 팔레트
 ```
 
+## 기획·작업 문서
+
+`docs/`에 기획·작업 문서를 모아둬. **작업이 끝난 문서는 `docs/done/`으로 옮겨** 진행 중인 것과 구분해.
+
+- `docs/` (진행 중·참조)
+  - `BILLING_INTEGRATION.md` — 구글 인앱 결제 도입 계획 (미구현)
+  - `RECORDS_TODO.md` — 기록 보기 기능 강화 TODO (일부 완료, 열린 항목 있음)
+  - `DATA_SAFETY.md` — Play Console 데이터 안전 양식 작성 가이드 (릴리스마다 참조)
+- `docs/done/` (완료)
+  - `VERSUS_NEARBY_CONNECTIONS.md` — 1:1 대전모드 구현 계획 (구현·출시 완료)
+  - `업적_스킨_사이드이펙트.md` — 업적·공 스킨 사전 영향 분석 (구현 완료)
+
 ## 빌드
 
 이 프로젝트는 **AGP 8.6.1 / Gradle 8.7 / Kotlin 1.9.0**으로 구성돼 있어. Gradle 8.7은 JDK 22까지 지원하므로 **JDK 17 또는 21**로 빌드해야 해. (시스템 기본 `JAVA_HOME`이 JDK 25면 빌드 실패)
