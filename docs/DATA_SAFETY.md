@@ -49,4 +49,4 @@ Google의 "수집(Collected)" 정의 = **기기 밖(개발자 서버/제3자)으
 
 ---
 
-관련 문서: `PRIVACY_POLICY.md`, `docs/VERSUS_NEARBY_CONNECTIONS.md`
+관련 문서: `PRIVACY_POLICY.md`, `docs/done/VERSUS_NEARBY_CONNECTIONS.md`
