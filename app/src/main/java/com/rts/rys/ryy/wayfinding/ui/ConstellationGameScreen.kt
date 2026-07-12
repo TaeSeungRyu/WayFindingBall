@@ -320,6 +320,7 @@ fun ConstellationGameScreen(
                     ConstellationCanvas(
                         stars = stage.stars,
                         stageLevel = stage.level,
+                        attemptId = attemptId,
                         reached = reached,
                         dragEnd = dragEnd,
                         closeOnComplete = stage.closeOnComplete,
@@ -489,6 +490,8 @@ private sealed class StarGesture {
 private fun ConstellationCanvas(
     stars: List<ConstellationStar>,
     stageLevel: Int,
+    /** 재시작마다 증가 — 제스처 인식기를 새로 시작하기 위한 키. */
+    attemptId: Int,
     reached: Int,
     dragEnd: Offset?,
     closeOnComplete: Boolean,
@@ -505,6 +508,8 @@ private fun ConstellationCanvas(
 ) {
     // pointerInput을 reached로 키잉하면 별 하나 닿을 때마다 재시작되어 드래그가 끊긴다.
     // rememberUpdatedState로 최신 값을 우회 참조. 별똥별/drift도 같은 이유로 우회.
+    // 단, attemptId(재시작)에는 키잉해야 이전 판에서 완성까지 갔던 제스처 코루틴이
+    // 남아 다음 판 드래그를 못 잡는 문제를 피할 수 있다.
     val reachedState = rememberUpdatedState(reached)
     val shootingsState = rememberUpdatedState(shootings)
     val driftTimeState = rememberUpdatedState(driftTime)
@@ -529,7 +534,7 @@ private fun ConstellationCanvas(
             .shadow(6.dp, RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
             .background(Brush.verticalGradient(listOf(Color(0xFF0A1340), Color(0xFF26367A))))
-            .pointerInput(stars) {
+            .pointerInput(stars, attemptId) {
                 awaitEachGesture {
                     val w = size.width.toFloat()
                     val h = size.height.toFloat()
