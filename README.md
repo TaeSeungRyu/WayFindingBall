@@ -9,7 +9,7 @@
 - 🧩 **미로 찾기** — 공을 굴려 별 목적지까지. 레벨 1~13(테마 미로) + 14~20(무한/특수 모드)
 - 🎨 **색깔 찾기** — 지시한 색 칸으로 공을 굴리기 (`game/ColorGame.kt`)
 - 🎯 **굴려서 맞히기** — 공을 굴려 표적 맞히기 (`game/HitGame.kt`)
-- ✨ **별자리 잇기** — 별을 손가락으로 이어 별자리 완성 (`game/Constellation.kt`, `game/Zodiac.kt`)
+- ✨ **별자리 잇기** — 별을 손가락으로 이어 별자리 완성 (`game/Constellation.kt`, `game/Zodiac.kt`). 아이가 직접 별을 찍어 나만의 "○○자리"를 만드는 **별자리 만들기** 포함 (`ui/ConstellationCreateScreen.kt`)
 
 또한 홈에서 **🤝 1:1 대전모드**로 진입할 수 있어 — 같은 공간의 친구와 근처 기기 연결로 겨루는 실시간 대전(아래 "1:1 대전모드" 참고).
 
@@ -21,6 +21,7 @@
 - 벽에 부딪히면 그 축 속도가 0이 되는 축별 충돌 처리, sub-step으로 고속 터널링 방지. 마찰·최대 속도 제한
 - **오늘의 도전** — 날짜 시드 기반 매일 새 미로 + 연속 도전(streak) 표시 (`game/DailyChallenge.kt`, `data/DailyRepository.kt`)
 - **나만의 미로 만들기** — ASCII 격자 에디터로 커스텀 스테이지 제작 (`ui/MazeEditorScreen.kt`, `data/CustomMazesRepository.kt`)
+- **별자리 만들기** — 밤하늘을 탭해 별을 찍어 나만의 "○○자리" 제작·저장(여러 개). 별자리 잇기 게임으로 그대로 플레이 (`ui/ConstellationCreateScreen.kt`, `game/CustomConstellation.kt`, `data/CustomConstellationRepository.kt`)
 - **내 기록** — 모드별·레벨별 최고기록 요약 카드 + 기록 카드 이미지 공유 (`ui/RecordsScreen.kt`, `data/ShareUtils.kt`)
 - **내 도감** — 배지(업적) + 공 스킨 컬렉션. 별을 모아 프리미엄 스킨 구매 (`ui/CollectionScreen.kt`, `data/Badge.kt`, `data/BallSkin.kt`, `data/StarWallet.kt`)
 - **소리·배경음악** 설정 및 사운드 매니저 (`data/SoundManager.kt`). 홈의 **⚙ 설정** 버튼에서 센서 on/off·민감도·소리·음악을 모달로 조정 (`ui/HomeScreen.kt`의 `SettingsDialog`)
@@ -62,6 +63,7 @@ app/src/main/java/com/rts/rys/ryy/wayfinding/
 │   ├── ColorRecordsRepository.kt / HitRecordsRepository.kt
 │   ├── ConstellationRecordsRepository.kt / DailyRepository.kt
 │   ├── CustomMaze.kt / CustomMazesRepository.kt       # 커스텀 미로
+│   ├── CustomConstellationRepository.kt               # 자녀가 만든 별자리
 │   ├── Badge.kt / BallSkin.kt / AchievementsRepository.kt / StarWallet.kt  # 도감
 │   ├── VersusNames.kt / VersusRecord.kt / VersusRecordsRepository.kt        # 대전 닉네임·기록
 │   ├── AppSettings.kt / SoundManager.kt / ShareUtils.kt
@@ -75,13 +77,14 @@ app/src/main/java/com/rts/rys/ryy/wayfinding/
 │   ├── Stars.kt / MazePar.kt / MazeTheme.kt / MazeValidator.kt
 │   ├── ColorGame.kt / FloorColorController.kt          # 색깔 찾기
 │   ├── HitGame.kt                                       # 굴려서 맞히기
-│   ├── Constellation.kt / Zodiac.kt                     # 별자리 잇기
+│   ├── Constellation.kt / Zodiac.kt / CustomConstellation.kt  # 별자리 잇기·만들기
 │   └── DailyChallenge.kt
 └── ui/
     ├── Routes.kt / SplashScreen.kt / HomeScreen.kt / TutorialScreen.kt
     ├── ModeSelectScreen.kt                              # 모드 선택
     ├── StageSelectScreen.kt / LevelSelectScreen.kt
     ├── ColorStageSelectScreen.kt / HitStageSelectScreen.kt / ConstellationStageSelectScreen.kt
+    ├── ConstellationCreateScreen.kt                    # 별자리 만들기(별 찍기 에디터)
     ├── GameScreen.kt / ColorGameScreen.kt / HitGameScreen.kt / ConstellationGameScreen.kt
     ├── ResultScreen.kt / PauseDialog.kt
     ├── RecordsScreen.kt / CollectionScreen.kt / ConstellationDexScreen.kt
@@ -105,6 +108,7 @@ app/src/main/java/com/rts/rys/ryy/wayfinding/
 - `docs/done/` (완료)
   - `VERSUS_NEARBY_CONNECTIONS.md` — 1:1 대전모드 구현 계획 (구현·출시 완료)
   - `업적_스킨_사이드이펙트.md` — 업적·공 스킨 사전 영향 분석 (구현 완료)
+  - `별자리_만들기.md` — 자녀가 직접 그리는 별자리 만들기 (구현·출시 완료, 2.0.2)
 
 ## 빌드
 
