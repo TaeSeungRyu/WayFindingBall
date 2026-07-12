@@ -46,8 +46,10 @@ import androidx.compose.ui.window.Dialog
 import kotlin.random.Random
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.ConstellationRecordsRepository
+import com.rts.rys.ryy.wayfinding.data.CustomConstellationRepository
 import com.rts.rys.ryy.wayfinding.game.Constellation
 import com.rts.rys.ryy.wayfinding.game.ConstellationStage
+import com.rts.rys.ryy.wayfinding.game.CustomConstellation
 import com.rts.rys.ryy.wayfinding.game.Zodiac
 import com.rts.rys.ryy.wayfinding.game.ZodiacEntry
 import com.rts.rys.ryy.wayfinding.game.dateRangeText
@@ -65,6 +67,7 @@ private val GoldRing = Color(0xFFFFD66B)
 fun ConstellationStageSelectScreen(
     onBack: () -> Unit,
     onSelect: (stageKey: String, recordKey: String) -> Unit,
+    onCreate: () -> Unit,
     onDex: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -80,6 +83,14 @@ fun ConstellationStageSelectScreen(
     val repo = remember { ConstellationRecordsRepository(context) }
     val levelBest = Constellation.stages.associate { it.level to repo.bestFor(it.level) }
     val zodiacBest = Zodiac.entries.associate { it.index to repo.bestForKey("zodiac_${it.index}") }
+
+    // 자녀가 만든 별자리. deleteTick으로 삭제 즉시 목록을 다시 읽는다
+    // (별자리 만들기 화면에서 돌아오면 화면 자체가 재구성되어 새 항목이 반영됨).
+    val customRepo = remember { CustomConstellationRepository(context) }
+    var deleteTick by remember { mutableIntStateOf(0) }
+    val customs = remember(deleteTick) { customRepo.all() }
+    val customBest = customs.associate { it.id to repo.bestForKey(it.recordKey) }
+    var pendingDelete by remember { mutableStateOf<CustomConstellation?>(null) }
 
     var showBirthdayDialog by remember { mutableStateOf(false) }
 
@@ -121,8 +132,27 @@ fun ConstellationStageSelectScreen(
                         Constellation.stages.filter { levelBest[it.level] != null } +
                             Zodiac.entries
                                 .filter { zodiacBest[it.index] != null }
-                                .map { it.stage }
+                                .map { it.stage } +
+                            customs
+                                .filter { customBest[it.id] != null }
+                                .map { it.toStage() }
                     NightSkyPanel(clearedStages = clearedStages)
+                }
+
+                // 섹션: 내가 만든 별자리
+                item {
+                    SectionHeader("내가 만든 별자리")
+                }
+                item {
+                    CreateStarCard(onClick = onCreate)
+                }
+                items(customs, key = { it.id }) { custom ->
+                    CustomStarCard(
+                        custom = custom,
+                        bestMs = customBest[custom.id],
+                        onClick = { onSelect(custom.stageKey, custom.recordKey) },
+                        onDelete = { pendingDelete = custom },
+                    )
                 }
 
                 // 섹션 1: 내 별자리
@@ -171,6 +201,18 @@ fun ConstellationStageSelectScreen(
                 }
                 item { Spacer(Modifier.height(16.dp)) }
             }
+        }
+
+        pendingDelete?.let { target ->
+            DeleteConfirmDialog(
+                displayName = target.displayName,
+                onDismiss = { pendingDelete = null },
+                onConfirm = {
+                    customRepo.delete(target.id)
+                    pendingDelete = null
+                    deleteTick++
+                },
+            )
         }
 
         if (showBirthdayDialog) {
@@ -428,6 +470,178 @@ private fun MyZodiacCard(
                         color = GoldRing,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateStarCard(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(84.dp)
+            .shadow(6.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF4A5DBE), Color(0xFF6B3FA0))))
+            .border(2.dp, GoldRing, RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(GoldRing.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("➕", fontSize = 24.sp)
+            }
+            Spacer(Modifier.size(14.dp))
+            Column {
+                Text(
+                    text = "별자리 만들기",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "밤하늘에 나만의 별자리를 그려요 ✨",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomStarCard(
+    custom: CustomConstellation,
+    bestMs: Long?,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(112.dp)
+            .shadow(6.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(CardDeep)
+            .border(1.dp, GoldRing.copy(alpha = 0.4f), RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick)
+            .padding(18.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(GoldRing.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(custom.emoji, fontSize = 28.sp)
+            }
+            Spacer(Modifier.size(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = custom.displayName,
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "내가 만든 별자리 · 별 ${custom.stars.size}개",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StarsBadge(count = custom.toStage().starsEarnedFor(bestMs), starSize = 14)
+                    Text(
+                        text = if (bestMs != null) formatElapsed(bestMs) else "아직 기록 없어요",
+                        color = GoldRing,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+            }
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.3f))
+                .clickable(onClick = onDelete),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("✕", color = Color.White.copy(alpha = 0.85f), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+        }
+    }
+}
+
+@Composable
+private fun DeleteConfirmDialog(
+    displayName: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(12.dp, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp))
+                .background(Brush.verticalGradient(listOf(NightTop, NightBottom)))
+                .border(2.dp, GoldRing, RoundedCornerShape(28.dp))
+                .padding(24.dp),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "🗑️ 지울까요?",
+                    color = NightInk,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "\"$displayName\"를 지우면\n다시 볼 수 없어요.",
+                    color = NightInk.copy(alpha = 0.85f),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DialogButton(
+                        label = "취소",
+                        bg = Color.White.copy(alpha = 0.14f),
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DialogButton(
+                        label = "지우기",
+                        bg = GoldRing,
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }

@@ -33,17 +33,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import com.rts.rys.ryy.wayfinding.data.AppSettings
+import com.rts.rys.ryy.wayfinding.data.CustomConstellationRepository
 import com.rts.rys.ryy.wayfinding.data.CustomMazesRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.data.VersusNames
 import com.rts.rys.ryy.wayfinding.net.NearbyManager
 import com.rts.rys.ryy.wayfinding.game.Constellation
+import com.rts.rys.ryy.wayfinding.game.CustomConstellation
 import com.rts.rys.ryy.wayfinding.game.DailyChallenge
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.game.Zodiac
 import com.rts.rys.ryy.wayfinding.ui.CollectionScreen
 import com.rts.rys.ryy.wayfinding.ui.ColorGameScreen
 import com.rts.rys.ryy.wayfinding.ui.ColorStageSelectScreen
+import com.rts.rys.ryy.wayfinding.ui.ConstellationCreateScreen
 import com.rts.rys.ryy.wayfinding.ui.ConstellationDexScreen
 import com.rts.rys.ryy.wayfinding.ui.ConstellationGameScreen
 import com.rts.rys.ryy.wayfinding.ui.ConstellationStageSelectScreen
@@ -117,6 +120,7 @@ private sealed class Screen {
     data object HitStageSelect : Screen()
     data class HitGame(val level: Int) : Screen()
     data object ConstellationStageSelect : Screen()
+    data object ConstellationCreate : Screen()
     data class ConstellationGame(val stageKey: String, val recordKey: String) : Screen()
     data object ConstellationDex : Screen()
     data object LevelSelect : Screen()
@@ -267,7 +271,12 @@ fun MazeApp() {
                 onSelect = { stageKey, recordKey ->
                     push(Screen.ConstellationGame(stageKey, recordKey))
                 },
+                onCreate = { push(Screen.ConstellationCreate) },
                 onDex = { push(Screen.ConstellationDex) }
+            )
+            Screen.ConstellationCreate -> ConstellationCreateScreen(
+                onBack = { pop() },
+                onSaved = { pop() }
             )
             Screen.ConstellationDex -> ConstellationDexScreen(onBack = { pop() })
             is Screen.ConstellationGame -> {
@@ -277,6 +286,11 @@ fun MazeApp() {
                             Constellation.stageOf(screen.stageKey.removePrefix("level_").toInt())
                         screen.stageKey.startsWith("zodiac_") ->
                             Zodiac.byIndex(screen.stageKey.removePrefix("zodiac_").toInt())?.stage
+                                ?: Constellation.stages.first()
+                        screen.stageKey.startsWith(CustomConstellation.KEY_PREFIX) ->
+                            CustomConstellationRepository(context)
+                                .get(screen.stageKey.removePrefix(CustomConstellation.KEY_PREFIX))
+                                ?.toStage()
                                 ?: Constellation.stages.first()
                         else -> Constellation.stages.first()
                     }
