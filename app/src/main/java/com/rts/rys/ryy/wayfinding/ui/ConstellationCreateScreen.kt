@@ -61,6 +61,9 @@ private val GoldRing = Color(0xFFFFD66B)
 private const val MIN_STARS = 3
 private const val MAX_STARS = 12
 
+/** 별자리 이름 최대 글자 수. */
+private const val MAX_NAME = 8
+
 private val EmojiChoices = listOf("🌟", "💫", "⭐", "✨", "🌙", "🪐", "🐻", "🐰", "🦁", "🐟", "🌈", "❤️")
 
 @Composable
@@ -277,8 +280,16 @@ private fun SaveDialog(
                 )
                 Spacer(Modifier.height(16.dp))
 
-                NameField(value = name, onChange = { name = it.take(8) })
-                Spacer(Modifier.height(8.dp))
+                NameField(value = name, onChange = { name = it.take(MAX_NAME) })
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "${name.length}/$MAX_NAME",
+                    color = NightInk.copy(alpha = 0.6f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.align(Alignment.End),
+                )
+                Spacer(Modifier.height(4.dp))
                 Text(
                     text = if (trimmed.isEmpty()) " " else "${trimmed}자리",
                     color = GoldRing,
