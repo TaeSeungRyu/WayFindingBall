@@ -703,7 +703,7 @@ private fun ConstellationCanvas(
             val isReached = s.order <= reached
             val isNext = (reached == 0 && s.order == 1) ||
                 (reached in 1 until stars.size && s.order == reached + 1)
-            val baseR = minSide * 0.032f
+            val baseR = minSide * 0.040f
             val pulseR = if (isNext) baseR * (1.05f + 0.18f * sin(pulse * 4.5f)) else baseR
 
             // 글로우 헤일로
@@ -728,9 +728,9 @@ private fun ConstellationCanvas(
             drawCircle(rim, radius = pulseR * 1.12f, center = Offset(cx, cy))
             drawCircle(body, radius = pulseR, center = Offset(cx, cy))
             // 순서 번호
-            numberPaint.textSize = pulseR * 1.1f
+            numberPaint.textSize = pulseR * 1.25f
             drawContext.canvas.nativeCanvas.drawText(
-                s.order.toString(), cx, cy + pulseR * 0.4f, numberPaint,
+                s.order.toString(), cx, cy + pulseR * 0.45f, numberPaint,
             )
         }
 

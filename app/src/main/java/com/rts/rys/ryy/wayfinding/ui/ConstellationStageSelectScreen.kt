@@ -474,6 +474,24 @@ private fun MyZodiacCard(
                 }
             }
         }
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.Black.copy(alpha = 0.28f))
+                .clickable(onClick = onClickInput)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("🎂", fontSize = 13.sp)
+            Spacer(Modifier.size(4.dp))
+            Text(
+                text = "바꾸기",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+            )
+        }
     }
 }
 
@@ -856,9 +874,12 @@ private fun BirthdayPickerDialog(
                     fontWeight = FontWeight.ExtraBold,
                 )
                 Spacer(Modifier.height(20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    NumberStepper("월", month, 1, 12) { month = it }
-                    NumberStepper("일", day, 1, maxDay) { day = it }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    NumberStepper("월", month, 1, 12, Modifier.weight(1f)) { month = it }
+                    NumberStepper("일", day, 1, maxDay, Modifier.weight(1f)) { day = it }
                 }
                 Spacer(Modifier.height(24.dp))
                 Row(
@@ -889,9 +910,13 @@ private fun NumberStepper(
     value: Int,
     min: Int,
     max: Int,
+    modifier: Modifier = Modifier,
     onChange: (Int) -> Unit,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(
             text = label,
             color = NightInk.copy(alpha = 0.75f),
@@ -901,16 +926,16 @@ private fun NumberStepper(
         Spacer(Modifier.height(6.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             StepperButton("−") { onChange(if (value > min) value - 1 else max) }
             Text(
                 text = value.toString(),
                 color = Color.White,
-                fontSize = 32.sp,
+                fontSize = 30.sp,
                 fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(min = 52.dp),
+                modifier = Modifier.widthIn(min = 34.dp),
             )
             StepperButton("+") { onChange(if (value < max) value + 1 else min) }
         }
@@ -921,7 +946,7 @@ private fun NumberStepper(
 private fun StepperButton(label: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(40.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.18f))
             .clickable(onClick = onClick),
