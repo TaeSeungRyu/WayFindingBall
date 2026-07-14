@@ -7,10 +7,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -180,8 +182,13 @@ private fun StarCanvas(
         List(70) { Triple(r.nextFloat(), r.nextFloat(), 0.3f + r.nextFloat() * 0.5f) }
     }
 
+    // 플레이 화면(ConstellationCanvas)이 정사각형에 렌더링하므로, 만든 모양이
+    // 눌리지 않도록 만들기 캔버스도 동일하게 정사각형으로 맞춘다. (좌표는 정규 0..1)
+    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+    val side = minOf(maxWidth, maxHeight)
     Box(
-        modifier = modifier
+        modifier = Modifier
+            .size(side)
             .clip(RoundedCornerShape(22.dp))
             .background(Brush.verticalGradient(listOf(Color(0xFF050B25), Color(0xFF14215C))))
             .border(1.dp, GoldRing.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
@@ -242,6 +249,7 @@ private fun StarCanvas(
                 modifier = Modifier.align(Alignment.Center),
             )
         }
+    }
     }
 }
 
@@ -374,14 +382,21 @@ private fun NameField(value: String, onChange: (String) -> Unit) {
 
 @Composable
 private fun EmojiPicker(selected: String, onSelect: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         EmojiChoices.chunked(6).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 row.forEach { e ->
                     val isSel = e == selected
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .weight(1f)
+                            .aspectRatio(1f)
                             .clip(CircleShape)
                             .background(
                                 if (isSel) GoldRing.copy(alpha = 0.3f)
