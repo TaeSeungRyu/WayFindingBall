@@ -7,12 +7,15 @@ import androidx.compose.runtime.setValue
 /**
  * "바닥 색칠하기" 진행 상태. 공이 지나간 바닥 칸을 칠하고 남은 칸 수를 센다.
  *
- * 칠해야 할 대상은 **시작점에서 실제로 도달 가능한** 바닥 칸만이다. (벽으로 막혀
- * 공이 닿을 수 없는 칸을 포함하면 영원히 클리어할 수 없으므로 BFS로 걸러낸다.)
+ * 각 칸은 색 인덱스를 가진다(-1 = 안 칠함). 색 고르기 모드에선 이미 칠한 칸을 다른
+ * 색으로 다시 칠할 수 있다(남은 칸 수는 그대로).
+ *
+ * 칠 대상은 **시작점에서 실제로 도달 가능한** 바닥 칸만이다. (벽으로 막혀 공이 닿을
+ * 수 없는 칸을 포함하면 영원히 클리어할 수 없으므로 BFS로 걸러낸다.)
  * 시작 칸은 생성 시 즉시 칠한다.
  */
 class FloorPaintController(private val maze: Maze) {
-    private val painted = Array(maze.rows) { BooleanArray(maze.cols) }
+    private val colorIdx = Array(maze.rows) { IntArray(maze.cols) { -1 } }
     private val reachable = Array(maze.rows) { BooleanArray(maze.cols) }
 
     /** 칠해야 할 전체(도달 가능) 바닥 칸 수. */
@@ -29,22 +32,29 @@ class FloorPaintController(private val maze: Maze) {
     init {
         total = floodFillReachable(maze.startCol, maze.startRow)
         remaining = total
-        paint(maze.startCol, maze.startRow)
+        paint(maze.startCol, maze.startRow, 0)
     }
 
     fun isReachable(c: Int, r: Int): Boolean =
         r in 0 until maze.rows && c in 0 until maze.cols && reachable[r][c]
 
-    fun isPainted(c: Int, r: Int): Boolean =
-        r in 0 until maze.rows && c in 0 until maze.cols && painted[r][c]
+    fun isPainted(c: Int, r: Int): Boolean = colorAt(c, r) >= 0
 
-    /** (c, r)를 칠한다. 새로 칠했으면 true. */
-    fun paint(c: Int, r: Int): Boolean {
-        if (!isReachable(c, r) || painted[r][c]) return false
-        painted[r][c] = true
-        remaining--
+    /** (c, r)의 색 인덱스. 안 칠했으면 -1. */
+    fun colorAt(c: Int, r: Int): Int =
+        if (r in 0 until maze.rows && c in 0 until maze.cols) colorIdx[r][c] else -1
+
+    /**
+     * (c, r)를 [idx] 색으로 칠한다.
+     * @return 2 = 처음 칠함, 1 = 색만 바꿈, 0 = 변화 없음(도달 불가·같은 색).
+     */
+    fun paint(c: Int, r: Int, idx: Int): Int {
+        if (!isReachable(c, r)) return 0
+        val was = colorIdx[r][c]
+        if (was == idx) return 0
+        colorIdx[r][c] = idx
         version++
-        return true
+        return if (was < 0) { remaining--; 2 } else 1
     }
 
     val done: Boolean get() = remaining <= 0

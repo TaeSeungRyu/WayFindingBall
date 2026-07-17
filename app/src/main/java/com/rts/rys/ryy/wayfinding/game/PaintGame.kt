@@ -17,8 +17,23 @@ data class PaintStage(
     val arenaLines: List<String>? = null,
     /** 광장 모드일 때 한 변 셀 수(테두리 포함). 홀수 권장(중앙 시작점). */
     val size: Int = 9,
-    /** 칠한 칸 색. */
+    /** 카드 대표 색이자 단색 모드의 칠 색. */
     val paintColor: Color,
+    /** true면 팔레트에서 색을 골라 칠한다(색 바꾸기 가능). false면 [paintColor] 단색. */
+    val chooseColor: Boolean = false,
+) {
+    /** 칠에 쓰는 색 목록. 단색 모드는 [paintColor] 하나, 색 고르기 모드는 여러 색. */
+    val palette: List<Color> get() = if (chooseColor) CHOOSE_PALETTE else listOf(paintColor)
+}
+
+/** 색 고르기 모드(7단계) 팔레트 — 또렷이 구분되는 6색. */
+private val CHOOSE_PALETTE = listOf(
+    Color(0xFFE53935), // 빨강
+    Color(0xFFFB8C00), // 주황
+    Color(0xFFFDD835), // 노랑
+    Color(0xFF43A047), // 초록
+    Color(0xFF1E88E5), // 파랑
+    Color(0xFF8E24AA), // 보라
 )
 
 object PaintGame {
@@ -85,6 +100,7 @@ object PaintGame {
         PaintStage(4, "4단계", "벽이 생겼어요", arenaLines = stage4Arena, paintColor = PINK),
         PaintStage(5, "5단계", "기둥 사이를 칠해요", arenaLines = stage5Arena, paintColor = AMBER),
         PaintStage(6, "6단계", "구불구불 미로", arenaLines = stage6Arena, paintColor = PURPLE),
+        PaintStage(7, "7단계", "색을 골라 칠해요", size = 9, paintColor = Color(0xFFEC407A), chooseColor = true),
     )
 
     fun stageOf(level: Int): PaintStage = stages.firstOrNull { it.level == level } ?: stages.first()

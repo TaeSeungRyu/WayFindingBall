@@ -3,6 +3,7 @@ package com.rts.rys.ryy.wayfinding.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -93,6 +95,8 @@ fun PaintGameScreen(
     var isNewBest by remember(attemptId) { mutableStateOf(false) }
     var pulse by remember(attemptId) { mutableFloatStateOf(0f) }
     var paused by remember(level) { mutableStateOf(false) }
+    // 색 고르기 모드: 지금 붓에 든 색 인덱스(팔레트 기준). 단색 모드는 항상 0.
+    var colorIndex by remember(attemptId) { mutableIntStateOf(0) }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
@@ -147,14 +151,17 @@ fun PaintGameScreen(
             val br = floor(physics.y).toInt()
             val cell = bc to br
             if (cell != lastCell) {
-                if (paintCtrl.paint(bc, br)) {
+                val res = paintCtrl.paint(bc, br, colorIndex)
+                if (res != 0) {
                     moved = true
-                    SoundManager.playStarTone((paintCtrl.total - paintCtrl.remaining) % 12)
-                    if (paintCtrl.done) {
-                        isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
-                        finished = true
-                        SoundManager.playGoal()
-                        SoundManager.speak("참 잘했어요")
+                    if (res == 2) {  // 처음 칠한 칸일 때만 소리·완료 판정.
+                        SoundManager.playStarTone((paintCtrl.total - paintCtrl.remaining) % 12)
+                        if (paintCtrl.done) {
+                            isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
+                            finished = true
+                            SoundManager.playGoal()
+                            SoundManager.speak("참 잘했어요")
+                        }
                     }
                 }
                 lastCell = cell
@@ -211,11 +218,11 @@ fun PaintGameScreen(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(stage.paintColor)
+                        .background(stage.palette[colorIndex])
                 )
                 Spacer(Modifier.size(10.dp))
                 Text(
-                    text = "바닥을 모두 칠해요!",
+                    text = if (stage.chooseColor) "좋아하는 색으로 칠해요!" else "바닥을 모두 칠해요!",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = InkDark,
@@ -238,7 +245,7 @@ fun PaintGameScreen(
                     PaintArenaCanvas(
                         arena = arena,
                         paint = paintCtrl,
-                        paintColor = stage.paintColor,
+                        palette = stage.palette,
                         ballX = ballX,
                         ballY = ballY,
                         skin = currentSkin,
@@ -253,6 +260,15 @@ fun PaintGameScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                if (stage.chooseColor) {
+                    ColorPalettePicker(
+                        palette = stage.palette,
+                        selected = colorIndex,
+                        onSelect = { colorIndex = it },
+                        enabled = !finished,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
                 SensorToggleChip(
                     sensorOn = sensorEnabled,
                     onToggle = { AppSettings.setSensorEnabled(!sensorEnabled) }
@@ -297,7 +313,7 @@ fun PaintGameScreen(
 private fun PaintArenaCanvas(
     arena: com.rts.rys.ryy.wayfinding.game.Maze,
     paint: FloorPaintController,
-    paintColor: Color,
+    palette: List<Color>,
     ballX: Float,
     ballY: Float,
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
@@ -317,12 +333,13 @@ private fun PaintArenaCanvas(
         val inset = cell * 0.06f
         val full = cell - inset * 2
 
-        // 바닥 칸(도달 가능한 칸만): 칠한 칸은 스테이지 색, 아직 안 칠한 칸은 연한 베이스.
+        // 바닥 칸(도달 가능한 칸만): 칠한 칸은 그 칸의 색, 아직 안 칠한 칸은 연한 베이스.
         paint.version  // 변경 시 재구성 트리거
         for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
             if (!paint.isReachable(c, r)) continue
+            val idx = paint.colorAt(c, r)
             drawRoundRect(
-                color = if (paint.isPainted(c, r)) paintColor else unpainted,
+                color = if (idx >= 0) palette[idx.coerceIn(0, palette.lastIndex)] else unpainted,
                 topLeft = Offset(c * cell + inset, r * cell + inset),
                 size = Size(full, full),
                 cornerRadius = CornerRadius(cell * 0.18f, cell * 0.18f),
@@ -347,6 +364,35 @@ private fun PaintArenaCanvas(
         val cy = ballY * cell
         drawBallDecoration(skin, cx, cy, r, phaseSec = pulse)
         drawBallBody(skin, cx, cy, r)
+    }
+}
+
+@Composable
+private fun ColorPalettePicker(
+    palette: List<Color>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    enabled: Boolean,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        palette.forEachIndexed { i, c ->
+            val isSel = i == selected
+            Box(
+                modifier = Modifier
+                    .size(if (isSel) 48.dp else 40.dp)
+                    .shadow(if (isSel) 6.dp else 2.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(c)
+                    .then(
+                        if (isSel) Modifier.border(3.dp, Color.White, CircleShape)
+                        else Modifier
+                    )
+                    .clickable(enabled = enabled) { onSelect(i) }
+            )
+        }
     }
 }
 
