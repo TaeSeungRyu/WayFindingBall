@@ -21,9 +21,13 @@ data class PaintStage(
     val paintColor: Color,
     /** true면 팔레트에서 색을 골라 칠한다(색 바꾸기 가능). false면 [paintColor] 단색. */
     val chooseColor: Boolean = false,
+    /** true면 AI와 바닥 색칠 대결. palette[0]=나, palette[1]=AI. */
+    val versus: Boolean = false,
+    /** 색을 직접 지정(대결 모드 등). null이면 규칙에 따라 자동 선택. */
+    val colors: List<Color>? = null,
 ) {
-    /** 칠에 쓰는 색 목록. 단색 모드는 [paintColor] 하나, 색 고르기 모드는 여러 색. */
-    val palette: List<Color> get() = if (chooseColor) CHOOSE_PALETTE else listOf(paintColor)
+    /** 칠에 쓰는 색 목록. 지정 색 > 색 고르기 팔레트 > 단색 순. */
+    val palette: List<Color> get() = colors ?: if (chooseColor) CHOOSE_PALETTE else listOf(paintColor)
 }
 
 /** 색 고르기 모드(7단계) 팔레트 — 또렷이 구분되는 6색. */
@@ -35,6 +39,10 @@ private val CHOOSE_PALETTE = listOf(
     Color(0xFF1E88E5), // 파랑
     Color(0xFF8E24AA), // 보라
 )
+
+/** 대결 모드(8단계) 색 — 파랑(나) vs 빨강(AI). */
+val VERSUS_ME = Color(0xFF1E88E5)
+val VERSUS_AI = Color(0xFFE53935)
 
 object PaintGame {
     private val MINT = Color(0xFF26C6A6)
@@ -101,6 +109,10 @@ object PaintGame {
         PaintStage(5, "5단계", "기둥 사이를 칠해요", arenaLines = stage5Arena, paintColor = AMBER),
         PaintStage(6, "6단계", "구불구불 미로", arenaLines = stage6Arena, paintColor = PURPLE),
         PaintStage(7, "7단계", "색을 골라 칠해요", size = 9, paintColor = Color(0xFFEC407A), chooseColor = true),
+        PaintStage(
+            8, "8단계", "AI와 색칠 대결!", size = 9, paintColor = VERSUS_ME,
+            versus = true, colors = listOf(VERSUS_ME, VERSUS_AI),
+        ),
     )
 
     fun stageOf(level: Int): PaintStage = stages.firstOrNull { it.level == level } ?: stages.first()
