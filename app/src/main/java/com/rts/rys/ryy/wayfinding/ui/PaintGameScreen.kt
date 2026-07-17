@@ -68,10 +68,13 @@ private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
 private const val SENSOR_MAX_SPEED = 22f
 private const val KEYPAD_MAX_SPEED = 14f
-// 8단계 대결 AI — 항상 가장 가까운 빈 칸으로 직진해 낭비가 없다. 속도 12는 너무
-// 느려(플레이어 압승) 18은 너무 빨라(AI 압승) 그 중간값으로 팽팽하게 맞춘다.
-private const val AI_ACCEL_GAIN = 38f
-private const val AI_MAX_SPEED = 15f
+// 8단계 대결 AI — 항상 최단 빈 칸으로 직진해 낭비가 없어 속도에 매우 민감하다.
+// 그래서 속도는 낮추고, 칸을 칠할 때마다 잠깐 멈칫(AI_THINK_PAUSE)하게 해서 도배
+// 속도 자체를 제한한다. 이러면 아이가 따라잡을 틈이 생기고 승패가 팽팽해진다.
+private const val AI_ACCEL_GAIN = 32f
+private const val AI_MAX_SPEED = 13f
+/** AI가 칸 하나를 칠한 뒤 다음 목표로 가기 전 잠깐 쉬는 시간(초). */
+private const val AI_THINK_PAUSE = 0.18f
 
 @Composable
 fun PaintGameScreen(
@@ -127,6 +130,7 @@ fun PaintGameScreen(
         finished = false
         var lastCell = floor(physics.x).toInt() to floor(physics.y).toInt()
         var aiLastCell = -1 to -1
+        var aiIdle = 0f  // 0보다 크면 AI가 잠깐 쉬는 중.
         var moved = false
 
         if (versus) {
@@ -205,16 +209,22 @@ fun PaintGameScreen(
 
             // AI: 가장 가까운 빈 칸으로 굴러가 자기 색(1)으로 칠한다. 판이 다 차면 승패 판정.
             if (versus && !finished) {
-                val target = nearestUnpainted(paintCtrl, arena, aiPhysics.x, aiPhysics.y)
-                if (target != null) {
-                    var dx = (target.first + 0.5f) - aiPhysics.x
-                    var dy = (target.second + 0.5f) - aiPhysics.y
-                    val len = sqrt(dx * dx + dy * dy)
-                    if (len > 0.001f) { dx /= len; dy /= len }
-                    aiPhysics.maxSpeed = AI_MAX_SPEED
-                    aiPhysics.step(dt, dx * AI_ACCEL_GAIN, dy * AI_ACCEL_GAIN)
-                } else {
+                aiPhysics.maxSpeed = AI_MAX_SPEED
+                if (aiIdle > 0f) {
+                    // 칸을 칠한 직후엔 잠깐 멈칫 — 가속 없이 마찰로 감속.
+                    aiIdle -= dt
                     aiPhysics.step(dt, 0f, 0f)
+                } else {
+                    val target = nearestUnpainted(paintCtrl, arena, aiPhysics.x, aiPhysics.y)
+                    if (target != null) {
+                        var dx = (target.first + 0.5f) - aiPhysics.x
+                        var dy = (target.second + 0.5f) - aiPhysics.y
+                        val len = sqrt(dx * dx + dy * dy)
+                        if (len > 0.001f) { dx /= len; dy /= len }
+                        aiPhysics.step(dt, dx * AI_ACCEL_GAIN, dy * AI_ACCEL_GAIN)
+                    } else {
+                        aiPhysics.step(dt, 0f, 0f)
+                    }
                 }
                 aiX = aiPhysics.x
                 aiY = aiPhysics.y
@@ -224,6 +234,7 @@ fun PaintGameScreen(
                 if (acell != aiLastCell) {
                     if (!paintCtrl.isPainted(ac, ar) && paintCtrl.paint(ac, ar, 1) == 2) {
                         aiCount++
+                        aiIdle = AI_THINK_PAUSE  // 새 칸을 칠했으니 잠깐 쉼.
                     }
                     aiLastCell = acell
                 }
