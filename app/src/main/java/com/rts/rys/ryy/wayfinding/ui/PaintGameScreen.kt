@@ -68,10 +68,10 @@ private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
 private const val SENSOR_MAX_SPEED = 22f
 private const val KEYPAD_MAX_SPEED = 14f
-// 8단계 대결 AI — 항상 가장 가까운 빈 칸으로 직진하므로 낭비가 없다. 그래서
-// 최고 속도는 플레이어(센서 22)보다 약간 낮게 두되, 팽팽한 경쟁이 되도록 충분히 빠르게.
-private const val AI_ACCEL_GAIN = 46f
-private const val AI_MAX_SPEED = 18f
+// 8단계 대결 AI — 항상 가장 가까운 빈 칸으로 직진해 낭비가 없다. 속도 12는 너무
+// 느려(플레이어 압승) 18은 너무 빨라(AI 압승) 그 중간값으로 팽팽하게 맞춘다.
+private const val AI_ACCEL_GAIN = 38f
+private const val AI_MAX_SPEED = 15f
 
 @Composable
 fun PaintGameScreen(
