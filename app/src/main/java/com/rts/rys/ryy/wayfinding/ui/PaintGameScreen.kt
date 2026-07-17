@@ -74,7 +74,7 @@ private const val KEYPAD_MAX_SPEED = 14f
 private const val AI_ACCEL_GAIN = 22f
 private const val AI_MAX_SPEED = 9f
 /** AI가 칸 하나를 칠한 뒤 다음 목표로 가기 전 잠깐 쉬는 시간(초). */
-private const val AI_THINK_PAUSE = 0.18f
+private const val AI_THINK_PAUSE = 0.36f
 
 @Composable
 fun PaintGameScreen(
