@@ -71,8 +71,8 @@ private const val KEYPAD_MAX_SPEED = 14f
 // 8단계 대결 AI — 항상 최단 빈 칸으로 직진해 낭비가 없어 속도에 매우 민감하다.
 // 그래서 속도는 낮추고, 칸을 칠할 때마다 잠깐 멈칫(AI_THINK_PAUSE)하게 해서 도배
 // 속도 자체를 제한한다. 이러면 아이가 따라잡을 틈이 생기고 승패가 팽팽해진다.
-private const val AI_ACCEL_GAIN = 22f
-private const val AI_MAX_SPEED = 9f
+private const val AI_ACCEL_GAIN = 15.4f
+private const val AI_MAX_SPEED = 6.3f
 /** AI가 칸 하나를 칠한 뒤 다음 목표로 가기 전 잠깐 쉬는 시간(초). */
 private const val AI_THINK_PAUSE = 0.36f
 
