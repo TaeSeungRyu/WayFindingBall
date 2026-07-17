@@ -1,0 +1,125 @@
+package com.rts.rys.ryy.wayfinding.game
+
+import androidx.compose.ui.graphics.Color
+
+/**
+ * "바닥 색칠하기" 모드 데이터.
+ *
+ * 공을 굴려 지나간 바닥 칸을 색칠하고, 모든 바닥 칸을 다 칠하면 클리어.
+ * 기존 [BallPhysics]/기울기·키패드 조작과 [Maze] 격자를 그대로 재사용한다.
+ * 앞 단계는 벽 없는 광장(크기 ↑), 뒤 단계는 미로 벽이 붙어 구석까지 칠해야 한다.
+ */
+data class PaintStage(
+    val level: Int,
+    val name: String,
+    val description: String,
+    /** null이면 [size] 크기의 테두리만 있는 빈 광장. 아니면 이 ASCII 미로를 사용. */
+    val arenaLines: List<String>? = null,
+    /** 광장 모드일 때 한 변 셀 수(테두리 포함). 홀수 권장(중앙 시작점). */
+    val size: Int = 9,
+    /** 칠한 칸 색. */
+    val paintColor: Color,
+)
+
+object PaintGame {
+    private val MINT = Color(0xFF26C6A6)
+    private val SKY = Color(0xFF4FC3F7)
+    private val LIME = Color(0xFF9CCC65)
+    private val PINK = Color(0xFFF06292)
+    private val AMBER = Color(0xFFFFB74D)
+    private val PURPLE = Color(0xFFBA68C8)
+
+    // 4단계 미로: 십자 벽으로 네 구역을 나누되 가운데 통로로 모두 이어진다.
+    private val stage4Arena = listOf(
+        "###########",
+        "#    #    #",
+        "#    #    #",
+        "#         #",
+        "#    #    #",
+        "## ##### ##",
+        "#    #    #",
+        "#         #",
+        "#    #    #",
+        "#    S    #",
+        "###########",
+    )
+
+    // 5단계 미로: 기둥 사이를 지그재그로 칠한다. 통로 행으로 모든 칸이 이어진다.
+    private val stage5Arena = listOf(
+        "#############",
+        "#           #",
+        "# # # # # # #",
+        "# # # # # # #",
+        "# # # # # # #",
+        "#           #",
+        "# # # # # # #",
+        "# # # # # # #",
+        "# # # # # # #",
+        "#           #",
+        "# # # # # # #",
+        "#     S     #",
+        "#############",
+    )
+
+    // 6단계 미로: 한 줄로 이어진 구불구불(serpentine) 통로. 칸막이가 한쪽 끝만 열린다.
+    private val stage6Arena = listOf(
+        "#############",
+        "#           #",
+        "# ###########",
+        "#           #",
+        "########### #",
+        "#           #",
+        "# ###########",
+        "#           #",
+        "########### #",
+        "#           #",
+        "# ###########",
+        "#     S     #",
+        "#############",
+    )
+
+    val stages: List<PaintStage> = listOf(
+        PaintStage(1, "1단계", "작은 광장을 칠해요", size = 7, paintColor = MINT),
+        PaintStage(2, "2단계", "조금 더 넓어요", size = 9, paintColor = SKY),
+        PaintStage(3, "3단계", "큰 광장을 칠해요", size = 11, paintColor = LIME),
+        PaintStage(4, "4단계", "벽이 생겼어요", arenaLines = stage4Arena, paintColor = PINK),
+        PaintStage(5, "5단계", "기둥 사이를 칠해요", arenaLines = stage5Arena, paintColor = AMBER),
+        PaintStage(6, "6단계", "구불구불 미로", arenaLines = stage6Arena, paintColor = PURPLE),
+    )
+
+    fun stageOf(level: Int): PaintStage = stages.firstOrNull { it.level == level } ?: stages.first()
+
+    /** 단계의 미로. 지정 레이아웃이 있으면 그것을, 없으면 [PaintStage.size] 광장을 만든다. */
+    fun buildArena(stage: PaintStage): Maze {
+        stage.arenaLines?.let { return Maze.fromAscii(it) }
+        val n = stage.size
+        val center = n / 2
+        val lines = (0 until n).map { r ->
+            buildString {
+                for (c in 0 until n) {
+                    append(
+                        when {
+                            r == 0 || r == n - 1 || c == 0 || c == n - 1 -> '#'
+                            r == center && c == center -> 'S'
+                            else -> ' '
+                        }
+                    )
+                }
+            }
+        }
+        return Maze.fromAscii(lines)
+    }
+
+    /**
+     * 클리어 시간 → 별 개수(0..3). 칸 수 기준으로 par를 정해 크기가 달라도 공정하게.
+     * 칸당 0.8초 이내면 ★★★, 1.4초 이내면 ★★, 그 외 ★.
+     */
+    fun starsFor(floorCount: Int, elapsedMs: Long): Int {
+        val perCell = elapsedMs.toFloat() / floorCount.coerceAtLeast(1)
+        return when {
+            perCell <= 800f -> 3
+            perCell <= 1400f -> 2
+            else -> 1
+        }
+    }
+}

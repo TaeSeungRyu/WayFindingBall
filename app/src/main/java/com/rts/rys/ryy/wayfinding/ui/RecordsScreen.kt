@@ -44,12 +44,14 @@ import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.ColorRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.HitRecordsRepository
+import com.rts.rys.ryy.wayfinding.data.PaintRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
 import com.rts.rys.ryy.wayfinding.data.ShareUtils
 import com.rts.rys.ryy.wayfinding.game.ColorGame
 import com.rts.rys.ryy.wayfinding.game.ColorStage
 import com.rts.rys.ryy.wayfinding.game.HitGame
 import com.rts.rys.ryy.wayfinding.game.MazePar
+import com.rts.rys.ryy.wayfinding.game.PaintGame
 import com.rts.rys.ryy.wayfinding.game.Stages
 import com.rts.rys.ryy.wayfinding.game.difficultyLabel
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
@@ -110,6 +112,10 @@ fun RecordsScreen(onBack: () -> Unit) {
         val repo = HitRecordsRepository(context)
         HitGame.stages.map { it.level to (it.name to repo.bestFor(it.level)) }
     }
+    val paintBests = remember {
+        val repo = PaintRecordsRepository(context)
+        PaintGame.stages.map { it.level to (it.name to repo.bestFor(it.level)) }
+    }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Box(
@@ -164,6 +170,14 @@ fun RecordsScreen(onBack: () -> Unit) {
                 items(hitBests, key = { "hit_${it.first}" }) { (level, pair) ->
                     val (name, bestMs) = pair
                     TimeBestCard(level = level, title = name, bestMs = bestMs, baseColor = WallGreen, emoji = "🎯")
+                }
+                item(key = "h_paint") {
+                    Spacer(Modifier.height(6.dp))
+                    SectionLabel("바닥 색칠하기")
+                }
+                items(paintBests, key = { "paint_${it.first}" }) { (level, pair) ->
+                    val (name, bestMs) = pair
+                    TimeBestCard(level = level, title = name, bestMs = bestMs, baseColor = Color(0xFF26A69A), emoji = "🖌️")
                 }
             }
         }

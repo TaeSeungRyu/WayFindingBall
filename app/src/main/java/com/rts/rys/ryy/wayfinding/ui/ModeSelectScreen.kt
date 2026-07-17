@@ -42,6 +42,8 @@ import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 
 // 별자리 모드용 — 밤하늘 톤 (테마를 기존 3모드와 시각적으로 분리).
 private val ConstellationCard = Color(0xFF3949AB)
+// 바닥 색칠하기 모드용 — 민트 톤.
+private val PaintCard = Color(0xFF26A69A)
 
 @Composable
 fun ModeSelectScreen(
@@ -50,6 +52,7 @@ fun ModeSelectScreen(
     onColor: () -> Unit,
     onHit: () -> Unit,
     onConstellation: () -> Unit,
+    onPaint: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -114,6 +117,13 @@ fun ModeSelectScreen(
                         subtitle = "별을 손가락으로 이어요",
                         bg = ConstellationCard,
                         onClick = onConstellation,
+                    )
+                    ModeCard(
+                        emoji = "🖌️",
+                        title = "바닥 색칠하기",
+                        subtitle = "공을 굴려 바닥을 다 칠해요",
+                        bg = PaintCard,
+                        onClick = onPaint,
                     )
                 }
             }
