@@ -64,6 +64,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import kotlinx.coroutines.android.awaitFrame
 import kotlin.math.floor
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
@@ -136,6 +137,8 @@ fun PaintGameScreen(
         var lastCell = floor(physics.x).toInt() to floor(physics.y).toInt()
         val aiLast = Array(aiN) { -1 to -1 }
         val aiIdle = FloatArray(aiN)
+        val aiTarget = arrayOfNulls<Pair<Int, Int>>(aiN)
+        val rnd = Random(attemptId + 101)
         var moved = false
 
         // 칸 하나를 [idx] 색으로 칠하고 점수판을 갱신. 덮어쓰기 불가 모드에선 빈 칸만.
@@ -235,22 +238,41 @@ fun PaintGameScreen(
                 for (i in 0 until aiN) {
                     val ph = aiList[i]
                     ph.maxSpeed = AI_MAX_SPEED
-                    if (aiIdle[i] > 0f) {
-                        aiIdle[i] -= dt
-                        ph.step(dt, 0f, 0f)  // 칸을 칠한 직후엔 잠깐 멈칫.
-                    } else {
-                        val target = if (overwrite)
-                            nearestNotMine(paintCtrl, arena, ph.x, ph.y, i + 1)
-                        else
-                            nearestUnpainted(paintCtrl, arena, ph.x, ph.y)
-                        if (target != null) {
-                            var dx = (target.first + 0.5f) - ph.x
-                            var dy = (target.second + 0.5f) - ph.y
+                    if (timed) {
+                        // 목표를 하나 정해 도달까지 유지 + 가끔 무작위 목표 — 부드럽고 덜 단조롭게.
+                        val cur = floor(ph.x).toInt() to floor(ph.y).toInt()
+                        var tgt = aiTarget[i]
+                        if (tgt == null || tgt == cur ||
+                            paintCtrl.colorAt(tgt.first, tgt.second) == i + 1
+                        ) {
+                            tgt = pickAiTarget(paintCtrl, arena, ph.x, ph.y, i + 1, rnd)
+                            aiTarget[i] = tgt
+                        }
+                        if (tgt != null) {
+                            var dx = (tgt.first + 0.5f) - ph.x
+                            var dy = (tgt.second + 0.5f) - ph.y
                             val len = sqrt(dx * dx + dy * dy)
                             if (len > 0.001f) { dx /= len; dy /= len }
                             ph.step(dt, dx * AI_ACCEL_GAIN, dy * AI_ACCEL_GAIN)
                         } else {
                             ph.step(dt, 0f, 0f)
+                        }
+                    } else {
+                        // 8단계: 가장 가까운 빈 칸으로, 칸마다 잠깐 멈칫.
+                        if (aiIdle[i] > 0f) {
+                            aiIdle[i] -= dt
+                            ph.step(dt, 0f, 0f)
+                        } else {
+                            val target = nearestUnpainted(paintCtrl, arena, ph.x, ph.y)
+                            if (target != null) {
+                                var dx = (target.first + 0.5f) - ph.x
+                                var dy = (target.second + 0.5f) - ph.y
+                                val len = sqrt(dx * dx + dy * dy)
+                                if (len > 0.001f) { dx /= len; dy /= len }
+                                ph.step(dt, dx * AI_ACCEL_GAIN, dy * AI_ACCEL_GAIN)
+                            } else {
+                                ph.step(dt, 0f, 0f)
+                            }
                         }
                     }
                     aiPos[i] = Offset(ph.x, ph.y)
@@ -258,7 +280,8 @@ fun PaintGameScreen(
                     val ar = floor(ph.y).toInt()
                     val acell = ac to ar
                     if (acell != aiLast[i]) {
-                        if (tryPaint(ac, ar, i + 1) != 0) aiIdle[i] = AI_THINK_PAUSE
+                        val painted = tryPaint(ac, ar, i + 1)
+                        if (painted != 0 && !timed) aiIdle[i] = AI_THINK_PAUSE
                         aiLast[i] = acell
                     }
                 }
@@ -269,7 +292,11 @@ fun PaintGameScreen(
                     val best = counts.maxOrNull() ?: 0
                     won = my == best && counts.count { it == best } == 1
                     draw = my == best && !won
-                    if (won && !timed) isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
+                    isNewBest = if (timed) {
+                        PaintRecordsRepository(context).recordScore(level, my)
+                    } else if (won) {
+                        PaintRecordsRepository(context).record(level, elapsedMs)
+                    } else false
                     finished = true
                     SoundManager.playGoal()
                 }
@@ -494,6 +521,32 @@ private fun nearestNotMine(
     return best
 }
 
+/**
+ * 땅따먹기 AI의 다음 목표 칸. 대개 가장 가까운 '내 것 아닌' 칸으로 가되,
+ * 30% 확률로 무작위 칸을 골라 세 공이 한곳에 뭉치지 않고 맵을 넓게 돌게 한다.
+ */
+private fun pickAiTarget(
+    paint: FloorPaintController,
+    arena: com.rts.rys.ryy.wayfinding.game.Maze,
+    x: Float,
+    y: Float,
+    myIdx: Int,
+    rnd: Random,
+): Pair<Int, Int>? {
+    if (rnd.nextFloat() < 0.3f) {
+        val curC = floor(x).toInt()
+        val curR = floor(y).toInt()
+        val candidates = ArrayList<Pair<Int, Int>>()
+        for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
+            if (c == curC && r == curR) continue
+            if (!paint.isReachable(c, r) || paint.colorAt(c, r) == myIdx) continue
+            candidates.add(c to r)
+        }
+        if (candidates.isNotEmpty()) return candidates[rnd.nextInt(candidates.size)]
+    }
+    return nearestNotMine(paint, arena, x, y, myIdx)
+}
+
 @Composable
 private fun PaintArenaCanvas(
     arena: com.rts.rys.ryy.wayfinding.game.Maze,
@@ -668,6 +721,15 @@ private fun PaintResultOverlay(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
+                if (isNewBest) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "✨ 최고 점수! ✨",
+                        color = CoralPink,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
             } else {
                 Text(
                     text = "바닥을 모두 칠했어요",

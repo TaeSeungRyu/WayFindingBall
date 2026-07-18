@@ -114,7 +114,15 @@ fun RecordsScreen(onBack: () -> Unit) {
     }
     val paintBests = remember {
         val repo = PaintRecordsRepository(context)
-        PaintGame.stages.map { it.level to (it.name to repo.bestFor(it.level)) }
+        PaintGame.stages.map { stage ->
+            PaintBest(
+                level = stage.level,
+                name = stage.name,
+                timed = stage.countdownS > 0f,
+                bestMs = repo.bestFor(stage.level),
+                bestScore = repo.bestScoreFor(stage.level),
+            )
+        }
     }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -175,9 +183,14 @@ fun RecordsScreen(onBack: () -> Unit) {
                     Spacer(Modifier.height(6.dp))
                     SectionLabel("바닥 색칠하기")
                 }
-                items(paintBests, key = { "paint_${it.first}" }) { (level, pair) ->
-                    val (name, bestMs) = pair
-                    TimeBestCard(level = level, title = name, bestMs = bestMs, baseColor = Color(0xFF26A69A), emoji = "🖌️")
+                items(paintBests, key = { "paint_${it.level}" }) { pb ->
+                    val valueText = if (pb.timed) pb.bestScore?.let { "$it 칸" }
+                                    else pb.bestMs?.let { formatElapsed(it) }
+                    PaintBestCard(
+                        title = pb.name,
+                        valueText = valueText,
+                        baseColor = Color(0xFF26A69A),
+                    )
                 }
             }
         }
@@ -283,6 +296,65 @@ private fun ColorBestCard(stage: ColorStage, bestMs: Long?) {
         Spacer(Modifier.size(8.dp))
         Text(
             text = if (hasRecord) formatElapsed(bestMs!!) else "기록 없음",
+            color = Color.White,
+            fontSize = if (hasRecord) 20.sp else 13.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
+}
+
+private data class PaintBest(
+    val level: Int,
+    val name: String,
+    val timed: Boolean,
+    val bestMs: Long?,
+    val bestScore: Int?,
+)
+
+/** 바닥 색칠하기 기록 카드 — 값(시간 또는 "N칸")을 문자열로 받아 그대로 표기. */
+@Composable
+private fun PaintBestCard(title: String, valueText: String?, baseColor: Color) {
+    val hasRecord = valueText != null
+    val color = if (hasRecord) baseColor else Color(0xFFBDB7B0)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(82.dp)
+            .shadow(6.dp, RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(color)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = "🖌️", fontSize = 26.sp)
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                maxLines = 1
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (hasRecord) "최고 기록" else "아직 도전해 보세요",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.85f)
+            )
+        }
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = valueText ?: "기록 없음",
             color = Color.White,
             fontSize = if (hasRecord) 20.sp else 13.sp,
             fontWeight = FontWeight.ExtraBold
