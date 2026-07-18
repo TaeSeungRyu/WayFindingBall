@@ -74,10 +74,11 @@ private const val KEYPAD_MAX_SPEED = 14f
 // 대결 AI 이동 속도는 스테이지별(PaintStage.aiMaxSpeed/aiAccelGain)로 지정한다.
 /** AI가 칸 하나를 칠한 뒤 다음 목표로 가기 전 잠깐 쉬는 시간(초, 8단계 전용). */
 private const val AI_THINK_PAUSE = 0.36f
-/** 동적 벽 생성 간격(초). */
-private const val WALL_SPAWN_INTERVAL = 1.6f
-/** 동적 벽이 덮을 수 있는 최대 비율(전체 도달 가능 칸 대비). */
-private const val WALL_MAX_RATIO = 0.30f
+// 동적 벽: 항상 3~6개가 랜덤 위치에 나타났다가 수명이 다하면 사라진다.
+private const val WALL_MIN = 3
+private const val WALL_MAX = 6
+private const val WALL_LIFE_MIN = 2.0f   // 벽 하나가 유지되는 최소 시간(초)
+private const val WALL_LIFE_MAX = 4.0f
 /** 목표에 이 시간(초) 넘게 못 닿으면(벽에 막힘 등) 목표를 다시 고른다. */
 private const val AI_TARGET_TIMEOUT = 2.5f
 
@@ -143,9 +144,10 @@ fun PaintGameScreen(
         val aiTarget = arrayOfNulls<Pair<Int, Int>>(aiN)
         val aiTargetAge = FloatArray(aiN)
         val rnd = Random(attemptId + 101)
-        var wallTimer = 0f
-        var wallsSpawned = 0
-        val maxWalls = (paintCtrl.total * WALL_MAX_RATIO).toInt()
+        val activeWalls = ArrayList<TempWall>()
+        var wallTarget = WALL_MIN + rnd.nextInt(WALL_MAX - WALL_MIN + 1)  // 3~6
+        var wallRetargetTimer = 0f
+        var wallSpawnCd = 0f
         var moved = false
 
         // 칸 하나를 [idx] 색으로 칠하고 점수판을 갱신. 덮어쓰기 불가 모드에선 빈 칸만.
@@ -298,12 +300,29 @@ fun PaintGameScreen(
                     }
                 }
 
-                // 동적 벽: 일정 간격으로 무작위 칸을 벽으로. 칠해진 칸 위에도 생기며,
-                // 공이 올라가 있는 칸은 피한다.
-                if (stage.dynamicWalls && wallsSpawned < maxWalls) {
-                    wallTimer += dt
-                    if (wallTimer >= WALL_SPAWN_INTERVAL) {
-                        wallTimer = 0f
+                // 동적 벽: 항상 3~6개가 나타났다 사라진다. 칠해진 칸 위에도 생기며,
+                // 공이 올라가 있는 칸은 피한다. 수명이 다하면 빈 바닥으로 복원.
+                if (stage.dynamicWalls) {
+                    // 목표 개수를 주기적으로 3~6 사이에서 다시 뽑는다.
+                    wallRetargetTimer += dt
+                    if (wallRetargetTimer >= 3f) {
+                        wallRetargetTimer = 0f
+                        wallTarget = WALL_MIN + rnd.nextInt(WALL_MAX - WALL_MIN + 1)
+                    }
+                    // 수명이 끝난 벽 제거 → 바닥 복원.
+                    val wit = activeWalls.iterator()
+                    while (wit.hasNext()) {
+                        val w = wit.next()
+                        w.life -= dt
+                        if (w.life <= 0f) {
+                            paintCtrl.unwall(w.c, w.r)
+                            arena.grid[w.r][w.c] = Cell.EMPTY
+                            wit.remove()
+                        }
+                    }
+                    // 목표 개수까지 하나씩(살짝 텀을 두고) 새 벽 생성.
+                    wallSpawnCd -= dt
+                    if (activeWalls.size < wallTarget && wallSpawnCd <= 0f) {
                         val occupied = HashSet<Pair<Int, Int>>()
                         occupied.add(floor(physics.x).toInt() to floor(physics.y).toInt())
                         for (i in 0 until aiN) {
@@ -320,11 +339,12 @@ fun PaintGameScreen(
                             val old = paintCtrl.wallify(wc, wr)
                             if (old in counts.indices) counts[old] = counts[old] - 1
                             arena.grid[wr][wc] = Cell.WALL
-                            wallsSpawned++
+                            activeWalls.add(TempWall(wc, wr, WALL_LIFE_MIN + rnd.nextFloat() * (WALL_LIFE_MAX - WALL_LIFE_MIN)))
                             // 그 칸을 노리던 AI는 목표를 다시 고르게.
                             for (i in 0 until aiN) {
                                 if (aiTarget[i] == (wc to wr)) aiTarget[i] = null
                             }
+                            wallSpawnCd = 0.3f + rnd.nextFloat() * 0.4f
                         }
                     }
                 }
@@ -520,6 +540,9 @@ fun PaintGameScreen(
         }
     }
 }
+
+/** 나타났다 사라지는 동적 벽 한 개. [life]는 남은 수명(초). */
+private class TempWall(val c: Int, val r: Int, var life: Float)
 
 /** AI 위치에서 가장 가까운 '도달 가능하고 아직 안 칠한' 칸을 찾는다. 없으면 null. */
 private fun nearestUnpainted(

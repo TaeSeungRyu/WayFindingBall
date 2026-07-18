@@ -72,6 +72,14 @@ class FloorPaintController(private val maze: Maze) {
         return old
     }
 
+    /** [wallify]로 벽이 된 칸을 다시 빈 바닥(도달 가능·안 칠함)으로 되돌린다. */
+    fun unwall(c: Int, r: Int) {
+        if (r !in 1 until maze.rows - 1 || c !in 1 until maze.cols - 1) return
+        reachable[r][c] = true
+        colorIdx[r][c] = -1
+        version++
+    }
+
     /** 시작점에서 상하좌우로 이어진 벽이 아닌 칸을 표시하고 그 개수를 반환. */
     private fun floodFillReachable(startC: Int, startR: Int): Int {
         if (maze.isWall(startC, startR)) return 0
