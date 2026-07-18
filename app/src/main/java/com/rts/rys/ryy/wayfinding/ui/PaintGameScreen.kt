@@ -468,7 +468,10 @@ private fun nearestUnpainted(
     return best
 }
 
-/** [myIdx] 색이 아닌(빈 칸 또는 남의 색) 가장 가까운 도달 가능 칸. 땅따먹기 AI용. */
+/**
+ * [myIdx] 색이 아닌(빈 칸 또는 남의 색) 가장 가까운 도달 가능 칸. 땅따먹기 AI용.
+ * 지금 서 있는 칸은 제외한다 — 그 칸이 뺏겨 최단이 되면 목표가 제자리라 AI가 얼어붙기 때문.
+ */
 private fun nearestNotMine(
     paint: FloorPaintController,
     arena: com.rts.rys.ryy.wayfinding.game.Maze,
@@ -476,9 +479,12 @@ private fun nearestNotMine(
     y: Float,
     myIdx: Int,
 ): Pair<Int, Int>? {
+    val curC = floor(x).toInt()
+    val curR = floor(y).toInt()
     var best: Pair<Int, Int>? = null
     var bestD = Float.MAX_VALUE
     for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
+        if (c == curC && r == curR) continue
         if (!paint.isReachable(c, r) || paint.colorAt(c, r) == myIdx) continue
         val dx = (c + 0.5f) - x
         val dy = (r + 0.5f) - y
