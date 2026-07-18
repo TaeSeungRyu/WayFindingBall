@@ -59,6 +59,19 @@ class FloorPaintController(private val maze: Maze) {
 
     val done: Boolean get() = remaining <= 0
 
+    /**
+     * (c, r)를 벽으로 만든다(동적 벽). 더는 칠할 수 없는 칸이 된다.
+     * @return 벽이 되기 전 그 칸의 색 인덱스(-1=빈 칸), 대상이 아니면 -2.
+     */
+    fun wallify(c: Int, r: Int): Int {
+        if (!isReachable(c, r)) return -2
+        val old = colorIdx[r][c]
+        reachable[r][c] = false
+        colorIdx[r][c] = -1
+        version++
+        return old
+    }
+
     /** 시작점에서 상하좌우로 이어진 벽이 아닌 칸을 표시하고 그 개수를 반환. */
     private fun floodFillReachable(startC: Int, startR: Int): Int {
         if (maze.isWall(startC, startR)) return 0

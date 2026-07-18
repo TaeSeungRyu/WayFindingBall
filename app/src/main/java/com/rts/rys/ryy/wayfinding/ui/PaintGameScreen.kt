@@ -52,6 +52,7 @@ import com.rts.rys.ryy.wayfinding.data.BallSkins
 import com.rts.rys.ryy.wayfinding.data.PaintRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
+import com.rts.rys.ryy.wayfinding.game.Cell
 import com.rts.rys.ryy.wayfinding.game.FloorPaintController
 import com.rts.rys.ryy.wayfinding.game.PaintGame
 import com.rts.rys.ryy.wayfinding.game.TiltSensor
@@ -70,13 +71,15 @@ private const val SENSOR_ACCEL_GAIN = 36f
 private const val KEYPAD_ACCEL_GAIN = 18f
 private const val SENSOR_MAX_SPEED = 22f
 private const val KEYPAD_MAX_SPEED = 14f
-// 8단계 대결 AI — 항상 최단 빈 칸으로 직진해 낭비가 없어 속도에 매우 민감하다.
-// 그래서 속도는 낮추고, 칸을 칠할 때마다 잠깐 멈칫(AI_THINK_PAUSE)하게 해서 도배
-// 속도 자체를 제한한다. 이러면 아이가 따라잡을 틈이 생기고 승패가 팽팽해진다.
-private const val AI_ACCEL_GAIN = 15.4f
-private const val AI_MAX_SPEED = 6.3f
-/** AI가 칸 하나를 칠한 뒤 다음 목표로 가기 전 잠깐 쉬는 시간(초). */
+// 대결 AI 이동 속도는 스테이지별(PaintStage.aiMaxSpeed/aiAccelGain)로 지정한다.
+/** AI가 칸 하나를 칠한 뒤 다음 목표로 가기 전 잠깐 쉬는 시간(초, 8단계 전용). */
 private const val AI_THINK_PAUSE = 0.36f
+/** 동적 벽 생성 간격(초). */
+private const val WALL_SPAWN_INTERVAL = 1.6f
+/** 동적 벽이 덮을 수 있는 최대 비율(전체 도달 가능 칸 대비). */
+private const val WALL_MAX_RATIO = 0.30f
+/** 목표에 이 시간(초) 넘게 못 닿으면(벽에 막힘 등) 목표를 다시 고른다. */
+private const val AI_TARGET_TIMEOUT = 2.5f
 
 @Composable
 fun PaintGameScreen(
@@ -138,7 +141,11 @@ fun PaintGameScreen(
         val aiLast = Array(aiN) { -1 to -1 }
         val aiIdle = FloatArray(aiN)
         val aiTarget = arrayOfNulls<Pair<Int, Int>>(aiN)
+        val aiTargetAge = FloatArray(aiN)
         val rnd = Random(attemptId + 101)
+        var wallTimer = 0f
+        var wallsSpawned = 0
+        val maxWalls = (paintCtrl.total * WALL_MAX_RATIO).toInt()
         var moved = false
 
         // 칸 하나를 [idx] 색으로 칠하고 점수판을 갱신. 덮어쓰기 불가 모드에선 빈 칸만.
@@ -237,23 +244,28 @@ fun PaintGameScreen(
             if (versus && !finished) {
                 for (i in 0 until aiN) {
                     val ph = aiList[i]
-                    ph.maxSpeed = AI_MAX_SPEED
+                    ph.maxSpeed = stage.aiMaxSpeed
                     if (timed) {
                         // 목표를 하나 정해 도달까지 유지 + 가끔 무작위 목표 — 부드럽고 덜 단조롭게.
+                        // 목표가 벽에 막히거나 오래 못 닿으면 다시 고른다.
                         val cur = floor(ph.x).toInt() to floor(ph.y).toInt()
+                        aiTargetAge[i] += dt
                         var tgt = aiTarget[i]
                         if (tgt == null || tgt == cur ||
-                            paintCtrl.colorAt(tgt.first, tgt.second) == i + 1
+                            paintCtrl.colorAt(tgt.first, tgt.second) == i + 1 ||
+                            !paintCtrl.isReachable(tgt.first, tgt.second) ||
+                            aiTargetAge[i] > AI_TARGET_TIMEOUT
                         ) {
                             tgt = pickAiTarget(paintCtrl, arena, ph.x, ph.y, i + 1, rnd)
                             aiTarget[i] = tgt
+                            aiTargetAge[i] = 0f
                         }
                         if (tgt != null) {
                             var dx = (tgt.first + 0.5f) - ph.x
                             var dy = (tgt.second + 0.5f) - ph.y
                             val len = sqrt(dx * dx + dy * dy)
                             if (len > 0.001f) { dx /= len; dy /= len }
-                            ph.step(dt, dx * AI_ACCEL_GAIN, dy * AI_ACCEL_GAIN)
+                            ph.step(dt, dx * stage.aiAccelGain, dy * stage.aiAccelGain)
                         } else {
                             ph.step(dt, 0f, 0f)
                         }
@@ -269,7 +281,7 @@ fun PaintGameScreen(
                                 var dy = (target.second + 0.5f) - ph.y
                                 val len = sqrt(dx * dx + dy * dy)
                                 if (len > 0.001f) { dx /= len; dy /= len }
-                                ph.step(dt, dx * AI_ACCEL_GAIN, dy * AI_ACCEL_GAIN)
+                                ph.step(dt, dx * stage.aiAccelGain, dy * stage.aiAccelGain)
                             } else {
                                 ph.step(dt, 0f, 0f)
                             }
@@ -285,6 +297,38 @@ fun PaintGameScreen(
                         aiLast[i] = acell
                     }
                 }
+
+                // 동적 벽: 일정 간격으로 무작위 칸을 벽으로. 칠해진 칸 위에도 생기며,
+                // 공이 올라가 있는 칸은 피한다.
+                if (stage.dynamicWalls && wallsSpawned < maxWalls) {
+                    wallTimer += dt
+                    if (wallTimer >= WALL_SPAWN_INTERVAL) {
+                        wallTimer = 0f
+                        val occupied = HashSet<Pair<Int, Int>>()
+                        occupied.add(floor(physics.x).toInt() to floor(physics.y).toInt())
+                        for (i in 0 until aiN) {
+                            occupied.add(floor(aiList[i].x).toInt() to floor(aiList[i].y).toInt())
+                        }
+                        val cands = ArrayList<Pair<Int, Int>>()
+                        for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
+                            if (!paintCtrl.isReachable(c, r)) continue
+                            if ((c to r) in occupied) continue
+                            cands.add(c to r)
+                        }
+                        if (cands.isNotEmpty()) {
+                            val (wc, wr) = cands[rnd.nextInt(cands.size)]
+                            val old = paintCtrl.wallify(wc, wr)
+                            if (old in counts.indices) counts[old] = counts[old] - 1
+                            arena.grid[wr][wc] = Cell.WALL
+                            wallsSpawned++
+                            // 그 칸을 노리던 AI는 목표를 다시 고르게.
+                            for (i in 0 until aiN) {
+                                if (aiTarget[i] == (wc to wr)) aiTarget[i] = null
+                            }
+                        }
+                    }
+                }
+
                 // 종료: 시간제는 타임업, 아니면 판이 다 찼을 때. 최다 색이 우승.
                 val over = if (timed) timeLeftMs <= 0L else paintCtrl.done
                 if (over) {
@@ -377,6 +421,7 @@ fun PaintGameScreen(
                 Spacer(Modifier.size(10.dp))
                 Text(
                     text = when {
+                        stage.versus && stage.dynamicWalls -> "벽을 피해 땅을 넓혀요!"
                         stage.versus && overwrite -> "덮어 칠하며 땅을 넓혀요!"
                         stage.versus -> "많이 칠하면 이겨요!"
                         stage.chooseColor -> "좋아하는 색으로 칠해요!"

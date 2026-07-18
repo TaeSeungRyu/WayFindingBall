@@ -31,6 +31,12 @@ data class PaintStage(
     val countdownS: Float = 0f,
     /** true면 다른 색 칸도 덮어칠 수 있다(땅따먹기). */
     val allowOverwrite: Boolean = false,
+    /** true면 진행 중 무작위 벽이 생긴다(칠해진 칸 위에도). */
+    val dynamicWalls: Boolean = false,
+    /** 대결 AI 이동 최고 속도. */
+    val aiMaxSpeed: Float = 6.3f,
+    /** 대결 AI 가속 계수. */
+    val aiAccelGain: Float = 15.4f,
 ) {
     /** 칠에 쓰는 색 목록. 지정 색 > 색 고르기 팔레트 > 단색 순. */
     val palette: List<Color> get() = colors ?: if (chooseColor) CHOOSE_PALETTE else listOf(paintColor)
@@ -46,10 +52,11 @@ private val CHOOSE_PALETTE = listOf(
     Color(0xFF8E24AA), // 보라
 )
 
-/** 대결 모드 색 — 파랑(나) · 빨강(AI1) · 초록(AI2). */
+/** 대결 모드 색 — 파랑(나) · 빨강(AI1) · 초록(AI2) · 주황(AI3). */
 val VERSUS_ME = Color(0xFF1E88E5)
 val VERSUS_AI = Color(0xFFE53935)
 val VERSUS_AI2 = Color(0xFF43A047)
+val VERSUS_AI3 = Color(0xFFFB8C00)
 
 object PaintGame {
     private val MINT = Color(0xFF26C6A6)
@@ -124,6 +131,13 @@ object PaintGame {
             9, "9단계", "3색 땅따먹기 대결!", size = 11, paintColor = VERSUS_ME,
             versus = true, aiBalls = 2, countdownS = 30f, allowOverwrite = true,
             colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2),
+        ),
+        PaintStage(
+            10, "10단계", "4색 대난투 + 벽!", size = 11, paintColor = VERSUS_ME,
+            versus = true, aiBalls = 3, countdownS = 35f, allowOverwrite = true,
+            dynamicWalls = true,
+            aiMaxSpeed = 6.3f * 0.8f, aiAccelGain = 15.4f * 0.8f,
+            colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2, VERSUS_AI3),
         ),
     )
 
