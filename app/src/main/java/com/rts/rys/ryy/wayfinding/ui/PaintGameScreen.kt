@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -106,14 +107,18 @@ fun PaintGameScreen(
     // 색 고르기 모드: 지금 붓에 든 색 인덱스(팔레트 기준). 단색 모드는 항상 0.
     var colorIndex by remember(attemptId) { mutableIntStateOf(0) }
 
-    // 8단계 대결 모드 상태.
+    // 대결 모드(8·9단계) 상태.
     val versus = stage.versus
-    val aiPhysics = remember(attemptId) { BallPhysics(arena, radius = 0.32f, friction = 1.8f) }
-    var aiX by remember(attemptId) { mutableFloatStateOf(aiPhysics.x) }
-    var aiY by remember(attemptId) { mutableFloatStateOf(aiPhysics.y) }
-    var playerCount by remember(attemptId) { mutableIntStateOf(0) }
-    var aiCount by remember(attemptId) { mutableIntStateOf(0) }
+    val aiN = if (versus) stage.aiBalls else 0
+    val timed = stage.countdownS > 0f
+    val overwrite = stage.allowOverwrite
+    val aiList = remember(attemptId) { List(aiN) { BallPhysics(arena, radius = 0.32f, friction = 1.8f) } }
+    val aiPos = remember(attemptId) { mutableStateListOf<Offset>().apply { repeat(aiN) { add(Offset.Zero) } } }
+    // 각 색(팔레트 인덱스)이 차지한 칸 수. [0]=나, [1..]=AI.
+    val counts = remember(attemptId) { mutableStateListOf<Int>().apply { repeat(stage.palette.size) { add(0) } } }
+    var timeLeftMs by remember(attemptId) { mutableLongStateOf(0L) }
     var won by remember(attemptId) { mutableStateOf(false) }
+    var draw by remember(attemptId) { mutableStateOf(false) }
 
     DisposableEffect(sensorEnabled) {
         if (sensorEnabled) tilt.start() else tilt.stop()
@@ -129,20 +134,39 @@ fun PaintGameScreen(
         elapsedMs = 0L
         finished = false
         var lastCell = floor(physics.x).toInt() to floor(physics.y).toInt()
-        var aiLastCell = -1 to -1
-        var aiIdle = 0f  // 0보다 크면 AI가 잠깐 쉬는 중.
+        val aiLast = Array(aiN) { -1 to -1 }
+        val aiIdle = FloatArray(aiN)
         var moved = false
 
+        // 칸 하나를 [idx] 색으로 칠하고 점수판을 갱신. 덮어쓰기 불가 모드에선 빈 칸만.
+        fun tryPaint(c: Int, r: Int, idx: Int): Int {
+            if (!overwrite && paintCtrl.isPainted(c, r)) return 0
+            val old = paintCtrl.colorAt(c, r)
+            val res = paintCtrl.paint(c, r, idx)
+            if (res != 0) {
+                if (old in counts.indices) counts[old] = counts[old] - 1
+                if (idx in counts.indices) counts[idx] = counts[idx] + 1
+            }
+            return res
+        }
+
         if (versus) {
-            // AI는 반대편 구석에서 시작. 시작 칸은 각자 색으로 칠한 상태.
-            aiPhysics.setPositionAndStop(arena.cols - 2, arena.rows - 2)
-            aiX = aiPhysics.x
-            aiY = aiPhysics.y
-            playerCount = 1  // 컨트롤러가 시작(중앙) 칸을 idx0(나)으로 칠해 둠
-            val ac0 = floor(aiPhysics.x).toInt()
-            val ar0 = floor(aiPhysics.y).toInt()
-            if (paintCtrl.paint(ac0, ar0, 1) == 2) aiCount = 1
-            aiLastCell = ac0 to ar0
+            // 시작 칸 점수 반영: 컨트롤러가 중앙을 idx0(나)으로 이미 칠해 둠.
+            if (counts.isNotEmpty()) counts[0] = 1
+            val corners = listOf(
+                (arena.cols - 2) to (arena.rows - 2),
+                1 to (arena.rows - 2),
+                (arena.cols - 2) to 1,
+                1 to 1,
+            )
+            for (i in 0 until aiN) {
+                val (cc, cr) = corners[i % corners.size]
+                aiList[i].setPositionAndStop(cc, cr)
+                aiPos[i] = Offset(aiList[i].x, aiList[i].y)
+                tryPaint(cc, cr, i + 1)
+                aiLast[i] = cc to cr
+            }
+            timeLeftMs = (stage.countdownS * 1000).toLong()
             moved = true  // 대결은 시작과 동시에 시간이 흐른다.
         }
 
@@ -152,8 +176,10 @@ fun PaintGameScreen(
             if (paused) { last = 0L; continue }
             if (last == 0L) { last = now; continue }
             val dt = ((now - last).coerceAtMost(33_000_000L)) / 1_000_000_000f
+            val deltaMs = (now - last) / 1_000_000L
             // 첫 칸을 새로 칠하기 전(공을 아직 안 굴린 상태)엔 시간이 흐르지 않게 한다.
-            if (moved) elapsedMs += (now - last) / 1_000_000L
+            if (moved) elapsedMs += deltaMs
+            if (timed) timeLeftMs = (timeLeftMs - deltaMs).coerceAtLeast(0L)
             pulse += dt
             last = now
 
@@ -184,11 +210,8 @@ fun PaintGameScreen(
             val cell = bc to br
             if (cell != lastCell) {
                 if (versus) {
-                    // 대결: 이미 칠한 칸은 뺏지 않고, 빈 칸만 내 색(0)으로.
-                    if (!paintCtrl.isPainted(bc, br) && paintCtrl.paint(bc, br, 0) == 2) {
-                        playerCount++
-                        SoundManager.playStarTone(playerCount % 12)
-                    }
+                    // 대결: 내 색(0)으로. 덮어쓰기 모드면 남의 칸도 뺏는다.
+                    if (tryPaint(bc, br, 0) == 2) SoundManager.playStarTone((counts[0]) % 12)
                 } else {
                     val res = paintCtrl.paint(bc, br, colorIndex)
                     if (res != 0) {
@@ -207,40 +230,46 @@ fun PaintGameScreen(
                 lastCell = cell
             }
 
-            // AI: 가장 가까운 빈 칸으로 굴러가 자기 색(1)으로 칠한다. 판이 다 차면 승패 판정.
+            // AI 공들: 각자 가장 가까운 '내 것이 아닌' 칸으로 굴러가 자기 색으로 칠한다.
             if (versus && !finished) {
-                aiPhysics.maxSpeed = AI_MAX_SPEED
-                if (aiIdle > 0f) {
-                    // 칸을 칠한 직후엔 잠깐 멈칫 — 가속 없이 마찰로 감속.
-                    aiIdle -= dt
-                    aiPhysics.step(dt, 0f, 0f)
-                } else {
-                    val target = nearestUnpainted(paintCtrl, arena, aiPhysics.x, aiPhysics.y)
-                    if (target != null) {
-                        var dx = (target.first + 0.5f) - aiPhysics.x
-                        var dy = (target.second + 0.5f) - aiPhysics.y
-                        val len = sqrt(dx * dx + dy * dy)
-                        if (len > 0.001f) { dx /= len; dy /= len }
-                        aiPhysics.step(dt, dx * AI_ACCEL_GAIN, dy * AI_ACCEL_GAIN)
+                for (i in 0 until aiN) {
+                    val ph = aiList[i]
+                    ph.maxSpeed = AI_MAX_SPEED
+                    if (aiIdle[i] > 0f) {
+                        aiIdle[i] -= dt
+                        ph.step(dt, 0f, 0f)  // 칸을 칠한 직후엔 잠깐 멈칫.
                     } else {
-                        aiPhysics.step(dt, 0f, 0f)
+                        val target = if (overwrite)
+                            nearestNotMine(paintCtrl, arena, ph.x, ph.y, i + 1)
+                        else
+                            nearestUnpainted(paintCtrl, arena, ph.x, ph.y)
+                        if (target != null) {
+                            var dx = (target.first + 0.5f) - ph.x
+                            var dy = (target.second + 0.5f) - ph.y
+                            val len = sqrt(dx * dx + dy * dy)
+                            if (len > 0.001f) { dx /= len; dy /= len }
+                            ph.step(dt, dx * AI_ACCEL_GAIN, dy * AI_ACCEL_GAIN)
+                        } else {
+                            ph.step(dt, 0f, 0f)
+                        }
+                    }
+                    aiPos[i] = Offset(ph.x, ph.y)
+                    val ac = floor(ph.x).toInt()
+                    val ar = floor(ph.y).toInt()
+                    val acell = ac to ar
+                    if (acell != aiLast[i]) {
+                        if (tryPaint(ac, ar, i + 1) != 0) aiIdle[i] = AI_THINK_PAUSE
+                        aiLast[i] = acell
                     }
                 }
-                aiX = aiPhysics.x
-                aiY = aiPhysics.y
-                val ac = floor(aiPhysics.x).toInt()
-                val ar = floor(aiPhysics.y).toInt()
-                val acell = ac to ar
-                if (acell != aiLastCell) {
-                    if (!paintCtrl.isPainted(ac, ar) && paintCtrl.paint(ac, ar, 1) == 2) {
-                        aiCount++
-                        aiIdle = AI_THINK_PAUSE  // 새 칸을 칠했으니 잠깐 쉼.
-                    }
-                    aiLastCell = acell
-                }
-                if (paintCtrl.done) {
-                    won = playerCount > aiCount
-                    if (won) isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
+                // 종료: 시간제는 타임업, 아니면 판이 다 찼을 때. 최다 색이 우승.
+                val over = if (timed) timeLeftMs <= 0L else paintCtrl.done
+                if (over) {
+                    val my = counts[0]
+                    val best = counts.maxOrNull() ?: 0
+                    won = my == best && counts.count { it == best } == 1
+                    draw = my == best && !won
+                    if (won && !timed) isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
                     finished = true
                     SoundManager.playGoal()
                 }
@@ -270,9 +299,17 @@ fun PaintGameScreen(
                         modifier = Modifier.align(Alignment.Center),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("$playerCount", color = stage.palette[0], fontSize = 24.sp, fontWeight = FontWeight.Black)
-                        Text(" : ", color = InkDark, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("$aiCount", color = stage.palette.getOrElse(1) { InkDark }, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                        stage.palette.forEachIndexed { i, c ->
+                            if (i > 0) {
+                                Text(" : ", color = InkDark, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                            Text(
+                                "${counts.getOrElse(i) { 0 }}",
+                                color = c,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                            )
+                        }
                     }
                 } else {
                     Text(
@@ -284,10 +321,10 @@ fun PaintGameScreen(
                     )
                 }
                 Text(
-                    text = formatElapsed(elapsedMs),
+                    text = formatElapsed(if (timed) timeLeftMs else elapsedMs),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = InkSoft,
+                    color = if (timed && timeLeftMs <= 5000L) CoralPink else InkSoft,
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }
@@ -313,11 +350,12 @@ fun PaintGameScreen(
                 Spacer(Modifier.size(10.dp))
                 Text(
                     text = when {
+                        stage.versus && overwrite -> "덮어 칠하며 땅을 넓혀요!"
                         stage.versus -> "많이 칠하면 이겨요!"
                         stage.chooseColor -> "좋아하는 색으로 칠해요!"
                         else -> "바닥을 모두 칠해요!"
                     },
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = InkDark,
                 )
@@ -342,9 +380,9 @@ fun PaintGameScreen(
                         palette = stage.palette,
                         ballX = ballX,
                         ballY = ballY,
-                        aiX = if (versus) aiX else null,
-                        aiY = if (versus) aiY else null,
-                        aiColor = stage.palette.getOrElse(1) { Color.Red },
+                        rivals = if (versus) {
+                            List(aiN) { aiPos[it] to stage.palette.getOrElse(it + 1) { Color.Red } }
+                        } else emptyList(),
                         skin = currentSkin,
                         pulse = pulse,
                     )
@@ -385,10 +423,9 @@ fun PaintGameScreen(
                 isNewBest = isNewBest,
                 versus = versus,
                 won = won,
-                playerCount = playerCount,
-                aiCount = aiCount,
-                playerColor = stage.palette[0],
-                aiColor = stage.palette.getOrElse(1) { Color.Red },
+                draw = draw,
+                counts = counts.toList(),
+                colors = stage.palette,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
             )
@@ -431,6 +468,26 @@ private fun nearestUnpainted(
     return best
 }
 
+/** [myIdx] 색이 아닌(빈 칸 또는 남의 색) 가장 가까운 도달 가능 칸. 땅따먹기 AI용. */
+private fun nearestNotMine(
+    paint: FloorPaintController,
+    arena: com.rts.rys.ryy.wayfinding.game.Maze,
+    x: Float,
+    y: Float,
+    myIdx: Int,
+): Pair<Int, Int>? {
+    var best: Pair<Int, Int>? = null
+    var bestD = Float.MAX_VALUE
+    for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
+        if (!paint.isReachable(c, r) || paint.colorAt(c, r) == myIdx) continue
+        val dx = (c + 0.5f) - x
+        val dy = (r + 0.5f) - y
+        val d = dx * dx + dy * dy
+        if (d < bestD) { bestD = d; best = c to r }
+    }
+    return best
+}
+
 @Composable
 private fun PaintArenaCanvas(
     arena: com.rts.rys.ryy.wayfinding.game.Maze,
@@ -438,9 +495,7 @@ private fun PaintArenaCanvas(
     palette: List<Color>,
     ballX: Float,
     ballY: Float,
-    aiX: Float? = null,
-    aiY: Float? = null,
-    aiColor: Color = Color.Red,
+    rivals: List<Pair<Offset, Color>> = emptyList(),
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
     pulse: Float,
 ) {
@@ -483,13 +538,13 @@ private fun PaintArenaCanvas(
             }
         }
 
-        // AI 라이벌 공 (대결 모드) — 눈 달린 색 공.
-        if (aiX != null && aiY != null) {
+        // AI 라이벌 공들 (대결 모드) — 눈 달린 색 공.
+        for ((pos, rivalColor) in rivals) {
             val er = cell * 0.4f
-            val ex = aiX * cell
-            val ey = aiY * cell
-            drawCircle(aiColor.copy(alpha = 0.35f), radius = er * 1.5f, center = Offset(ex, ey))
-            drawCircle(aiColor, radius = er, center = Offset(ex, ey))
+            val ex = pos.x * cell
+            val ey = pos.y * cell
+            drawCircle(rivalColor.copy(alpha = 0.35f), radius = er * 1.5f, center = Offset(ex, ey))
+            drawCircle(rivalColor, radius = er, center = Offset(ex, ey))
             val eyeDx = er * 0.32f
             val eyeY = ey - er * 0.06f
             drawCircle(Color.White, radius = er * 0.26f, center = Offset(ex - eyeDx, eyeY))
@@ -543,14 +598,12 @@ private fun PaintResultOverlay(
     isNewBest: Boolean,
     versus: Boolean = false,
     won: Boolean = false,
-    playerCount: Int = 0,
-    aiCount: Int = 0,
-    playerColor: Color = SkyBlue,
-    aiColor: Color = Color.Red,
+    draw: Boolean = false,
+    counts: List<Int> = emptyList(),
+    colors: List<Color> = emptyList(),
     onRetry: () -> Unit,
     onHome: () -> Unit,
 ) {
-    val draw = versus && playerCount == aiCount
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -590,13 +643,21 @@ private fun PaintResultOverlay(
             Spacer(Modifier.height(4.dp))
             if (versus) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("$playerCount", color = playerColor, fontSize = 28.sp, fontWeight = FontWeight.Black)
-                    Text(" : ", color = InkSoft, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("$aiCount", color = aiColor, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                    colors.forEachIndexed { i, c ->
+                        if (i > 0) {
+                            Text(" : ", color = InkSoft, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Text(
+                            "${counts.getOrElse(i) { 0 }}",
+                            color = c,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "칸을 더 많이 칠하면 이겨요",
+                    text = "칸을 더 많이 차지하면 이겨요",
                     color = InkSoft,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,

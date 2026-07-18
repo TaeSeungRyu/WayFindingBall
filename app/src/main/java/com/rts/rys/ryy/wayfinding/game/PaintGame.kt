@@ -21,10 +21,16 @@ data class PaintStage(
     val paintColor: Color,
     /** true면 팔레트에서 색을 골라 칠한다(색 바꾸기 가능). false면 [paintColor] 단색. */
     val chooseColor: Boolean = false,
-    /** true면 AI와 바닥 색칠 대결. palette[0]=나, palette[1]=AI. */
+    /** true면 AI와 바닥 색칠 대결. palette[0]=나, palette[1..]=AI. */
     val versus: Boolean = false,
     /** 색을 직접 지정(대결 모드 등). null이면 규칙에 따라 자동 선택. */
     val colors: List<Color>? = null,
+    /** 대결 AI 공 개수. */
+    val aiBalls: Int = 1,
+    /** 0보다 크면 이 초 동안의 카운트다운 대결(끝났을 때 최다 색이 우승). 0이면 판을 다 채울 때까지. */
+    val countdownS: Float = 0f,
+    /** true면 다른 색 칸도 덮어칠 수 있다(땅따먹기). */
+    val allowOverwrite: Boolean = false,
 ) {
     /** 칠에 쓰는 색 목록. 지정 색 > 색 고르기 팔레트 > 단색 순. */
     val palette: List<Color> get() = colors ?: if (chooseColor) CHOOSE_PALETTE else listOf(paintColor)
@@ -40,9 +46,10 @@ private val CHOOSE_PALETTE = listOf(
     Color(0xFF8E24AA), // 보라
 )
 
-/** 대결 모드(8단계) 색 — 파랑(나) vs 빨강(AI). */
+/** 대결 모드 색 — 파랑(나) · 빨강(AI1) · 초록(AI2). */
 val VERSUS_ME = Color(0xFF1E88E5)
 val VERSUS_AI = Color(0xFFE53935)
+val VERSUS_AI2 = Color(0xFF43A047)
 
 object PaintGame {
     private val MINT = Color(0xFF26C6A6)
@@ -112,6 +119,11 @@ object PaintGame {
         PaintStage(
             8, "8단계", "AI와 색칠 대결!", size = 9, paintColor = VERSUS_ME,
             versus = true, colors = listOf(VERSUS_ME, VERSUS_AI),
+        ),
+        PaintStage(
+            9, "9단계", "3색 땅따먹기 대결!", size = 11, paintColor = VERSUS_ME,
+            versus = true, aiBalls = 2, countdownS = 30f, allowOverwrite = true,
+            colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2),
         ),
     )
 
