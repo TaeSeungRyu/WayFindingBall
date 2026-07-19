@@ -66,6 +66,12 @@ class BallPhysics(
         y = row + 0.5f
     }
 
+    /** 속도만 0으로. (기절 등으로 제자리에 멈춰야 할 때) */
+    fun stop() {
+        vx = 0f
+        vy = 0f
+    }
+
     /** 외부 충격을 속도에 더한다. 공-공 충돌(포켓볼 모드) 같은 즉발 임펄스 적용용. */
     fun applyImpulse(dvx: Float, dvy: Float) {
         vx += dvx

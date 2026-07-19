@@ -33,6 +33,8 @@ data class PaintStage(
     val allowOverwrite: Boolean = false,
     /** true면 진행 중 무작위 벽이 생긴다(칠해진 칸 위에도). */
     val dynamicWalls: Boolean = false,
+    /** true면 술래(방해꾼)가 등장 — 닿은 공은 잠시 기절하고 그 칸이 지워진다. */
+    val chaser: Boolean = false,
     /** 대결 AI 이동 최고 속도. */
     val aiMaxSpeed: Float = 6.3f,
     /** 대결 AI 가속 계수. */
@@ -138,6 +140,12 @@ object PaintGame {
             dynamicWalls = true,
             aiMaxSpeed = 6.3f * 0.8f, aiAccelGain = 15.4f * 0.8f,
             colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2, VERSUS_AI3),
+        ),
+        PaintStage(
+            11, "11단계", "술래를 피해 땅따먹기!", size = 11, paintColor = VERSUS_ME,
+            versus = true, aiBalls = 2, countdownS = 35f, allowOverwrite = true,
+            chaser = true,
+            colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2),
         ),
     )
 

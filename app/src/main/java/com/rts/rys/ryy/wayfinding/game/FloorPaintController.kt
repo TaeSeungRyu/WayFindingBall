@@ -80,6 +80,19 @@ class FloorPaintController(private val maze: Maze) {
         version++
     }
 
+    /**
+     * (c, r)의 색을 지워 빈 바닥으로 만든다(술래에 잡힌 자리 등). 도달 가능은 유지.
+     * @return 지우기 전 색 인덱스(-1=이미 빈 칸), 대상이 아니면 -2.
+     */
+    fun erase(c: Int, r: Int): Int {
+        if (!isReachable(c, r)) return -2
+        val old = colorIdx[r][c]
+        if (old < 0) return -1
+        colorIdx[r][c] = -1
+        version++
+        return old
+    }
+
     /** 시작점에서 상하좌우로 이어진 벽이 아닌 칸을 표시하고 그 개수를 반환. */
     private fun floodFillReachable(startC: Int, startR: Int): Int {
         if (maze.isWall(startC, startR)) return 0
