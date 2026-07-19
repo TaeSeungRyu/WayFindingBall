@@ -51,6 +51,10 @@ fun PaintStageSelectScreen(
         val repo = PaintRecordsRepository(context)
         PaintGame.stages.associate { it.level to repo.bestFor(it.level) }
     }
+    val bestScores = remember {
+        val repo = PaintRecordsRepository(context)
+        PaintGame.stages.associate { it.level to repo.bestScoreFor(it.level) }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -88,6 +92,7 @@ fun PaintStageSelectScreen(
                         PaintStageCard(
                             stage = stage,
                             bestMs = bestTimes[stage.level],
+                            bestScore = bestScores[stage.level],
                             onClick = { onSelect(stage.level) }
                         )
                     }
@@ -101,6 +106,7 @@ fun PaintStageSelectScreen(
 private fun PaintStageCard(
     stage: PaintStage,
     bestMs: Long?,
+    bestScore: Int?,
     onClick: () -> Unit,
 ) {
     Box(
@@ -141,8 +147,14 @@ private fun PaintStageCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(6.dp))
+                // 시간제 대결(9단계~)은 시간 대신 차지한 칸 수를 최고 기록으로.
+                val bestText = if (stage.countdownS > 0f) {
+                    bestScore?.let { "최고 기록  ${it}칸" }
+                } else {
+                    bestMs?.let { "최고 기록  ${formatElapsed(it)}" }
+                }
                 Text(
-                    text = if (bestMs != null) "최고 기록  ${formatElapsed(bestMs)}" else "아직 기록 없어요",
+                    text = bestText ?: "아직 기록 없어요",
                     color = Color.White,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold,
