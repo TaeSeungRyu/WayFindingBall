@@ -200,6 +200,26 @@ fun PaintGameScreen(
                 chaserPhysics.setPositionAndStop(arena.cols / 2, 1)
                 chaserPos = Offset(chaserPhysics.x, chaserPhysics.y)
             }
+            // 고정 장애물: 시작 위치를 피해 무작위 칸을 벽으로.
+            if (stage.obstacles > 0) {
+                val taken = HashSet<Pair<Int, Int>>()
+                taken.add(arena.startCol to arena.startRow)
+                for (i in 0 until aiN) {
+                    taken.add(floor(aiList[i].x).toInt() to floor(aiList[i].y).toInt())
+                }
+                if (chaserOn) taken.add(floor(chaserPhysics.x).toInt() to floor(chaserPhysics.y).toInt())
+                val cells = ArrayList<Pair<Int, Int>>()
+                for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
+                    if ((c to r) in taken || !paintCtrl.isReachable(c, r)) continue
+                    cells.add(c to r)
+                }
+                cells.shuffle(rnd)
+                for (k in 0 until minOf(stage.obstacles, cells.size)) {
+                    val (oc, orow) = cells[k]
+                    paintCtrl.wallify(oc, orow)
+                    arena.grid[orow][oc] = Cell.WALL
+                }
+            }
             timeLeftMs = (stage.countdownS * 1000).toLong()
             moved = true  // 대결은 시작과 동시에 시간이 흐른다.
         }
@@ -334,6 +354,18 @@ fun PaintGameScreen(
                         if (painted != 0 && !timed) aiIdle[i] = AI_THINK_PAUSE
                         aiLast[i] = acell
                     }
+                }
+
+                // 공끼리 충돌 → 서로 튕겨나간다(나 + AI들. 술래는 제외).
+                if (stage.ballBounce) {
+                    val n = aiN + 1
+                    val balls = Array(n) { if (it == 0) physics else aiList[it - 1] }
+                    for (a in 0 until n) for (b in a + 1 until n) {
+                        bounceBalls(balls[a], balls[b])
+                    }
+                    ballX = physics.x
+                    ballY = physics.y
+                    for (i in 0 until aiN) aiPos[i] = Offset(aiList[i].x, aiList[i].y)
                 }
 
                 // 술래: 기절 안 한 가장 가까운 공을 쫓다 닿으면 그 공을 기절시키고 그 칸을 지운다.
@@ -659,6 +691,29 @@ fun PaintGameScreen(
 
 /** 나타났다 사라지는 동적 벽 한 개. [life]는 남은 수명(초). */
 private class TempWall(val c: Int, val r: Int, var life: Float)
+
+/** 두 공이 겹치면 겹침을 풀고, 서로 다가오는 중이면 법선 방향으로 튕겨낸다(질량 동일·탄성 e). */
+private fun bounceBalls(a: BallPhysics, b: BallPhysics, radius: Float = 0.32f, e: Float = 0.8f) {
+    val dx = b.x - a.x
+    val dy = b.y - a.y
+    val distSq = dx * dx + dy * dy
+    val minDist = radius * 2f
+    if (distSq >= minDist * minDist || distSq < 1e-6f) return
+    val dist = sqrt(distSq)
+    val nx = dx / dist
+    val ny = dy / dist
+    // 겹침 분리 — 각자 절반씩 밀어낸다.
+    val overlap = minDist - dist
+    a.nudgePosition(-nx * overlap / 2f, -ny * overlap / 2f)
+    b.nudgePosition(nx * overlap / 2f, ny * overlap / 2f)
+    // 법선 방향 상대속도가 접근(음수)일 때만 튕김.
+    val vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny
+    if (vn < 0f) {
+        val j = -(1f + e) * vn / 2f
+        a.applyImpulse(-j * nx, -j * ny)
+        b.applyImpulse(j * nx, j * ny)
+    }
+}
 
 /** AI 위치에서 가장 가까운 '도달 가능하고 아직 안 칠한' 칸을 찾는다. 없으면 null. */
 private fun nearestUnpainted(
