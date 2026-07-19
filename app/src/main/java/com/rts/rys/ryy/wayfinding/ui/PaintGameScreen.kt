@@ -91,6 +91,12 @@ private const val CHASER_CATCH_R = 0.6f   // 이 거리(칸) 안이면 잡힘
 private const val CHASER_STUN_S = 1.2f     // 잡힌 공이 멈추는 시간
 private const val CHASER_COOLDOWN_S = 1.0f // 한 번 잡은 뒤 다시 잡기까지
 
+// 공끼리 충돌(튕김).
+private const val BOUNCE_E = 1.0f          // 탄성(1=완전 튕김)
+private const val BOUNCE_MIN = 4.0f        // 살짝 닿아도 이 속도로는 튕긴다
+/** 부딪힌 뒤 조종을 잠깐 끊고 튕긴 속도로 미끄러지는 시간(초). 없으면 추진에 바로 상쇄됨. */
+private const val KNOCK_S = 0.22f
+
 @Composable
 fun PaintGameScreen(
     level: Int,
@@ -165,6 +171,8 @@ fun PaintGameScreen(
         var wallSpawnCd = 0f
         var playerStun = 0f
         val aiStun = FloatArray(aiN)
+        var playerKnock = 0f
+        val aiKnock = FloatArray(aiN)
         var chaserCd = 0f
         var moved = false
 
@@ -260,6 +268,10 @@ fun PaintGameScreen(
                 playerStun -= dt
                 physics.stop()
                 if (playerStun <= 0f) playerStunned = false
+            } else if (playerKnock > 0f) {
+                // 부딪혀 튕기는 중 — 조종 없이 튕긴 속도로 미끄러진다.
+                playerKnock -= dt
+                physics.step(dt, 0f, 0f)
             } else {
                 physics.step(dt, ax, ay)
             }
@@ -303,7 +315,11 @@ fun PaintGameScreen(
                         continue
                     }
                     ph.maxSpeed = stage.aiMaxSpeed
-                    if (timed) {
+                    if (aiKnock[i] > 0f) {
+                        // 부딪혀 튕기는 중 — 추적 없이 튕긴 속도로 미끄러진다.
+                        aiKnock[i] -= dt
+                        ph.step(dt, 0f, 0f)
+                    } else if (timed) {
                         // 목표를 하나 정해 도달까지 유지 + 가끔 무작위 목표 — 부드럽고 덜 단조롭게.
                         // 목표가 벽에 막히거나 오래 못 닿으면 다시 고른다.
                         val cur = floor(ph.x).toInt() to floor(ph.y).toInt()
@@ -361,7 +377,11 @@ fun PaintGameScreen(
                     val n = aiN + 1
                     val balls = Array(n) { if (it == 0) physics else aiList[it - 1] }
                     for (a in 0 until n) for (b in a + 1 until n) {
-                        bounceBalls(balls[a], balls[b])
+                        if (bounceBalls(balls[a], balls[b])) {
+                            // 부딪힌 두 공에 넉백 시간 부여 — 잠깐 조종을 끊어 튕김이 보이게.
+                            if (a == 0) playerKnock = KNOCK_S else aiKnock[a - 1] = KNOCK_S
+                            if (b == 0) playerKnock = KNOCK_S else aiKnock[b - 1] = KNOCK_S
+                        }
                     }
                     ballX = physics.x
                     ballY = physics.y
@@ -692,13 +712,16 @@ fun PaintGameScreen(
 /** 나타났다 사라지는 동적 벽 한 개. [life]는 남은 수명(초). */
 private class TempWall(val c: Int, val r: Int, var life: Float)
 
-/** 두 공이 겹치면 겹침을 풀고, 서로 다가오는 중이면 법선 방향으로 튕겨낸다(질량 동일·탄성 e). */
-private fun bounceBalls(a: BallPhysics, b: BallPhysics, radius: Float = 0.32f, e: Float = 0.8f) {
+/**
+ * 두 공이 겹치면 겹침을 풀고 법선 방향으로 튕겨낸다(질량 동일·탄성 e).
+ * @return 실제로 튕김 임펄스를 준 경우 true(호출부에서 넉백 시간 부여용).
+ */
+private fun bounceBalls(a: BallPhysics, b: BallPhysics, radius: Float = 0.32f, e: Float = BOUNCE_E): Boolean {
     val dx = b.x - a.x
     val dy = b.y - a.y
     val distSq = dx * dx + dy * dy
     val minDist = radius * 2f
-    if (distSq >= minDist * minDist || distSq < 1e-6f) return
+    if (distSq >= minDist * minDist || distSq < 1e-6f) return false
     val dist = sqrt(distSq)
     val nx = dx / dist
     val ny = dy / dist
@@ -706,13 +729,15 @@ private fun bounceBalls(a: BallPhysics, b: BallPhysics, radius: Float = 0.32f, e
     val overlap = minDist - dist
     a.nudgePosition(-nx * overlap / 2f, -ny * overlap / 2f)
     b.nudgePosition(nx * overlap / 2f, ny * overlap / 2f)
-    // 법선 방향 상대속도가 접근(음수)일 때만 튕김.
+    // 법선 방향 상대속도가 접근(음수)일 때 튕김. 살짝 닿아도 최소 세기는 준다.
     val vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny
-    if (vn < 0f) {
-        val j = -(1f + e) * vn / 2f
+    if (vn < 0.5f) {
+        val j = maxOf(-(1f + e) * vn / 2f, BOUNCE_MIN)
         a.applyImpulse(-j * nx, -j * ny)
         b.applyImpulse(j * nx, j * ny)
+        return true
     }
+    return false
 }
 
 /** AI 위치에서 가장 가까운 '도달 가능하고 아직 안 칠한' 칸을 찾는다. 없으면 null. */
