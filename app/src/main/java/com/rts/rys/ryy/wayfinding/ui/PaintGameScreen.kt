@@ -174,6 +174,7 @@ fun PaintGameScreen(
         var playerKnock = 0f
         val aiKnock = FloatArray(aiN)
         var chaserCd = 0f
+        var savedPeak = 0  // 시간제 대결에서 지금까지 기록한 내 최고 칸 수.
         var moved = false
 
         // 칸 하나를 [idx] 색으로 칠하고 점수판을 갱신. 덮어쓰기 불가 모드에선 빈 칸만.
@@ -514,6 +515,12 @@ fun PaintGameScreen(
                     }
                 }
 
+                // 시간제 대결: 진행 중에도 내 최고 칸 수를 계속 기록 — 중간에 나가도 남게.
+                if (timed && counts[0] > savedPeak) {
+                    savedPeak = counts[0]
+                    if (PaintRecordsRepository(context).recordScore(level, counts[0])) isNewBest = true
+                }
+
                 // 종료: 시간제는 타임업, 아니면 판이 다 찼을 때. 최다 색이 우승.
                 val over = if (timed) timeLeftMs <= 0L else paintCtrl.done
                 if (over) {
@@ -521,11 +528,11 @@ fun PaintGameScreen(
                     val best = counts.maxOrNull() ?: 0
                     won = my == best && counts.count { it == best } == 1
                     draw = my == best && !won
-                    isNewBest = if (timed) {
-                        PaintRecordsRepository(context).recordScore(level, my)
+                    if (timed) {
+                        if (PaintRecordsRepository(context).recordScore(level, my)) isNewBest = true
                     } else if (won) {
-                        PaintRecordsRepository(context).record(level, elapsedMs)
-                    } else false
+                        isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
+                    }
                     finished = true
                     SoundManager.playGoal()
                 }
