@@ -83,7 +83,8 @@ private const val WALL_LIFE_MAX = 4.0f
 /** 목표에 이 시간(초) 넘게 못 닿으면(벽에 막힘 등) 목표를 다시 고른다. */
 private const val AI_TARGET_TIMEOUT = 2.5f
 
-// 술래(방해꾼) — 가장 가까운 공을 쫓다 닿으면 기절+칸 지움.
+// 술래(방해꾼) — 1등(가장 많이 차지한) 공을 노린다. 닿으면 기절+칸 지움.
+// 1등을 노리므로 앞설수록 사냥당해 순위가 계속 뒤집힌다. (속도는 피할 수 있게 느리게)
 private const val CHASER_MAX_SPEED = 7.0f
 private const val CHASER_ACCEL_GAIN = 20f
 private const val CHASER_CATCH_R = 0.6f   // 이 거리(칸) 안이면 잡힘
@@ -341,20 +342,34 @@ fun PaintGameScreen(
                     cph.maxSpeed = CHASER_MAX_SPEED
                     var tx = 0f
                     var ty = 0f
-                    var bestD = Float.MAX_VALUE
                     var found = false
-                    if (playerStun <= 0f) {
-                        val dx = physics.x - cph.x
-                        val dy = physics.y - cph.y
-                        bestD = dx * dx + dy * dy
-                        tx = physics.x; ty = physics.y; found = true
+                    // 1순위: 1등(최다 색) 공. 기절 중이 아니면 그 공을 쫓는다.
+                    var leadIdx = 0
+                    var leadCount = -1
+                    for (k in counts.indices) {
+                        if (counts[k] > leadCount) { leadCount = counts[k]; leadIdx = k }
                     }
-                    for (i in 0 until aiN) {
-                        if (aiStun[i] > 0f) continue
-                        val dx = aiList[i].x - cph.x
-                        val dy = aiList[i].y - cph.y
-                        val d = dx * dx + dy * dy
-                        if (d < bestD) { bestD = d; tx = aiList[i].x; ty = aiList[i].y; found = true }
+                    val leaderStunned = if (leadIdx == 0) playerStun > 0f else aiStun[leadIdx - 1] > 0f
+                    if (!leaderStunned) {
+                        tx = if (leadIdx == 0) physics.x else aiList[leadIdx - 1].x
+                        ty = if (leadIdx == 0) physics.y else aiList[leadIdx - 1].y
+                        found = true
+                    } else {
+                        // 1등이 기절 중이면 기절 안 한 가장 가까운 공으로.
+                        var bestD = Float.MAX_VALUE
+                        if (playerStun <= 0f) {
+                            val dx = physics.x - cph.x
+                            val dy = physics.y - cph.y
+                            bestD = dx * dx + dy * dy
+                            tx = physics.x; ty = physics.y; found = true
+                        }
+                        for (i in 0 until aiN) {
+                            if (aiStun[i] > 0f) continue
+                            val dx = aiList[i].x - cph.x
+                            val dy = aiList[i].y - cph.y
+                            val d = dx * dx + dy * dy
+                            if (d < bestD) { bestD = d; tx = aiList[i].x; ty = aiList[i].y; found = true }
+                        }
                     }
                     if (found) {
                         var dx = tx - cph.x

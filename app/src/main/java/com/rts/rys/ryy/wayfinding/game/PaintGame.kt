@@ -142,10 +142,10 @@ object PaintGame {
             colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2, VERSUS_AI3),
         ),
         PaintStage(
-            11, "11단계", "술래를 피해 땅따먹기!", size = 11, paintColor = VERSUS_ME,
-            versus = true, aiBalls = 2, countdownS = 35f, allowOverwrite = true,
+            11, "11단계", "술래가 1등을 노려요!", size = 11, paintColor = VERSUS_ME,
+            versus = true, aiBalls = 3, countdownS = 35f, allowOverwrite = true,
             chaser = true,
-            colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2),
+            colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2, VERSUS_AI3),
         ),
     )
 
