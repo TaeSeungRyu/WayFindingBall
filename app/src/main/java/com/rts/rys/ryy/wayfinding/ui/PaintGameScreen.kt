@@ -130,6 +130,11 @@ fun PaintGameScreen(
     // 대결 모드(8·9단계) 상태.
     val versus = stage.versus
     val aiN = if (versus) stage.aiBalls else 0
+    // 팀전: 아군(AI0)은 나와 같은 색(0), 적(AI1,2)은 색1. 일반전은 각자 고유색(i+1).
+    val teams = stage.teams
+    val aiColorIdx = remember(attemptId, aiN) {
+        IntArray(aiN) { i -> if (teams) (if (i == 0) 0 else 1) else i + 1 }
+    }
     val timed = stage.countdownS > 0f
     val overwrite = stage.allowOverwrite
     val aiList = remember(attemptId) { List(aiN) { BallPhysics(arena, radius = 0.32f, friction = 1.8f) } }
@@ -202,7 +207,7 @@ fun PaintGameScreen(
                 val (cc, cr) = corners[i % corners.size]
                 aiList[i].setPositionAndStop(cc, cr)
                 aiPos[i] = Offset(aiList[i].x, aiList[i].y)
-                tryPaint(cc, cr, i + 1)
+                tryPaint(cc, cr, aiColorIdx[i])
                 aiLast[i] = cc to cr
             }
             if (chaserOn) {
@@ -327,11 +332,11 @@ fun PaintGameScreen(
                         aiTargetAge[i] += dt
                         var tgt = aiTarget[i]
                         if (tgt == null || tgt == cur ||
-                            paintCtrl.colorAt(tgt.first, tgt.second) == i + 1 ||
+                            paintCtrl.colorAt(tgt.first, tgt.second) == aiColorIdx[i] ||
                             !paintCtrl.isReachable(tgt.first, tgt.second) ||
                             aiTargetAge[i] > AI_TARGET_TIMEOUT
                         ) {
-                            tgt = pickAiTarget(paintCtrl, arena, ph.x, ph.y, i + 1, rnd)
+                            tgt = pickAiTarget(paintCtrl, arena, ph.x, ph.y, aiColorIdx[i], rnd)
                             aiTarget[i] = tgt
                             aiTargetAge[i] = 0f
                         }
@@ -367,17 +372,20 @@ fun PaintGameScreen(
                     val ar = floor(ph.y).toInt()
                     val acell = ac to ar
                     if (acell != aiLast[i]) {
-                        val painted = tryPaint(ac, ar, i + 1)
+                        val painted = tryPaint(ac, ar, aiColorIdx[i])
                         if (painted != 0 && !timed) aiIdle[i] = AI_THINK_PAUSE
                         aiLast[i] = acell
                     }
                 }
 
-                // 공끼리 충돌 → 서로 튕겨나간다(나 + AI들. 술래는 제외).
+                // 공끼리 충돌 → 서로 튕겨나간다(나 + AI들. 술래는 제외). 팀전은 같은 편 제외.
                 if (stage.ballBounce) {
                     val n = aiN + 1
                     val balls = Array(n) { if (it == 0) physics else aiList[it - 1] }
+                    // 각 공의 팀(=칠하는 색 인덱스). index0=나(0), 나머지는 aiColorIdx.
+                    val teamOf = IntArray(n) { if (it == 0) 0 else aiColorIdx[it - 1] }
                     for (a in 0 until n) for (b in a + 1 until n) {
+                        if (teams && teamOf[a] == teamOf[b]) continue  // 같은 편은 안 튕김
                         if (bounceBalls(balls[a], balls[b])) {
                             // 부딪힌 두 공에 넉백 시간 부여 — 잠깐 조종을 끊어 튕김이 보이게.
                             if (a == 0) playerKnock = KNOCK_S else aiKnock[a - 1] = KNOCK_S
@@ -613,6 +621,7 @@ fun PaintGameScreen(
                 Spacer(Modifier.size(10.dp))
                 Text(
                     text = when {
+                        stage.versus && teams -> "우리 팀 색을 더 많이!"
                         stage.versus && stage.chaser -> "술래를 피해 땅을 넓혀요!"
                         stage.versus && stage.dynamicWalls -> "벽을 피해 땅을 넓혀요!"
                         stage.versus && overwrite -> "덮어 칠하며 땅을 넓혀요!"
@@ -646,7 +655,7 @@ fun PaintGameScreen(
                         ballX = ballX,
                         ballY = ballY,
                         rivals = if (versus) {
-                            List(aiN) { aiPos[it] to stage.palette.getOrElse(it + 1) { Color.Red } }
+                            List(aiN) { aiPos[it] to stage.palette.getOrElse(aiColorIdx[it]) { Color.Red } }
                         } else emptyList(),
                         chaser = if (chaserOn) chaserPos else null,
                         playerStunned = playerStunned,
