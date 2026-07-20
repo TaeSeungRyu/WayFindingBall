@@ -65,6 +65,7 @@ import com.rts.rys.ryy.wayfinding.ui.theme.SkyBottom
 import com.rts.rys.ryy.wayfinding.ui.theme.SkyTop
 import kotlinx.coroutines.android.awaitFrame
 import kotlin.math.floor
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -90,6 +91,14 @@ private const val CHASER_ACCEL_GAIN = 20f
 private const val CHASER_CATCH_R = 0.6f   // 이 거리(칸) 안이면 잡힘
 private const val CHASER_STUN_S = 1.2f     // 잡힌 공이 멈추는 시간
 private const val CHASER_COOLDOWN_S = 1.0f // 한 번 잡은 뒤 다시 잡기까지
+
+// 폭탄 — 랜덤 위치에 생겨 도화선이 타들어가다 터진다. 범위 안 공은 정지 + 그 자리 색 지움.
+private const val BOMB_SPAWN_INTERVAL = 2.2f
+private const val BOMB_FUSE = 1.8f         // 생긴 뒤 터지기까지(초)
+private const val BOMB_MAX = 3             // 동시에 존재할 최대 폭탄 수
+private const val BOMB_BLAST_R = 1.6f      // 폭발 반경(칸) — 이 안의 공이 정지
+private const val BOMB_STUN_S = 3.0f       // 터졌을 때 공이 멈추는 시간
+private const val BLAST_LIFE = 0.45f       // 폭발 연출 지속(초)
 
 // 공끼리 충돌(튕김).
 private const val BOUNCE_E = 1.0f          // 탄성(1=완전 튕김)
@@ -144,6 +153,9 @@ fun PaintGameScreen(
     var timeLeftMs by remember(attemptId) { mutableLongStateOf(0L) }
     var won by remember(attemptId) { mutableStateOf(false) }
     var draw by remember(attemptId) { mutableStateOf(false) }
+    // 폭탄/폭발 렌더용 (위치, 진행도).
+    var bombRender by remember(attemptId) { mutableStateOf<List<Pair<Offset, Float>>>(emptyList()) }
+    var blastRender by remember(attemptId) { mutableStateOf<List<Pair<Offset, Float>>>(emptyList()) }
 
     // 11단계 술래(방해꾼).
     val chaserOn = versus && stage.chaser
@@ -179,6 +191,9 @@ fun PaintGameScreen(
         var playerKnock = 0f
         val aiKnock = FloatArray(aiN)
         var chaserCd = 0f
+        val activeBombs = ArrayList<Bomb>()
+        val blasts = ArrayList<Blast>()
+        var bombSpawnCd = BOMB_SPAWN_INTERVAL
         var savedPeak = 0  // 시간제 대결에서 지금까지 기록한 내 최고 칸 수.
         var moved = false
 
@@ -523,6 +538,67 @@ fun PaintGameScreen(
                     }
                 }
 
+                // 폭탄: 랜덤 위치에 생겨 도화선이 타들어가다 터진다. 범위 안 공은 정지 + 그 자리 색 지움.
+                if (stage.bombs) {
+                    bombSpawnCd -= dt
+                    if (bombSpawnCd <= 0f && activeBombs.size < BOMB_MAX) {
+                        bombSpawnCd = BOMB_SPAWN_INTERVAL
+                        val cands = ArrayList<Pair<Int, Int>>()
+                        for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
+                            if (paintCtrl.isReachable(c, r)) cands.add(c to r)
+                        }
+                        if (cands.isNotEmpty()) {
+                            val (bc, br) = cands[rnd.nextInt(cands.size)]
+                            activeBombs.add(Bomb(bc, br, BOMB_FUSE))
+                        }
+                    }
+                    val bit = activeBombs.iterator()
+                    while (bit.hasNext()) {
+                        val bomb = bit.next()
+                        bomb.fuse -= dt
+                        if (bomb.fuse <= 0f) {
+                            val bx = bomb.c + 0.5f
+                            val by = bomb.r + 0.5f
+                            // 폭발 범위 안의 공은 정지시킨다.
+                            val pdx = physics.x - bx
+                            val pdy = physics.y - by
+                            if (pdx * pdx + pdy * pdy <= BOMB_BLAST_R * BOMB_BLAST_R) {
+                                playerStun = BOMB_STUN_S
+                                playerStunned = true
+                                physics.stop()
+                            }
+                            for (i in 0 until aiN) {
+                                val adx = aiList[i].x - bx
+                                val ady = aiList[i].y - by
+                                if (adx * adx + ady * ady <= BOMB_BLAST_R * BOMB_BLAST_R) {
+                                    aiStun[i] = BOMB_STUN_S
+                                    aiList[i].stop()
+                                }
+                            }
+                            // 폭발 자리 3x3 색 지움.
+                            for (dr in -1..1) for (dc in -1..1) {
+                                val old = paintCtrl.erase(bomb.c + dc, bomb.r + dr)
+                                if (old in counts.indices) counts[old] = counts[old] - 1
+                            }
+                            blasts.add(Blast(bx, by, 0f))
+                            SoundManager.playBonk()
+                            bit.remove()
+                        }
+                    }
+                    val eit = blasts.iterator()
+                    while (eit.hasNext()) {
+                        val ex = eit.next()
+                        ex.age += dt
+                        if (ex.age > BLAST_LIFE) eit.remove()
+                    }
+                    bombRender = activeBombs.map {
+                        Offset(it.c + 0.5f, it.r + 0.5f) to (it.fuse / BOMB_FUSE).coerceIn(0f, 1f)
+                    }
+                    blastRender = blasts.map {
+                        Offset(it.x, it.y) to (it.age / BLAST_LIFE).coerceIn(0f, 1f)
+                    }
+                }
+
                 // 시간제 대결: 진행 중에도 내 최고 칸 수를 계속 기록 — 중간에 나가도 남게.
                 if (timed && counts[0] > savedPeak) {
                     savedPeak = counts[0]
@@ -659,6 +735,8 @@ fun PaintGameScreen(
                         } else emptyList(),
                         chaser = if (chaserOn) chaserPos else null,
                         playerStunned = playerStunned,
+                        bombs = bombRender,
+                        blasts = blastRender,
                         skin = currentSkin,
                         pulse = pulse,
                     )
@@ -727,6 +805,12 @@ fun PaintGameScreen(
 
 /** 나타났다 사라지는 동적 벽 한 개. [life]는 남은 수명(초). */
 private class TempWall(val c: Int, val r: Int, var life: Float)
+
+/** 도화선이 타들어가는 폭탄. [fuse]는 터지기까지 남은 시간(초). */
+private class Bomb(val c: Int, val r: Int, var fuse: Float)
+
+/** 폭발 연출 한 개. [age]는 시작 후 경과(초). */
+private class Blast(val x: Float, val y: Float, var age: Float)
 
 /**
  * 두 공이 겹치면 겹침을 풀고 법선 방향으로 튕겨낸다(질량 동일·탄성 e).
@@ -837,6 +921,8 @@ private fun PaintArenaCanvas(
     rivals: List<Pair<Offset, Color>> = emptyList(),
     chaser: Offset? = null,
     playerStunned: Boolean = false,
+    bombs: List<Pair<Offset, Float>> = emptyList(),
+    blasts: List<Pair<Offset, Float>> = emptyList(),
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
     pulse: Float,
 ) {
@@ -877,6 +963,22 @@ private fun PaintArenaCanvas(
                     cornerRadius = CornerRadius(cell * 0.15f, cell * 0.15f),
                 )
             }
+        }
+
+        // 폭탄 — 검은 공에 심지. 터질 때가 가까울수록(fuseFrac→0) 빨갛게 빠르게 깜빡.
+        for ((pos, fuseFrac) in bombs) {
+            val bx = pos.x * cell
+            val by = pos.y * cell
+            val br = cell * 0.32f
+            val danger = 1f - fuseFrac
+            val blink = 0.5f + 0.5f * sin(pulse * (6f + danger * 34f))
+            drawCircle(
+                color = Color(0xFFE53935).copy(alpha = (0.2f + 0.6f * danger * blink).coerceIn(0f, 1f)),
+                radius = br * (1.6f + danger),
+                center = Offset(bx, by),
+            )
+            drawCircle(Color(0xFF212121), radius = br, center = Offset(bx, by))
+            drawCircle(Color(0xFFFFB300), radius = br * 0.22f, center = Offset(bx, by - br * 1.05f))
         }
 
         // AI 라이벌 공들 (대결 모드) — 눈 달린 색 공.
@@ -923,6 +1025,15 @@ private fun PaintArenaCanvas(
                 center = Offset(cx, cy),
                 style = Stroke(width = cell * 0.06f),
             )
+        }
+
+        // 폭발 연출 — 퍼지며 옅어지는 원.
+        for ((pos, prog) in blasts) {
+            val ex = pos.x * cell
+            val ey = pos.y * cell
+            val rad = cell * (0.4f + prog * BOMB_BLAST_R)
+            drawCircle(Color(0xFFFFC107).copy(alpha = (1f - prog) * 0.6f), radius = rad, center = Offset(ex, ey))
+            drawCircle(Color.White.copy(alpha = (1f - prog) * 0.5f), radius = rad * 0.6f, center = Offset(ex, ey))
         }
     }
 }

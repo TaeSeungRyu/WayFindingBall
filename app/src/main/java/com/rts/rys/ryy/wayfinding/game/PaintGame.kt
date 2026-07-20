@@ -41,6 +41,8 @@ data class PaintStage(
     val obstacles: Int = 0,
     /** true면 2:2 팀전 — 나+아군(색0) vs 적 둘(색1). 같은 편은 안 튕긴다. */
     val teams: Boolean = false,
+    /** true면 랜덤 위치에 폭탄이 생겨 터진다 — 범위 안 공은 잠시 정지, 그 자리 색은 지워짐. */
+    val bombs: Boolean = false,
     /** 대결 AI 이동 최고 속도. */
     val aiMaxSpeed: Float = 6.3f,
     /** 대결 AI 가속 계수. */
@@ -156,7 +158,7 @@ object PaintGame {
         PaintStage(
             12, "12단계", "팀 대결 2:2!", size = 11, paintColor = VERSUS_ME,
             versus = true, aiBalls = 3, countdownS = 35f, allowOverwrite = true,
-            ballBounce = true, teams = true,
+            ballBounce = true, teams = true, bombs = true, dynamicWalls = true,
             colors = listOf(VERSUS_ME, VERSUS_AI),
         ),
     )
