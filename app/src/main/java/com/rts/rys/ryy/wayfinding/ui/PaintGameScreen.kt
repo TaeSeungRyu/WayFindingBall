@@ -349,27 +349,18 @@ fun PaintGameScreen(
                     // 대결: 내 색(0)으로. 덮어쓰기 모드면 남의 칸도 뺏는다.
                     if (tryPaint(bc, br, 0) == 2) SoundManager.playStarTone((counts[0]) % 12)
                 } else if (stage.colorByNumber) {
-                    // 색칠 도안: 도안 칸만 칠한다. 지정 색과 맞으면 완성 진행, 틀리면 그 색으로 보이되 미완성.
+                    // 색칠 도안: 도안 칸에 '맞는 색'일 때만 칠해진다. 틀린 색은 아무 반응 없음.
                     val tgt = if (br in cnTarget.indices && bc in cnTarget[br].indices) cnTarget[br][bc] else -1
-                    if (tgt >= 0) {
-                        val old = paintCtrl.colorAt(bc, br)
-                        if (old != colorIndex) {
-                            paintCtrl.paint(bc, br, colorIndex)
-                            moved = true
-                            val wasCorrect = old == tgt
-                            val nowCorrect = colorIndex == tgt
-                            if (!wasCorrect && nowCorrect) {
-                                cnCorrect++
-                                SoundManager.playStarTone(cnCorrect % 12)
-                            } else if (wasCorrect && !nowCorrect) {
-                                cnCorrect--
-                            }
-                            if (cnCorrect >= cnTotal) {
-                                isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
-                                finished = true
-                                SoundManager.playGoal()
-                                SoundManager.speak("참 잘했어요")
-                            }
+                    if (tgt >= 0 && colorIndex == tgt && paintCtrl.colorAt(bc, br) != tgt) {
+                        paintCtrl.paint(bc, br, colorIndex)
+                        moved = true
+                        cnCorrect++
+                        SoundManager.playStarTone(cnCorrect % 12)
+                        if (cnCorrect >= cnTotal) {
+                            isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
+                            finished = true
+                            SoundManager.playGoal()
+                            SoundManager.speak("참 잘했어요")
                         }
                     }
                 } else {
