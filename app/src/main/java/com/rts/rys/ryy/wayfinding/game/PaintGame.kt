@@ -116,6 +116,27 @@ val CN_HOUSE = listOf(
     ".1111111.",
 )
 
+/** 16단계 색칠 도안 팔레트 — 0=보라,1=분홍,2=노랑,3=갈색(몸통·더듬이). */
+val CN_BUTTERFLY_PALETTE = listOf(
+    Color(0xFF8E24AA), // 0 보라
+    Color(0xFFEC407A), // 1 분홍
+    Color(0xFFFDD835), // 2 노랑
+    Color(0xFF6D4C41), // 3 갈색
+)
+
+/** 16단계 색칠 도안 — 나비(4색, 촘촘해 조금 어려움). 9x9. */
+val CN_BUTTERFLY = listOf(
+    "..3...3..",
+    "...3.3...",
+    ".00.3.00.",
+    "001131100",
+    "021232120",
+    "001131100",
+    ".00.3.00.",
+    "....3....",
+    ".........",
+)
+
 object PaintGame {
     private val MINT = Color(0xFF26C6A6)
     private val SKY = Color(0xFF4FC3F7)
@@ -222,6 +243,10 @@ object PaintGame {
         PaintStage(
             15, "15단계", "그림 따라 칠하기 · 집", size = 11, paintColor = CN_HOUSE_PALETTE[0],
             colorByNumber = true, template = CN_HOUSE, colors = CN_HOUSE_PALETTE,
+        ),
+        PaintStage(
+            16, "16단계", "그림 따라 칠하기 · 나비", size = 11, paintColor = CN_BUTTERFLY_PALETTE[0],
+            colorByNumber = true, template = CN_BUTTERFLY, colors = CN_BUTTERFLY_PALETTE,
         ),
     )
 
