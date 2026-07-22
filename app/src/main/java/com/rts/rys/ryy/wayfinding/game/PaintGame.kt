@@ -43,6 +43,8 @@ data class PaintStage(
     val teams: Boolean = false,
     /** true면 랜덤 위치에 폭탄이 생겨 터진다 — 범위 안 공은 잠시 정지, 그 자리 색은 지워짐. */
     val bombs: Boolean = false,
+    /** true면 별 구역(2x2)이 있어 그 칸은 점수 2배 — 핵심 구역 쟁탈전. */
+    val zones: Boolean = false,
     /** 대결 AI 이동 최고 속도. */
     val aiMaxSpeed: Float = 6.3f,
     /** 대결 AI 가속 계수. */
@@ -160,6 +162,12 @@ object PaintGame {
             versus = true, aiBalls = 3, countdownS = 35f, allowOverwrite = true,
             ballBounce = true, teams = true, bombs = true, dynamicWalls = true,
             colors = listOf(VERSUS_ME, VERSUS_AI),
+        ),
+        PaintStage(
+            13, "13단계", "별 구역 쟁탈전!", size = 11, paintColor = VERSUS_ME,
+            versus = true, aiBalls = 3, countdownS = 35f, allowOverwrite = true,
+            ballBounce = true, zones = true,
+            colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2, VERSUS_AI3),
         ),
     )
 

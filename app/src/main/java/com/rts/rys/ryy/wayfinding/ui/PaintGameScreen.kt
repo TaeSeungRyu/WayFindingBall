@@ -43,6 +43,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -150,6 +151,23 @@ fun PaintGameScreen(
     val aiPos = remember(attemptId) { mutableStateListOf<Offset>().apply { repeat(aiN) { add(Offset.Zero) } } }
     // 각 색(팔레트 인덱스)이 차지한 칸 수. [0]=나, [1..]=AI.
     val counts = remember(attemptId) { mutableStateListOf<Int>().apply { repeat(stage.palette.size) { add(0) } } }
+    // 별 구역(2x2) 칸 좌표 — 그 칸은 점수 2배. 색별 별 칸 소유 수는 starCounts.
+    val starCells = remember(attemptId) {
+        if (!stage.zones) emptySet()
+        else {
+            val tls = listOf(
+                2 to 2, (arena.cols - 4) to 2, 2 to (arena.rows - 4), (arena.cols - 4) to (arena.rows - 4)
+            )
+            val s = HashSet<Pair<Int, Int>>()
+            for ((tc, tr) in tls) for (dc in 0..1) for (dr in 0..1) {
+                val c = tc + dc
+                val r = tr + dr
+                if (c in 1 until arena.cols - 1 && r in 1 until arena.rows - 1) s.add(c to r)
+            }
+            s
+        }
+    }
+    val starCounts = remember(attemptId) { mutableStateListOf<Int>().apply { repeat(stage.palette.size) { add(0) } } }
     var timeLeftMs by remember(attemptId) { mutableLongStateOf(0L) }
     var won by remember(attemptId) { mutableStateOf(false) }
     var draw by remember(attemptId) { mutableStateOf(false) }
@@ -205,6 +223,10 @@ fun PaintGameScreen(
             if (res != 0) {
                 if (old in counts.indices) counts[old] = counts[old] - 1
                 if (idx in counts.indices) counts[idx] = counts[idx] + 1
+                if ((c to r) in starCells) {  // 별 구역은 점수판(starCounts)도 갱신 — 2배 반영용.
+                    if (old in starCounts.indices) starCounts[old] = starCounts[old] - 1
+                    if (idx in starCounts.indices) starCounts[idx] = starCounts[idx] + 1
+                }
             }
             return res
         }
@@ -351,7 +373,7 @@ fun PaintGameScreen(
                             !paintCtrl.isReachable(tgt.first, tgt.second) ||
                             aiTargetAge[i] > AI_TARGET_TIMEOUT
                         ) {
-                            tgt = pickAiTarget(paintCtrl, arena, ph.x, ph.y, aiColorIdx[i], rnd)
+                            tgt = pickAiTarget(paintCtrl, arena, ph.x, ph.y, aiColorIdx[i], rnd, starCells)
                             aiTarget[i] = tgt
                             aiTargetAge[i] = 0f
                         }
@@ -599,18 +621,21 @@ fun PaintGameScreen(
                     }
                 }
 
-                // 시간제 대결: 진행 중에도 내 최고 칸 수를 계속 기록 — 중간에 나가도 남게.
-                if (timed && counts[0] > savedPeak) {
-                    savedPeak = counts[0]
-                    if (PaintRecordsRepository(context).recordScore(level, counts[0])) isNewBest = true
+                // 점수 = 일반 칸 + 별 칸(2배라 starCounts만큼 가산). 별 구역 없으면 starCounts=0.
+                fun scoreOf(i: Int) = counts[i] + starCounts.getOrElse(i) { 0 }
+
+                // 시간제 대결: 진행 중에도 내 최고 점수를 계속 기록 — 중간에 나가도 남게.
+                if (timed && scoreOf(0) > savedPeak) {
+                    savedPeak = scoreOf(0)
+                    if (PaintRecordsRepository(context).recordScore(level, savedPeak)) isNewBest = true
                 }
 
-                // 종료: 시간제는 타임업, 아니면 판이 다 찼을 때. 최다 색이 우승.
+                // 종료: 시간제는 타임업, 아니면 판이 다 찼을 때. 최고 점수 색이 우승.
                 val over = if (timed) timeLeftMs <= 0L else paintCtrl.done
                 if (over) {
-                    val my = counts[0]
-                    val best = counts.maxOrNull() ?: 0
-                    won = my == best && counts.count { it == best } == 1
+                    val my = scoreOf(0)
+                    val best = counts.indices.maxOf { scoreOf(it) }
+                    won = my == best && counts.indices.count { scoreOf(it) == best } == 1
                     draw = my == best && !won
                     if (timed) {
                         if (PaintRecordsRepository(context).recordScore(level, my)) isNewBest = true
@@ -651,7 +676,7 @@ fun PaintGameScreen(
                                 Text(" : ", color = InkDark, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                             }
                             Text(
-                                "${counts.getOrElse(i) { 0 }}",
+                                "${counts.getOrElse(i) { 0 } + starCounts.getOrElse(i) { 0 }}",
                                 color = c,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Black,
@@ -697,6 +722,7 @@ fun PaintGameScreen(
                 Spacer(Modifier.size(10.dp))
                 Text(
                     text = when {
+                        stage.versus && stage.zones -> "★ 별 구역은 2배! 차지해요"
                         stage.versus && teams -> "우리 팀 색을 더 많이!"
                         stage.versus && stage.chaser -> "술래를 피해 땅을 넓혀요!"
                         stage.versus && stage.dynamicWalls -> "벽을 피해 땅을 넓혀요!"
@@ -737,6 +763,7 @@ fun PaintGameScreen(
                         playerStunned = playerStunned,
                         bombs = bombRender,
                         blasts = blastRender,
+                        starCells = starCells,
                         skin = currentSkin,
                         pulse = pulse,
                     )
@@ -778,7 +805,7 @@ fun PaintGameScreen(
                 versus = versus,
                 won = won,
                 draw = draw,
-                counts = counts.toList(),
+                counts = List(stage.palette.size) { counts.getOrElse(it) { 0 } + starCounts.getOrElse(it) { 0 } },
                 colors = stage.palette,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
@@ -896,7 +923,21 @@ private fun pickAiTarget(
     y: Float,
     myIdx: Int,
     rnd: Random,
+    starCells: Set<Pair<Int, Int>> = emptySet(),
 ): Pair<Int, Int>? {
+    // 별 구역이 있으면 절반은 가장 가까운 '내 것 아닌' 별 칸을 노린다 — 핵심 구역 쟁탈.
+    if (starCells.isNotEmpty() && rnd.nextFloat() < 0.5f) {
+        var best: Pair<Int, Int>? = null
+        var bestD = Float.MAX_VALUE
+        for ((c, r) in starCells) {
+            if (!paint.isReachable(c, r) || paint.colorAt(c, r) == myIdx) continue
+            val dx = (c + 0.5f) - x
+            val dy = (r + 0.5f) - y
+            val d = dx * dx + dy * dy
+            if (d < bestD) { bestD = d; best = c to r }
+        }
+        if (best != null) return best
+    }
     if (rnd.nextFloat() < 0.3f) {
         val curC = floor(x).toInt()
         val curR = floor(y).toInt()
@@ -923,9 +964,17 @@ private fun PaintArenaCanvas(
     playerStunned: Boolean = false,
     bombs: List<Pair<Offset, Float>> = emptyList(),
     blasts: List<Pair<Offset, Float>> = emptyList(),
+    starCells: Set<Pair<Int, Int>> = emptySet(),
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
     pulse: Float,
 ) {
+    val starPaint = remember {
+        android.graphics.Paint().apply {
+            textAlign = android.graphics.Paint.Align.CENTER
+            isAntiAlias = true
+            color = android.graphics.Color.parseColor("#FFF3B0")
+        }
+    }
     Canvas(
         modifier = Modifier
             .fillMaxSize()
@@ -951,6 +1000,17 @@ private fun PaintArenaCanvas(
                 size = Size(full, full),
                 cornerRadius = CornerRadius(cell * 0.18f, cell * 0.18f),
             )
+        }
+
+        // 별 구역 표시 — 2배 점수 칸에 ★ (칠한 색 위에 살짝 얹어 표시).
+        if (starCells.isNotEmpty()) {
+            starPaint.textSize = cell * 0.82f
+            starPaint.alpha = 235
+            for ((c, r) in starCells) {
+                drawContext.canvas.nativeCanvas.drawText(
+                    "★", c * cell + cell / 2f, r * cell + cell * 0.72f, starPaint,
+                )
+            }
         }
 
         // 벽 셀(테두리 + 내부 벽)
