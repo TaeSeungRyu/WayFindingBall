@@ -45,6 +45,10 @@ data class PaintStage(
     val bombs: Boolean = false,
     /** true면 별 구역(2x2)이 있어 그 칸은 점수 2배 — 핵심 구역 쟁탈전. */
     val zones: Boolean = false,
+    /** true면 색칠 도안 — [template]의 칸을 지정 색으로 칠해 그림을 완성한다. */
+    val colorByNumber: Boolean = false,
+    /** 색칠 도안 그림. 각 문자는 팔레트 인덱스('0'~'9'), '.'은 배경(칠 안 함). */
+    val template: List<String>? = null,
     /** 대결 AI 이동 최고 속도. */
     val aiMaxSpeed: Float = 6.3f,
     /** 대결 AI 가속 계수. */
@@ -69,6 +73,27 @@ val VERSUS_ME = Color(0xFF1E88E5)
 val VERSUS_AI = Color(0xFFE53935)
 val VERSUS_AI2 = Color(0xFF43A047)
 val VERSUS_AI3 = Color(0xFFFB8C00)
+
+/** 색칠 도안(14단계) 팔레트 — 도안 문자 0=분홍,1=노랑,2=초록,3=하늘. */
+val CN_PALETTE = listOf(
+    Color(0xFFEC407A), // 0 분홍
+    Color(0xFFFDD835), // 1 노랑
+    Color(0xFF66BB6A), // 2 초록
+    Color(0xFF42A5F5), // 3 하늘
+)
+
+/** 14단계 색칠 도안 — 꽃(분홍 꽃잎·노랑 가운데·초록 줄기). 9x9(테두리 제외). */
+val CN_FLOWER = listOf(
+    "...000...",
+    "..00000..",
+    ".0001000.",
+    ".0011100.",
+    ".0001000.",
+    "..00000..",
+    "....2....",
+    "...222...",
+    "....2....",
+)
 
 object PaintGame {
     private val MINT = Color(0xFF26C6A6)
@@ -168,6 +193,10 @@ object PaintGame {
             versus = true, aiBalls = 3, countdownS = 35f, allowOverwrite = true,
             ballBounce = true, zones = true,
             colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2, VERSUS_AI3),
+        ),
+        PaintStage(
+            14, "14단계", "그림 따라 칠하기", size = 11, paintColor = CN_PALETTE[0],
+            colorByNumber = true, template = CN_FLOWER, colors = CN_PALETTE,
         ),
     )
 

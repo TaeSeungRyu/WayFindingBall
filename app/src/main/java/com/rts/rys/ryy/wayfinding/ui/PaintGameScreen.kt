@@ -137,6 +137,23 @@ fun PaintGameScreen(
     // 색 고르기 모드: 지금 붓에 든 색 인덱스(팔레트 기준). 단색 모드는 항상 0.
     var colorIndex by remember(attemptId) { mutableIntStateOf(0) }
 
+    // 색칠 도안(14단계): 목표 색 격자(-1=배경) + 맞게 칠한 칸 수.
+    val cnTarget = remember(attemptId) {
+        val t = Array(arena.rows) { IntArray(arena.cols) { -1 } }
+        stage.template?.forEachIndexed { tr, line ->
+            line.forEachIndexed { tc, ch ->
+                if (ch in '0'..'9') {
+                    val r = tr + 1
+                    val c = tc + 1
+                    if (r in t.indices && c in t[r].indices) t[r][c] = ch - '0'
+                }
+            }
+        }
+        t
+    }
+    val cnTotal = remember(attemptId) { cnTarget.sumOf { row -> row.count { it >= 0 } } }
+    var cnCorrect by remember(attemptId) { mutableIntStateOf(0) }
+
     // 대결 모드(8·9단계) 상태.
     val versus = stage.versus
     val aiN = if (versus) stage.aiBalls else 0
@@ -275,6 +292,9 @@ fun PaintGameScreen(
             moved = true  // 대결은 시작과 동시에 시간이 흐른다.
         }
 
+        // 색칠 도안: 컨트롤러가 자동으로 칠한 시작 칸을 비워 도안 안내가 보이게.
+        if (stage.colorByNumber) paintCtrl.erase(arena.startCol, arena.startRow)
+
         var last = 0L
         while (!finished) {
             val now = awaitFrame()
@@ -328,6 +348,30 @@ fun PaintGameScreen(
                 if (versus) {
                     // 대결: 내 색(0)으로. 덮어쓰기 모드면 남의 칸도 뺏는다.
                     if (tryPaint(bc, br, 0) == 2) SoundManager.playStarTone((counts[0]) % 12)
+                } else if (stage.colorByNumber) {
+                    // 색칠 도안: 도안 칸만 칠한다. 지정 색과 맞으면 완성 진행, 틀리면 그 색으로 보이되 미완성.
+                    val tgt = if (br in cnTarget.indices && bc in cnTarget[br].indices) cnTarget[br][bc] else -1
+                    if (tgt >= 0) {
+                        val old = paintCtrl.colorAt(bc, br)
+                        if (old != colorIndex) {
+                            paintCtrl.paint(bc, br, colorIndex)
+                            moved = true
+                            val wasCorrect = old == tgt
+                            val nowCorrect = colorIndex == tgt
+                            if (!wasCorrect && nowCorrect) {
+                                cnCorrect++
+                                SoundManager.playStarTone(cnCorrect % 12)
+                            } else if (wasCorrect && !nowCorrect) {
+                                cnCorrect--
+                            }
+                            if (cnCorrect >= cnTotal) {
+                                isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
+                                finished = true
+                                SoundManager.playGoal()
+                                SoundManager.speak("참 잘했어요")
+                            }
+                        }
+                    }
                 } else {
                     val res = paintCtrl.paint(bc, br, colorIndex)
                     if (res != 0) {
@@ -685,7 +729,7 @@ fun PaintGameScreen(
                     }
                 } else {
                     Text(
-                        text = "$done / ${paintCtrl.total}",
+                        text = if (stage.colorByNumber) "$cnCorrect / $cnTotal" else "$done / ${paintCtrl.total}",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = InkDark,
@@ -728,6 +772,7 @@ fun PaintGameScreen(
                         stage.versus && stage.dynamicWalls -> "벽을 피해 땅을 넓혀요!"
                         stage.versus && overwrite -> "덮어 칠하며 땅을 넓혀요!"
                         stage.versus -> "많이 칠하면 이겨요!"
+                        stage.colorByNumber -> "그림 색에 맞춰 칠해요!"
                         stage.chooseColor -> "좋아하는 색으로 칠해요!"
                         else -> "바닥을 모두 칠해요!"
                     },
@@ -764,6 +809,7 @@ fun PaintGameScreen(
                         bombs = bombRender,
                         blasts = blastRender,
                         starCells = starCells,
+                        cnTarget = if (stage.colorByNumber) cnTarget else null,
                         skin = currentSkin,
                         pulse = pulse,
                     )
@@ -776,7 +822,7 @@ fun PaintGameScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (stage.chooseColor) {
+                if (stage.chooseColor || stage.colorByNumber) {
                     ColorPalettePicker(
                         palette = stage.palette,
                         selected = colorIndex,
@@ -800,7 +846,7 @@ fun PaintGameScreen(
         if (finished) {
             PaintResultOverlay(
                 elapsedMs = elapsedMs,
-                stars = PaintGame.starsFor(paintCtrl.total, elapsedMs),
+                stars = PaintGame.starsFor(if (stage.colorByNumber) cnTotal else paintCtrl.total, elapsedMs),
                 isNewBest = isNewBest,
                 versus = versus,
                 won = won,
@@ -965,6 +1011,7 @@ private fun PaintArenaCanvas(
     bombs: List<Pair<Offset, Float>> = emptyList(),
     blasts: List<Pair<Offset, Float>> = emptyList(),
     starCells: Set<Pair<Int, Int>> = emptySet(),
+    cnTarget: Array<IntArray>? = null,
     skin: com.rts.rys.ryy.wayfinding.data.BallSkin,
     pulse: Float,
 ) {
@@ -993,9 +1040,21 @@ private fun PaintArenaCanvas(
         paint.version  // 변경 시 재구성 트리거
         for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
             if (!paint.isReachable(c, r)) continue
-            val idx = paint.colorAt(c, r)
+            val painted = paint.colorAt(c, r)
+            val col = if (cnTarget != null) {
+                // 색칠 도안: 도안 칸은 안내(연한 목표색)→맞게 칠하면 진하게, 틀리면 칠한 색. 배경은 베이스.
+                val tgt = cnTarget[r][c]
+                when {
+                    tgt < 0 -> unpainted
+                    painted < 0 -> palette[tgt.coerceIn(0, palette.lastIndex)].copy(alpha = 0.25f)
+                    painted == tgt -> palette[tgt.coerceIn(0, palette.lastIndex)]
+                    else -> palette[painted.coerceIn(0, palette.lastIndex)]
+                }
+            } else {
+                if (painted >= 0) palette[painted.coerceIn(0, palette.lastIndex)] else unpainted
+            }
             drawRoundRect(
-                color = if (idx >= 0) palette[idx.coerceIn(0, palette.lastIndex)] else unpainted,
+                color = col,
                 topLeft = Offset(c * cell + inset, r * cell + inset),
                 size = Size(full, full),
                 cornerRadius = CornerRadius(cell * 0.18f, cell * 0.18f),
