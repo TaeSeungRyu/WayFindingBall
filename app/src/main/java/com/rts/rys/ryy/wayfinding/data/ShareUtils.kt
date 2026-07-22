@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.data
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -11,6 +12,9 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
@@ -123,6 +127,82 @@ object ShareUtils {
         canvas.drawText("또르르 미로", W / 2f, H - 80f, brandPaint)
 
         return bmp
+    }
+
+    /** 칠한 격자를 그림으로 렌더 — 각 칸 색(ARGB, 0이면 배경/안 칠함). 정사각 1080px. */
+    fun renderGridArt(cols: Int, rows: Int, argb: Array<IntArray>): Bitmap {
+        val size = 1080
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, 0f, 0f, size.toFloat(),
+                Color.parseColor("#FFF6E9"), Color.parseColor("#FCE7C4"), Shader.TileMode.CLAMP,
+            )
+        }
+        canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), bgPaint)
+
+        val n = maxOf(cols, rows).coerceAtLeast(1)
+        val cell = size.toFloat() / (n + 1)
+        val offX = (size - cell * cols) / 2f
+        val offY = (size - cell * rows) / 2f
+        val inset = cell * 0.06f
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        for (r in 0 until rows) for (c in 0 until cols) {
+            val col = argb.getOrNull(r)?.getOrNull(c) ?: 0
+            if (col == 0) continue
+            paint.color = col
+            val left = offX + c * cell + inset
+            val top = offY + r * cell + inset
+            canvas.drawRoundRect(
+                left, top, left + cell - 2 * inset, top + cell - 2 * inset,
+                cell * 0.2f, cell * 0.2f, paint,
+            )
+        }
+        val brand = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = withAlpha(Color.parseColor("#7A5A2A"), 180)
+            textSize = 42f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText("또르르 미로", size / 2f, size - 36f, brand)
+        return bmp
+    }
+
+    /** 비트맵을 갤러리(사진)에 저장. 성공하면 true. */
+    fun saveBitmapToGallery(
+        context: Context,
+        bitmap: Bitmap,
+        fileName: String = "ddoreu_${System.currentTimeMillis()}",
+    ): Boolean {
+        val display = "$fileName.png"
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, display)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(
+                        MediaStore.Images.Media.RELATIVE_PATH,
+                        Environment.DIRECTORY_PICTURES + "/또르르미로",
+                    )
+                }
+                val uri = context.contentResolver.insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values,
+                ) ?: return false
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                } ?: return false
+                true
+            } else {
+                @Suppress("DEPRECATION")
+                val saved = MediaStore.Images.Media.insertImage(
+                    context.contentResolver, bitmap, display, "또르르 미로 그림",
+                )
+                saved != null
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun shareBitmap(context: Context, bitmap: Bitmap, fileName: String = "record_${System.currentTimeMillis()}.png") {

@@ -1,5 +1,6 @@
 package com.rts.rys.ryy.wayfinding.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,7 @@ import com.rts.rys.ryy.wayfinding.data.AchievementsRepository
 import com.rts.rys.ryy.wayfinding.data.AppSettings
 import com.rts.rys.ryy.wayfinding.data.BallSkins
 import com.rts.rys.ryy.wayfinding.data.PaintRecordsRepository
+import com.rts.rys.ryy.wayfinding.data.ShareUtils
 import com.rts.rys.ryy.wayfinding.data.SoundManager
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.Cell
@@ -857,6 +860,23 @@ fun PaintGameScreen(
                 draw = draw,
                 counts = List(stage.palette.size) { counts.getOrElse(it) { 0 } + starCounts.getOrElse(it) { 0 } },
                 colors = stage.palette,
+                onSaveArt = if (stage.mirror || stage.colorByNumber) {
+                    {
+                        val argb = Array(arena.rows) { r ->
+                            IntArray(arena.cols) { c ->
+                                val idx = paintCtrl.colorAt(c, r)
+                                if (idx >= 0) stage.palette[idx.coerceIn(0, stage.palette.lastIndex)].toArgb() else 0
+                            }
+                        }
+                        val bmp = ShareUtils.renderGridArt(arena.cols, arena.rows, argb)
+                        val ok = ShareUtils.saveBitmapToGallery(context, bmp)
+                        Toast.makeText(
+                            context,
+                            if (ok) "사진에 저장했어요!" else "저장하지 못했어요",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                } else null,
                 onRetry = { attemptId += 1 },
                 onHome = onExit,
             )
@@ -1200,6 +1220,7 @@ private fun PaintResultOverlay(
     draw: Boolean = false,
     counts: List<Int> = emptyList(),
     colors: List<Color> = emptyList(),
+    onSaveArt: (() -> Unit)? = null,
     onRetry: () -> Unit,
     onHome: () -> Unit,
 ) {
@@ -1304,6 +1325,10 @@ private fun PaintResultOverlay(
                         fontWeight = FontWeight.ExtraBold,
                     )
                 }
+            }
+            if (onSaveArt != null) {
+                Spacer(Modifier.height(16.dp))
+                PaintResultButton("📷 사진 저장", Color(0xFF26A69A), onSaveArt, Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
