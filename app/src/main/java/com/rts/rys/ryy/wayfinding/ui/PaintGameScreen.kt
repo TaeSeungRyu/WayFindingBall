@@ -364,17 +364,29 @@ fun PaintGameScreen(
                         }
                     }
                 } else {
-                    val res = paintCtrl.paint(bc, br, colorIndex)
-                    if (res != 0) {
-                        moved = true
-                        if (res == 2) {  // 처음 칠한 칸일 때만 소리·완료 판정.
-                            SoundManager.playStarTone((paintCtrl.total - paintCtrl.remaining) % 12)
-                            if (paintCtrl.done) {
-                                isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
-                                finished = true
-                                SoundManager.playGoal()
-                                SoundManager.speak("참 잘했어요")
-                            }
+                    // 일반 칠하기 — 대칭 모드면 상하좌우 대칭 칸까지 함께 칠한다.
+                    val targets = if (stage.mirror) {
+                        val c2 = arena.cols - 1 - bc
+                        val r2 = arena.rows - 1 - br
+                        setOf(bc to br, c2 to br, bc to r2, c2 to r2)
+                    } else {
+                        setOf(bc to br)
+                    }
+                    var anyNew = false
+                    var anyChange = false
+                    for ((pc, pr) in targets) {
+                        val res = paintCtrl.paint(pc, pr, colorIndex)
+                        if (res != 0) anyChange = true
+                        if (res == 2) anyNew = true
+                    }
+                    if (anyChange) moved = true
+                    if (anyNew) {  // 처음 칠한 칸이 생겼을 때만 소리·완료 판정.
+                        SoundManager.playStarTone((paintCtrl.total - paintCtrl.remaining) % 12)
+                        if (paintCtrl.done) {
+                            isNewBest = PaintRecordsRepository(context).record(level, elapsedMs)
+                            finished = true
+                            SoundManager.playGoal()
+                            SoundManager.speak("참 잘했어요")
                         }
                     }
                 }
@@ -764,6 +776,7 @@ fun PaintGameScreen(
                         stage.versus && overwrite -> "덮어 칠하며 땅을 넓혀요!"
                         stage.versus -> "많이 칠하면 이겨요!"
                         stage.colorByNumber -> "그림 색에 맞춰 칠해요!"
+                        stage.mirror -> "칠하면 대칭으로 퍼져요!"
                         stage.chooseColor -> "좋아하는 색으로 칠해요!"
                         else -> "바닥을 모두 칠해요!"
                     },

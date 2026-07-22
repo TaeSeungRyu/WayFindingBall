@@ -49,6 +49,8 @@ data class PaintStage(
     val colorByNumber: Boolean = false,
     /** 색칠 도안 그림. 각 문자는 팔레트 인덱스('0'~'9'), '.'은 배경(칠 안 함). */
     val template: List<String>? = null,
+    /** true면 대칭 그리기 — 한 칸을 칠하면 상하좌우 대칭으로 함께 칠해진다(만다라). */
+    val mirror: Boolean = false,
     /** 대결 AI 이동 최고 속도. */
     val aiMaxSpeed: Float = 6.3f,
     /** 대결 AI 가속 계수. */
@@ -247,6 +249,10 @@ object PaintGame {
         PaintStage(
             16, "16단계", "그림 따라 칠하기 · 나비", size = 11, paintColor = CN_BUTTERFLY_PALETTE[0],
             colorByNumber = true, template = CN_BUTTERFLY, colors = CN_BUTTERFLY_PALETTE,
+        ),
+        PaintStage(
+            17, "17단계", "거울 대칭 그리기", size = 13, paintColor = Color(0xFF8E24AA),
+            chooseColor = true, mirror = true,
         ),
     )
 
