@@ -95,6 +95,27 @@ val CN_FLOWER = listOf(
     "....2....",
 )
 
+/** 15단계 색칠 도안 팔레트 — 0=빨강(지붕),1=노랑(벽),2=갈색(문),3=하늘. */
+val CN_HOUSE_PALETTE = listOf(
+    Color(0xFFE53935), // 0 빨강
+    Color(0xFFFDD835), // 1 노랑
+    Color(0xFF8D6E63), // 2 갈색
+    Color(0xFF42A5F5), // 3 하늘
+)
+
+/** 15단계 색칠 도안 — 집(빨강 지붕·노랑 벽·갈색 문). 9x9. */
+val CN_HOUSE = listOf(
+    "....0....",
+    "...000...",
+    "..00000..",
+    ".0000000.",
+    ".1111111.",
+    ".1112111.",
+    ".1112111.",
+    ".1112111.",
+    ".1111111.",
+)
+
 object PaintGame {
     private val MINT = Color(0xFF26C6A6)
     private val SKY = Color(0xFF4FC3F7)
@@ -195,8 +216,12 @@ object PaintGame {
             colors = listOf(VERSUS_ME, VERSUS_AI, VERSUS_AI2, VERSUS_AI3),
         ),
         PaintStage(
-            14, "14단계", "그림 따라 칠하기", size = 11, paintColor = CN_PALETTE[0],
+            14, "14단계", "그림 따라 칠하기 · 꽃", size = 11, paintColor = CN_PALETTE[0],
             colorByNumber = true, template = CN_FLOWER, colors = CN_PALETTE,
+        ),
+        PaintStage(
+            15, "15단계", "그림 따라 칠하기 · 집", size = 11, paintColor = CN_HOUSE_PALETTE[0],
+            colorByNumber = true, template = CN_HOUSE, colors = CN_HOUSE_PALETTE,
         ),
     )
 
