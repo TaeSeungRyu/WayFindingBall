@@ -6,6 +6,25 @@ Play Console 업로드 기준 버전별 변경 이력. 최신 버전이 맨 위.
 
 ---
 
+## 2.1.0 (versionCode 10)
+
+**사용자 대상**
+```
+🎨 새 게임 '바닥 색칠하기' 추가!
+- 공을 굴려 바닥을 칠하는 17단계 — 혼자 칠하기, 색 골라 칠하기, AI와 색칠 대결, 팀 대결 2:2, 별 구역 쟁탈전까지!
+- 그림 따라 칠하기(꽃·집·나비)와 거울 대칭 그리기로 나만의 그림을 만들어요.
+- 완성한 그림을 사진으로 저장할 수 있어요.
+```
+
+**기술 요약**
+- 새 모드 `game/PaintGame.kt` · `ui/PaintGameScreen.kt` · `game/FloorPaintController.kt` · `data/PaintRecordsRepository.kt`. 홈 → 모드 선택에 5번째 카드로 배선.
+- 1~7: 솔로 칠하기(광장→미로)·색 고르기. 8~13: AI 대결·팀전·땅따먹기(덮어쓰기)·동적 벽·술래·폭탄·별 구역 2배 점수. 14~16: 색칠 도안(꽃·집·나비). 17: 거울 대칭 그리기.
+- 대결 로직을 N개 AI·카운트다운·덮어쓰기·다수 점수판으로 일반화. 시간제 단계는 차지한 칸 수를 최고 점수로 저장·표시.
+- 완성 그림 사진 저장: `ShareUtils.renderGridArt`/`saveBitmapToGallery`(Android 10+ MediaStore).
+- **targetSdk/compileSdk 36 (Android 16)** 반영 — Play 타겟 요구 충족.
+
+---
+
 ## 2.0.4 (versionCode 9)
 
 **사용자 대상**
