@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.game.BallPhysics
 import com.rts.rys.ryy.wayfinding.game.FloorPaintController
+import com.rts.rys.ryy.wayfinding.game.PaintStage
 import com.rts.rys.ryy.wayfinding.ui.theme.CoralPink
 import com.rts.rys.ryy.wayfinding.ui.theme.InkDark
 import com.rts.rys.ryy.wayfinding.ui.theme.InkSoft
@@ -167,6 +168,159 @@ internal fun pickAiTarget(
         if (candidates.isNotEmpty()) return candidates[rnd.nextInt(candidates.size)]
     }
     return nearestNotMine(paint, arena, x, y, myIdx)
+}
+
+/**
+ * AI 공 한 개(i)의 이번 프레임 업데이트 — 이동(넉백/추적/멈칫)과 칸 칠하기.
+ * 배열·목록·tryPaint는 참조/클로저로 넘겨 원본을 그대로 갱신한다(로직 동일).
+ */
+internal fun updateAiBall(
+    i: Int,
+    aiList: List<BallPhysics>,
+    aiPos: MutableList<Offset>,
+    aiStun: FloatArray,
+    aiKnock: FloatArray,
+    aiIdle: FloatArray,
+    aiTarget: Array<Pair<Int, Int>?>,
+    aiTargetAge: FloatArray,
+    aiLast: Array<Pair<Int, Int>>,
+    aiColorIdx: IntArray,
+    paint: FloorPaintController,
+    arena: com.rts.rys.ryy.wayfinding.game.Maze,
+    stage: PaintStage,
+    rnd: Random,
+    starCells: Set<Pair<Int, Int>>,
+    timed: Boolean,
+    dt: Float,
+    tryPaint: (Int, Int, Int) -> Int,
+) {
+    val ph = aiList[i]
+    if (aiStun[i] > 0f) {
+        // 술래에 잡혀 기절 — 이번 프레임은 멈춘다.
+        aiStun[i] -= dt
+        ph.stop()
+        aiPos[i] = Offset(ph.x, ph.y)
+        return
+    }
+    ph.maxSpeed = stage.aiMaxSpeed
+    if (aiKnock[i] > 0f) {
+        // 부딪혀 튕기는 중 — 추적 없이 튕긴 속도로 미끄러진다.
+        aiKnock[i] -= dt
+        ph.step(dt, 0f, 0f)
+    } else if (timed) {
+        // 목표를 하나 정해 도달까지 유지 + 가끔 무작위 목표 — 부드럽고 덜 단조롭게.
+        // 목표가 벽에 막히거나 오래 못 닿으면 다시 고른다.
+        val cur = floor(ph.x).toInt() to floor(ph.y).toInt()
+        aiTargetAge[i] += dt
+        var tgt = aiTarget[i]
+        if (tgt == null || tgt == cur ||
+            paint.colorAt(tgt.first, tgt.second) == aiColorIdx[i] ||
+            !paint.isReachable(tgt.first, tgt.second) ||
+            aiTargetAge[i] > AI_TARGET_TIMEOUT
+        ) {
+            tgt = pickAiTarget(paint, arena, ph.x, ph.y, aiColorIdx[i], rnd, starCells)
+            aiTarget[i] = tgt
+            aiTargetAge[i] = 0f
+        }
+        if (tgt != null) {
+            var dx = (tgt.first + 0.5f) - ph.x
+            var dy = (tgt.second + 0.5f) - ph.y
+            val len = sqrt(dx * dx + dy * dy)
+            if (len > 0.001f) { dx /= len; dy /= len }
+            ph.step(dt, dx * stage.aiAccelGain, dy * stage.aiAccelGain)
+        } else {
+            ph.step(dt, 0f, 0f)
+        }
+    } else {
+        // 8단계: 가장 가까운 빈 칸으로, 칸마다 잠깐 멈칫.
+        if (aiIdle[i] > 0f) {
+            aiIdle[i] -= dt
+            ph.step(dt, 0f, 0f)
+        } else {
+            val target = nearestUnpainted(paint, arena, ph.x, ph.y)
+            if (target != null) {
+                var dx = (target.first + 0.5f) - ph.x
+                var dy = (target.second + 0.5f) - ph.y
+                val len = sqrt(dx * dx + dy * dy)
+                if (len > 0.001f) { dx /= len; dy /= len }
+                ph.step(dt, dx * stage.aiAccelGain, dy * stage.aiAccelGain)
+            } else {
+                ph.step(dt, 0f, 0f)
+            }
+        }
+    }
+    aiPos[i] = Offset(ph.x, ph.y)
+    val ac = floor(ph.x).toInt()
+    val ar = floor(ph.y).toInt()
+    val acell = ac to ar
+    if (acell != aiLast[i]) {
+        val painted = tryPaint(ac, ar, aiColorIdx[i])
+        if (painted != 0 && !timed) aiIdle[i] = AI_THINK_PAUSE
+        aiLast[i] = acell
+    }
+}
+
+/** 동적 벽 타이머 상태(재설정·생성 텀·목표 개수). */
+internal class WallTimers(var retarget: Float, var spawnCd: Float, var target: Int)
+
+/** 동적 벽 한 프레임: 수명 끝난 벽 제거 + 목표 개수까지 새 벽 생성. 로직은 원본과 동일. */
+internal fun tickWalls(
+    timers: WallTimers,
+    activeWalls: MutableList<TempWall>,
+    paint: FloorPaintController,
+    arena: com.rts.rys.ryy.wayfinding.game.Maze,
+    counts: MutableList<Int>,
+    player: BallPhysics,
+    aiList: List<BallPhysics>,
+    aiN: Int,
+    aiTarget: Array<Pair<Int, Int>?>,
+    rnd: Random,
+    dt: Float,
+) {
+    // 목표 개수를 주기적으로 3~6 사이에서 다시 뽑는다.
+    timers.retarget += dt
+    if (timers.retarget >= 3f) {
+        timers.retarget = 0f
+        timers.target = WALL_MIN + rnd.nextInt(WALL_MAX - WALL_MIN + 1)
+    }
+    // 수명이 끝난 벽 제거 → 바닥 복원.
+    val wit = activeWalls.iterator()
+    while (wit.hasNext()) {
+        val w = wit.next()
+        w.life -= dt
+        if (w.life <= 0f) {
+            paint.unwall(w.c, w.r)
+            arena.grid[w.r][w.c] = com.rts.rys.ryy.wayfinding.game.Cell.EMPTY
+            wit.remove()
+        }
+    }
+    // 목표 개수까지 하나씩(살짝 텀을 두고) 새 벽 생성.
+    timers.spawnCd -= dt
+    if (activeWalls.size < timers.target && timers.spawnCd <= 0f) {
+        val occupied = HashSet<Pair<Int, Int>>()
+        occupied.add(floor(player.x).toInt() to floor(player.y).toInt())
+        for (i in 0 until aiN) {
+            occupied.add(floor(aiList[i].x).toInt() to floor(aiList[i].y).toInt())
+        }
+        val cands = ArrayList<Pair<Int, Int>>()
+        for (r in 1 until arena.rows - 1) for (c in 1 until arena.cols - 1) {
+            if (!paint.isReachable(c, r)) continue
+            if ((c to r) in occupied) continue
+            cands.add(c to r)
+        }
+        if (cands.isNotEmpty()) {
+            val (wc, wr) = cands[rnd.nextInt(cands.size)]
+            val old = paint.wallify(wc, wr)
+            if (old in counts.indices) counts[old] = counts[old] - 1
+            arena.grid[wr][wc] = com.rts.rys.ryy.wayfinding.game.Cell.WALL
+            activeWalls.add(TempWall(wc, wr, WALL_LIFE_MIN + rnd.nextFloat() * (WALL_LIFE_MAX - WALL_LIFE_MIN)))
+            // 그 칸을 노리던 AI는 목표를 다시 고르게.
+            for (i in 0 until aiN) {
+                if (aiTarget[i] == (wc to wr)) aiTarget[i] = null
+            }
+            timers.spawnCd = 0.3f + rnd.nextFloat() * 0.4f
+        }
+    }
 }
 
 @Composable
