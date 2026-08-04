@@ -147,9 +147,9 @@ private fun PaintStageCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(6.dp))
-                // 시간제 대결(9단계~)은 시간 대신 차지한 칸 수를 최고 기록으로.
+                // 시간제 대결(9단계~)은 시간 대신 차지한 칸수(높을수록 좋음)를 최고 기록으로.
                 val bestText = if (stage.countdownS > 0f) {
-                    bestScore?.let { "최고 기록  ${it}칸" }
+                    bestScore?.let { "최고 칸수  ${it}칸" }
                 } else {
                     bestMs?.let { "최고 기록  ${formatElapsed(it)}" }
                 }

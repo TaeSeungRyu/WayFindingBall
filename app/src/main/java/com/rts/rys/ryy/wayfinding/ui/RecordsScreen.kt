@@ -184,11 +184,13 @@ fun RecordsScreen(onBack: () -> Unit) {
                     SectionLabel("바닥 색칠하기")
                 }
                 items(paintBests, key = { "paint_${it.level}" }) { pb ->
-                    val valueText = if (pb.timed) pb.bestScore?.let { "$it 칸" }
+                    // 대결(시간제)은 차지한 칸수(높을수록 좋음), 나머지는 완주 시간.
+                    val valueText = if (pb.timed) pb.bestScore?.let { "${it}칸" }
                                     else pb.bestMs?.let { formatElapsed(it) }
                     PaintBestCard(
                         title = pb.name,
                         valueText = valueText,
+                        sublabel = if (pb.timed) "최고 칸수" else "최고 기록",
                         baseColor = Color(0xFF26A69A),
                     )
                 }
@@ -313,7 +315,7 @@ private data class PaintBest(
 
 /** 바닥 색칠하기 기록 카드 — 값(시간 또는 "N칸")을 문자열로 받아 그대로 표기. */
 @Composable
-private fun PaintBestCard(title: String, valueText: String?, baseColor: Color) {
+private fun PaintBestCard(title: String, valueText: String?, sublabel: String, baseColor: Color) {
     val hasRecord = valueText != null
     val color = if (hasRecord) baseColor else Color(0xFFBDB7B0)
     Row(
@@ -346,7 +348,7 @@ private fun PaintBestCard(title: String, valueText: String?, baseColor: Color) {
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = if (hasRecord) "최고 기록" else "아직 도전해 보세요",
+                text = if (hasRecord) sublabel else "아직 도전해 보세요",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White.copy(alpha = 0.85f)
