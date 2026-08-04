@@ -69,6 +69,19 @@ private const val KEYPAD_ACCEL_GAIN = 18f
 private const val SENSOR_MAX_SPEED = 22f
 private const val KEYPAD_MAX_SPEED = 14f
 
+// 타일별 고유 색 — 흰 글자가 잘 보이는 채도 있는 9색.
+private val TILE_COLORS = listOf(
+    Color(0xFFEF5350), // 빨강
+    Color(0xFFFB8C00), // 주황
+    Color(0xFF43A047), // 초록
+    Color(0xFF00897B), // 청록
+    Color(0xFF1E88E5), // 파랑
+    Color(0xFF3949AB), // 남색
+    Color(0xFF8E24AA), // 보라
+    Color(0xFFD81B60), // 분홍
+    Color(0xFF6D4C41), // 갈색
+)
+
 @Composable
 fun LearnGameScreen(
     level: Int,
@@ -331,29 +344,27 @@ private fun LearnArenaCanvas(
             val pad = cell * 0.1f
             val w = tile - pad * 2
             val glow = 0.5f + 0.5f * sin(pulse * 4f)
-            val tileColor = when {
-                done -> Color(0xFFA5D6A7)
-                current -> Color(0xFFFFF59D)
-                else -> Color.White
-            }
+            // 타일별 고유 색. 완료된 타일은 흐리게 표시.
+            val base = TILE_COLORS[i % TILE_COLORS.size]
             drawRoundRect(
-                color = tileColor,
+                color = if (done) base.copy(alpha = 0.4f) else base,
                 topLeft = Offset(left + pad, top + pad),
                 size = Size(w, w),
                 cornerRadius = CornerRadius(cell * 0.3f, cell * 0.3f),
             )
             if (current) {
+                // 지금 차례 — 금색 펄스 테두리로 강조.
                 drawRoundRect(
-                    color = Color(0xFFFFB300).copy(alpha = 0.5f + 0.5f * glow),
+                    color = Color(0xFFFFC107).copy(alpha = 0.55f + 0.45f * glow),
                     topLeft = Offset(left + pad, top + pad),
                     size = Size(w, w),
                     cornerRadius = CornerRadius(cell * 0.3f, cell * 0.3f),
-                    style = Stroke(width = cell * 0.12f),
+                    style = Stroke(width = cell * 0.16f),
                 )
             }
             labelPaint.textSize = tile * 0.55f
-            labelPaint.color = if (done) android.graphics.Color.parseColor("#2E7D32")
-            else android.graphics.Color.parseColor("#3A2E10")
+            labelPaint.color = if (done) android.graphics.Color.parseColor("#66FFFFFF")
+            else android.graphics.Color.WHITE
             drawContext.canvas.nativeCanvas.drawText(
                 item.label,
                 left + tile / 2f,
