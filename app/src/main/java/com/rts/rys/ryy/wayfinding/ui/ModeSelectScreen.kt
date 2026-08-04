@@ -44,6 +44,8 @@ import com.rts.rys.ryy.wayfinding.ui.theme.WallGreen
 private val ConstellationCard = Color(0xFF3949AB)
 // 바닥 색칠하기 모드용 — 민트 톤.
 private val PaintCard = Color(0xFF26A69A)
+// 숫자·한글 배우기 모드용 — 보라 톤.
+private val LearnCard = Color(0xFF7E57C2)
 
 @Composable
 fun ModeSelectScreen(
@@ -53,6 +55,7 @@ fun ModeSelectScreen(
     onHit: () -> Unit,
     onConstellation: () -> Unit,
     onPaint: () -> Unit,
+    onLearn: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -124,6 +127,13 @@ fun ModeSelectScreen(
                         subtitle = "공을 굴려 바닥을 다 칠해요",
                         bg = PaintCard,
                         onClick = onPaint,
+                    )
+                    ModeCard(
+                        emoji = "🎓",
+                        title = "숫자·한글 배우기",
+                        subtitle = "순서대로 굴려 숫자·글자를 배워요",
+                        bg = LearnCard,
+                        onClick = onLearn,
                     )
                 }
             }

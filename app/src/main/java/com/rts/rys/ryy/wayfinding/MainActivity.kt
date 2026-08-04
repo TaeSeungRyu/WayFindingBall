@@ -56,6 +56,8 @@ import com.rts.rys.ryy.wayfinding.ui.HitStageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.HomeScreen
 import com.rts.rys.ryy.wayfinding.ui.LevelSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.MazeEditorScreen
+import com.rts.rys.ryy.wayfinding.ui.LearnGameScreen
+import com.rts.rys.ryy.wayfinding.ui.LearnStageSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.ModeSelectScreen
 import com.rts.rys.ryy.wayfinding.ui.PaintGameScreen
 import com.rts.rys.ryy.wayfinding.ui.PaintStageSelectScreen
@@ -123,6 +125,8 @@ private sealed class Screen {
     data class HitGame(val level: Int) : Screen()
     data object PaintStageSelect : Screen()
     data class PaintGame(val level: Int) : Screen()
+    data object LearnStageSelect : Screen()
+    data class LearnGame(val level: Int) : Screen()
     data object ConstellationStageSelect : Screen()
     data object ConstellationCreate : Screen()
     data class ConstellationGame(val stageKey: String, val recordKey: String) : Screen()
@@ -253,7 +257,8 @@ fun MazeApp() {
                 onColor = { push(Screen.ColorStageSelect) },
                 onHit = { push(Screen.HitStageSelect) },
                 onConstellation = { push(Screen.ConstellationStageSelect) },
-                onPaint = { push(Screen.PaintStageSelect) }
+                onPaint = { push(Screen.PaintStageSelect) },
+                onLearn = { push(Screen.LearnStageSelect) }
             )
             Screen.ColorStageSelect -> ColorStageSelectScreen(
                 onBack = { pop() },
@@ -276,6 +281,14 @@ fun MazeApp() {
                 onSelect = { level -> push(Screen.PaintGame(level)) }
             )
             is Screen.PaintGame -> PaintGameScreen(
+                level = screen.level,
+                onExit = { pop() }
+            )
+            Screen.LearnStageSelect -> LearnStageSelectScreen(
+                onBack = { pop() },
+                onSelect = { level -> push(Screen.LearnGame(level)) }
+            )
+            is Screen.LearnGame -> LearnGameScreen(
                 level = screen.level,
                 onExit = { pop() }
             )

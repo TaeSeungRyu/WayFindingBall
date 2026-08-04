@@ -44,12 +44,14 @@ import androidx.compose.ui.unit.sp
 import com.rts.rys.ryy.wayfinding.data.ColorRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.GameRecord
 import com.rts.rys.ryy.wayfinding.data.HitRecordsRepository
+import com.rts.rys.ryy.wayfinding.data.LearnRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.PaintRecordsRepository
 import com.rts.rys.ryy.wayfinding.data.RecordsRepository
 import com.rts.rys.ryy.wayfinding.data.ShareUtils
 import com.rts.rys.ryy.wayfinding.game.ColorGame
 import com.rts.rys.ryy.wayfinding.game.ColorStage
 import com.rts.rys.ryy.wayfinding.game.HitGame
+import com.rts.rys.ryy.wayfinding.game.LearnGame
 import com.rts.rys.ryy.wayfinding.game.MazePar
 import com.rts.rys.ryy.wayfinding.game.PaintGame
 import com.rts.rys.ryy.wayfinding.game.Stages
@@ -124,6 +126,10 @@ fun RecordsScreen(onBack: () -> Unit) {
             )
         }
     }
+    val learnBests = remember {
+        val repo = LearnRecordsRepository(context)
+        LearnGame.stages.map { it.level to (it.description to repo.bestFor(it.level)) }
+    }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     Box(
@@ -193,6 +199,14 @@ fun RecordsScreen(onBack: () -> Unit) {
                         sublabel = if (pb.timed) "최고 칸수" else "최고 기록",
                         baseColor = Color(0xFF26A69A),
                     )
+                }
+                item(key = "h_learn") {
+                    Spacer(Modifier.height(6.dp))
+                    SectionLabel("숫자·한글 배우기")
+                }
+                items(learnBests, key = { "learn_${it.first}" }) { (level, pair) ->
+                    val (name, bestMs) = pair
+                    TimeBestCard(level = level, title = name, bestMs = bestMs, baseColor = Color(0xFF7E57C2), emoji = "🎓")
                 }
             }
         }
