@@ -7,7 +7,11 @@ package com.rts.rys.ryy.wayfinding.game
  * 밟으면 다음으로 진행. 밟을 때마다 TTS로 읽어줘 숫자·글자·순서를 배운다.
  * 기존 [BallPhysics]/기울기·키패드 조작을 그대로 재사용한다.
  */
-data class LearnItem(val label: String, val col: Int, val row: Int)
+/** [col],[row]은 타일(2x2 구역)의 좌상단 칸. */
+data class LearnItem(val label: String, val col: Int, val row: Int) {
+    fun contains(c: Int, r: Int): Boolean =
+        c in col until col + LearnGame.TILE && r in row until row + LearnGame.TILE
+}
 
 data class LearnStage(
     val level: Int,
@@ -19,8 +23,10 @@ data class LearnStage(
 
 object LearnGame {
     const val SIZE = 11
+    /** 타일 한 변 칸 수(2x2 = 크게). */
+    const val TILE = 2
 
-    // 3x3 격자(열/행 2·5·8) 위치를 라벨 순서와 다르게 흩뿌린 배치 — 순서 찾기가 놀이가 되게.
+    // 3x3 격자의 각 셀 좌상단(열/행 2·5·8)을 라벨 순서와 다르게 흩뿌린 배치 — 각 타일은 2x2.
     private val POSITIONS = listOf(
         5 to 5, 2 to 2, 8 to 8, 8 to 2, 2 to 8, 5 to 2, 8 to 5, 2 to 5, 5 to 8,
     )

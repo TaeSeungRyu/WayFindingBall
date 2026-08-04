@@ -151,7 +151,7 @@ fun LearnGameScreen(
             if (cell != lastCell) {
                 if (reached < stage.items.size) {
                     val cur = stage.items[reached]
-                    if (bc == cur.col && br == cur.row) {
+                    if (cur.contains(bc, br)) {
                         reached += 1
                         SoundManager.speak(cur.label)  // 밟은 숫자/글자를 읽어준다.
                         SoundManager.playGoal()
@@ -160,7 +160,7 @@ fun LearnGameScreen(
                             finished = true
                             SoundManager.speak("참 잘했어요")
                         }
-                    } else if (stage.items.any { it.col == bc && it.row == br }) {
+                    } else if (stage.items.any { it.contains(bc, br) }) {
                         // 순서가 아닌 타일을 밟음 — 살짝 알려주고 무시.
                         wrongFlash = 0.4f
                         SoundManager.playBonk()
@@ -320,6 +320,7 @@ private fun LearnArenaCanvas(
             .background(Color(0xFFF3EFE7))
     ) {
         val cell = size.minDimension / arenaCols
+        val tile = LearnGame.TILE * cell  // 타일 한 변 픽셀(2x2).
 
         // 타일 — 이미 밟음(초록·연하게)/지금 차례(노랑 강조·펄스)/아직(흰 타일).
         items.forEachIndexed { i, item ->
@@ -327,7 +328,8 @@ private fun LearnArenaCanvas(
             val current = i == reached
             val left = item.col * cell
             val top = item.row * cell
-            val pad = cell * 0.08f
+            val pad = cell * 0.1f
+            val w = tile - pad * 2
             val glow = 0.5f + 0.5f * sin(pulse * 4f)
             val tileColor = when {
                 done -> Color(0xFFA5D6A7)
@@ -337,25 +339,25 @@ private fun LearnArenaCanvas(
             drawRoundRect(
                 color = tileColor,
                 topLeft = Offset(left + pad, top + pad),
-                size = Size(cell - pad * 2, cell - pad * 2),
-                cornerRadius = CornerRadius(cell * 0.22f, cell * 0.22f),
+                size = Size(w, w),
+                cornerRadius = CornerRadius(cell * 0.3f, cell * 0.3f),
             )
             if (current) {
                 drawRoundRect(
                     color = Color(0xFFFFB300).copy(alpha = 0.5f + 0.5f * glow),
                     topLeft = Offset(left + pad, top + pad),
-                    size = Size(cell - pad * 2, cell - pad * 2),
-                    cornerRadius = CornerRadius(cell * 0.22f, cell * 0.22f),
-                    style = Stroke(width = cell * 0.08f),
+                    size = Size(w, w),
+                    cornerRadius = CornerRadius(cell * 0.3f, cell * 0.3f),
+                    style = Stroke(width = cell * 0.12f),
                 )
             }
-            labelPaint.textSize = cell * 0.5f
+            labelPaint.textSize = tile * 0.55f
             labelPaint.color = if (done) android.graphics.Color.parseColor("#2E7D32")
             else android.graphics.Color.parseColor("#3A2E10")
             drawContext.canvas.nativeCanvas.drawText(
                 item.label,
-                left + cell / 2f,
-                top + cell / 2f + cell * 0.18f,
+                left + tile / 2f,
+                top + tile / 2f + tile * 0.2f,
                 labelPaint,
             )
         }
