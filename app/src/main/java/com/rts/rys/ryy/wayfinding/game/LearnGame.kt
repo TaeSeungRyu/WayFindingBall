@@ -45,6 +45,10 @@ object LearnGame {
         make(3, "3단계", "한글 ㄱ~ㅁ", listOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ")),
         make(4, "4단계", "한글 ㄱ~ㅈ", listOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ")),
         make(5, "5단계", "알파벳 A~E", listOf("A", "B", "C", "D", "E")),
+        // 4단계(ㄱ~ㅈ)에 이어 자음을 마저 배워 기본 자음 14개를 완성.
+        make(6, "6단계", "한글 ㅊ~ㅎ", listOf("ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ")),
+        make(7, "7단계", "한글 모음", listOf("ㅏ", "ㅑ", "ㅓ", "ㅕ", "ㅗ", "ㅛ", "ㅜ", "ㅠ", "ㅣ")),
+        make(8, "8단계", "알파벳 A~I", ('A'..'I').map { it.toString() }),
     )
 
     fun stageOf(level: Int): LearnStage = stages.firstOrNull { it.level == level } ?: stages.first()
