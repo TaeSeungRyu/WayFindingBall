@@ -163,6 +163,13 @@ object ColorGame {
             10, "10단계", "보였다 안 보여요", emptyList(), 10,
             floorMode = true, flipCycleS = 3f,
         ),
+        // 11~13단계: 새 규칙 없이 검증된 add-on(dark·chaser·memorizeOrder·dynamicWalls)만 겹친 도전 단계.
+        ColorStage(11, "11단계", "깜깜한데 술래가 와요", zones6, 4, dark = true, chaser = true),
+        ColorStage(12, "12단계", "순서 기억 + 깜깜", zones6, 4, memorizeOrder = true, dark = true),
+        ColorStage(
+            13, "13단계", "기억 + 술래 + 움직이는 벽", zones6, 4,
+            memorizeOrder = true, chaser = true, dynamicWalls = true,
+        ),
     )
 
     /** 헌트 모드: 12색 팔레트를 12개 위치에 무작위로 1:1 배치한다. */

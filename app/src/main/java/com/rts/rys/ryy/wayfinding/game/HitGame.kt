@@ -88,6 +88,23 @@ object HitGame {
         "#############",
     )
 
+    // 11단계용: 모서리 범퍼 + 가운데 가로 바 2개 (기존 아레나와 다른 반사 패턴)
+    private val stage11Arena = listOf(
+        "#############",
+        "#           #",
+        "# ##     ## #",
+        "#           #",
+        "#    ###    #",
+        "#           #",
+        "#     S     #",
+        "#           #",
+        "#    ###    #",
+        "#           #",
+        "# ##     ## #",
+        "#           #",
+        "#############",
+    )
+
     val stages: List<HitStage> = listOf(
         HitStage(1, "1단계", "표적 5개", 5),
         HitStage(2, "2단계", "표적 8개", 8),
@@ -99,6 +116,10 @@ object HitGame {
         HitStage(8, "8단계", "포켓에 공을 넣어요", 5, pockets = true),
         HitStage(9, "9단계", "순서대로 포켓", 5, ordered = true, pockets = true),
         HitStage(10, "10단계", "색깔 매칭 포켓", 8, pockets = true, colorMatch = true),
+        // 11~13단계: 새 규칙 없이 검증된 옵션(아레나·ordered·moving·dynamicWalls)만 조합.
+        HitStage(11, "11단계", "지그재그 범퍼", 10, arenaLines = stage11Arena),
+        HitStage(12, "12단계", "순서 + 사라지는 벽", 6, ordered = true, dynamicWalls = true),
+        HitStage(13, "13단계", "순서 + 움직임 + 사라지는 벽", 6, ordered = true, moving = true, dynamicWalls = true),
     )
 
 
