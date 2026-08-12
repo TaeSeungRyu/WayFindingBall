@@ -6,6 +6,24 @@ Play Console 업로드 기준 버전별 변경 이력. 최신 버전이 맨 위.
 
 ---
 
+## 2.3.0 (versionCode 12)
+
+**사용자 대상**
+```
+🎮 즐길 거리가 더 많아졌어요!
+- 숫자·한글 배우기: 한글 자음(ㅊ~ㅎ)·모음·알파벳(A~I) 단계가 늘었어요.
+- 색깔 찾기: 깜깜한데 술래가 오거나, 순서를 기억하는 더 짜릿한 단계 추가!
+- 굴려서 맞히기: 지그재그 범퍼와 움직이는 표적 등 새 단계 추가!
+```
+
+**기술 요약**
+- 새 게임 규칙·화면 없이 기존 데이터(`stages`)만 확장 — 선택 화면·기록·별점 합계는 리스트를 순회하므로 자동 반영.
+- 배우기 6~8단계: 한글 ㅊ~ㅎ(자음 14개 완성)·한글 모음·알파벳 A~I (`game/LearnGame.kt`).
+- 색깔 11~13단계: dark+chaser / memorizeOrder+dark / memorizeOrder+chaser+dynamicWalls (`game/ColorGame.kt`).
+- 맞히기 11~13단계: 새 아레나(지그재그 범퍼) / ordered+dynamicWalls / ordered+moving+dynamicWalls (`game/HitGame.kt`).
+
+---
+
 ## 2.2.0 (versionCode 11)
 
 **사용자 대상**
