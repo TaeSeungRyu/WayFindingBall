@@ -8,6 +8,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 빌드
 
+**새 환경에서 클론했다면 먼저 `docs/SETUP.md`를 따를 것.** 저장소에 없거나 손봐야 하는 설정 파일이 있다.
+
+| 파일 | git 추적 | 새 클론에서 할 일 |
+| --- | --- | --- |
+| `gradle.properties` | **추적됨** (비공개 저장소라 커밋) | `org.gradle.java.home` 한 줄이 머신별 JDK 경로다 — 없는 경로면 Gradle 즉시 실패. 로컬만 고치고 커밋하지 말 것 |
+| `local.properties` | 무시됨 | `sdk.dir` 지정해 생성 (없으면 `SDK location not found`). Android Studio로 한 번 열면 자동 생성 |
+| `keystore.properties` | 무시됨 | 릴리스 시에만 필요. 없으면 릴리스가 **미서명**으로 빌드됨 (`app/build.gradle.kts`가 존재 여부로 분기) |
+| `upload-keystore.jks` | 무시됨 | 동일. 분실하면 Play 업데이트 불가 — 기존 PC에서 복사해 온다 |
+
 **JDK 버전이 핵심 함정이다.** AGP 8.6.1 / Gradle 8.7 / Kotlin 1.9.0 구성. Gradle 8.7은 JDK 22까지만 지원하므로 **JDK 17 또는 21**로 빌드해야 한다. 시스템 기본 `JAVA_HOME`이 JDK 25면 빌드가 실패하니 아래처럼 명시적으로 지정한다.
 
 ```powershell
@@ -15,14 +24,19 @@ $env:JAVA_HOME = 'C:\Program Files\Java\jdk-17.0.19'
 $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 .\gradlew.bat assembleDebug           # 디버그 APK
 .\gradlew.bat assembleRelease         # 서명된 릴리스 APK (keystore.properties 필요)
+.\gradlew.bat bundleRelease           # Play 업로드용 AAB
 .\gradlew.bat test                    # 단위 테스트 (JVM)
 .\gradlew.bat connectedAndroidTest    # 계측 테스트 (기기/에뮬 필요)
 ```
 
-- 디버그 산출물: `app/build/outputs/apk/debug/app-debug.apk`
+macOS/Linux는 `export JAVA_HOME=...` 후 `./gradlew ...`.
+
+- 디버그 산출물: `app/build/outputs/apk/debug/app-debug.apk`, AAB: `app/build/outputs/bundle/release/app-release.aab`
 - 릴리스 서명은 루트 `keystore.properties`(gitignore됨)에서 로드. 없으면 릴리스는 미서명으로 빌드됨.
-- 테스트는 스캐폴드(`ExampleUnitTest`, `ExampleInstrumentedTest`)만 존재 — 실질적 테스트 커버리지 없음.
-- 릴리스마다 `app/build.gradle.kts`의 `versionCode`(정수 증가)와 `versionName`을 함께 올린다.
+- SDK는 **compileSdk/targetSdk 36** — API 36 플랫폼이 설치돼 있어야 한다. AGP 8.6.1이 36을 미지원이라 경고하지만 `android.suppressUnsupportedCompileSdk=36`으로 억제된 상태이고 빌드는 정상이다.
+- 의존성 버전은 전부 `gradle/libs.versions.toml`(버전 카탈로그)에서 관리 — `app/build.gradle.kts`에 직접 좌표를 적지 않는다.
+- 테스트는 스캐폴드(`ExampleUnitTest`, `ExampleInstrumentedTest`)만 존재 — 실질적 테스트 커버리지 없음. `test` 통과가 동작 보증이 아니므로 실기기 확인이 필요하다.
+- 릴리스마다 `app/build.gradle.kts`의 `versionCode`(정수 증가)와 `versionName`을 함께 올리고, `docs/RELEASE_NOTES.md` 맨 위에 항목(사용자 대상 문구 + 기술 요약)을 추가한다.
 
 ## 아키텍처
 

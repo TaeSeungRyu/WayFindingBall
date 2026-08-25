@@ -4,12 +4,14 @@
 
 ## 게임 모드
 
-홈의 "놀러 가기" → **무엇을 할까요?** 화면에서 네 가지 모드를 고를 수 있어 (`ui/ModeSelectScreen.kt`):
+홈의 "놀러 가기" → **무엇을 할까요?** 화면에서 여섯 가지 모드를 고를 수 있어 (`ui/ModeSelectScreen.kt`):
 
 - 🧩 **미로 찾기** — 공을 굴려 별 목적지까지. 레벨 1~13(테마 미로) + 14~20(무한/특수 모드)
 - 🎨 **색깔 찾기** — 지시한 색 칸으로 공을 굴리기 (`game/ColorGame.kt`)
 - 🎯 **굴려서 맞히기** — 공을 굴려 표적 맞히기 (`game/HitGame.kt`)
 - ✨ **별자리 잇기** — 별을 손가락으로 이어 별자리 완성 (`game/Constellation.kt`, `game/Zodiac.kt`). 아이가 직접 별을 찍어 나만의 "○○자리"를 만드는 **별자리 만들기** 포함 (`ui/ConstellationCreateScreen.kt`)
+- 🖌️ **바닥 색칠하기** — 공을 굴려 바닥 칠하기. 솔로·AI 대결·팀전·도안 따라 칠하기·거울 대칭 (`game/PaintGame.kt`, `game/FloorPaintController.kt`)
+- 🔢 **숫자·한글 배우기** — 숫자·한글·알파벳 타일을 순서대로 밟으며 소리로 배우기 (`game/LearnGame.kt`)
 
 또한 홈에서 **🤝 1:1 대전모드**로 진입할 수 있어 — 같은 공간의 친구와 근처 기기 연결로 겨루는 실시간 대전(아래 "1:1 대전모드" 참고).
 
@@ -102,6 +104,8 @@ app/src/main/java/com/rts/rys/ryy/wayfinding/
 `docs/`에 기획·작업 문서를 모아둬. **작업이 끝난 문서는 `docs/done/`으로 옮겨** 진행 중인 것과 구분해.
 
 - `docs/` (진행 중·참조)
+  - `SETUP.md` — **새 PC/클론 환경 셋업 가이드** (git에 없는 설정 파일, 빌드 오류, 릴리스 절차)
+  - `RELEASE_NOTES.md` — 버전별 변경 이력 (Play Console "새로운 기능" 문구 + 기술 요약). 릴리스마다 갱신
   - `BILLING_INTEGRATION.md` — 구글 인앱 결제 도입 계획 (미구현)
   - `RECORDS_TODO.md` — 기록 보기 기능 강화 TODO (일부 완료, 열린 항목 있음)
   - `DATA_SAFETY.md` — Play Console 데이터 안전 양식 작성 가이드 (릴리스마다 참조)
@@ -112,6 +116,8 @@ app/src/main/java/com/rts/rys/ryy/wayfinding/
 
 ## 빌드
 
+> ⚠️ 새 PC에서 클론했다면 **먼저 [`docs/SETUP.md`](docs/SETUP.md)** 를 볼 것. `local.properties`(SDK 경로)와 릴리스용 키스토어는 저장소에 없어서 직접 만들어야 하고, `gradle.properties`의 JDK 경로 한 줄도 머신에 맞게 고쳐야 해.
+
 이 프로젝트는 **AGP 8.6.1 / Gradle 8.7 / Kotlin 1.9.0**으로 구성돼 있어. Gradle 8.7은 JDK 22까지 지원하므로 **JDK 17 또는 21**로 빌드해야 해. (시스템 기본 `JAVA_HOME`이 JDK 25면 빌드 실패)
 
 PowerShell 기준:
@@ -119,10 +125,17 @@ PowerShell 기준:
 ```powershell
 $env:JAVA_HOME = 'C:\Program Files\Java\jdk-17.0.19'
 $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
-.\gradlew.bat assembleDebug
+.\gradlew.bat assembleDebug           # 디버그 APK
+.\gradlew.bat assembleRelease         # 릴리스 APK (keystore.properties 있으면 서명)
+.\gradlew.bat bundleRelease           # Play 업로드용 AAB
+.\gradlew.bat test                    # JVM 단위 테스트
 ```
 
-산출물: `app/build/outputs/apk/debug/app-debug.apk`
+macOS / Linux는 `export JAVA_HOME=...` 후 `./gradlew assembleDebug`.
+
+산출물: `app/build/outputs/apk/debug/app-debug.apk` · `app/build/outputs/bundle/release/app-release.aab`
+
+의존성은 `gradle/libs.versions.toml`(버전 카탈로그)에서 관리해. 빌드 오류·릴리스 절차·키스토어 이전은 [`docs/SETUP.md`](docs/SETUP.md)에 표로 정리돼 있어.
 
 ## 조작
 
@@ -145,7 +158,7 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 ## 요구 환경
 
 - minSdk 26 (Android 8.0)
-- targetSdk 35
+- targetSdk / compileSdk 36 (Android 16)
 - 가속도 센서가 없어도 D-pad로 플레이 가능 (`uses-feature` `required="false"`)
 - **1:1 대전모드**는 API 32(Android 12L) 이상에서만 지원 (Nearby를 위치 권한 없이 쓰기 위한 요건). 그 미만 기기에서는 대전 버튼이 '지원 불가'로 표시되고 나머지 기능은 정상 동작
 - 대전모드 이용 시 근처 기기 연결용 **블루투스/근처 Wi-Fi 기기 권한**을 런타임 요청 (위치 권한 미사용, `neverForLocation`)
